@@ -1,0 +1,461 @@
+/* ─────────────────────────────────────────────
+   Te Pinta — globals.css
+   Sistema de gestión interna
+   ───────────────────────────────────────────── */
+
+/*
+  Importamos Fraunces (la alternativa serif del brandbook a Recoleta).
+  Inter para body — pero usamos una variante con optical sizing para
+  mejor legibilidad en interfaces densas.
+  Usamos la variable weight de Inter para no cargar múltiples pesos.
+*/
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;1,9..144,400&family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+
+@import 'tailwindcss';
+
+@theme {
+  /* ── Paleta de marca ── */
+  --color-rojo-pimenton: #b54a32;
+  --color-crema-maiz: #f3e7d1;
+  --color-azul-noche-criolla: #17325c;
+  --color-verde-yerba: #657447;
+  --color-oro-horno: #d28a2d;
+
+  /* ── Paleta secundaria ── */
+  --color-arcilla: #c7704f;
+  --color-arena: #e7d6bb;
+  --color-carbon: #333333;
+  --color-rosa-sal: #d9a193;
+  --color-verde-hoja: #7e9160;
+
+  /* ── Semánticos de app ── */
+  --color-background: #fffbf4;
+  --color-foreground: #22160f;
+  --color-card: #ffffff;
+  --color-card-foreground: #22160f;
+  --color-popover: #fffaf2;
+  --color-popover-foreground: #22160f;
+  --color-primary: #b54a32;
+  --color-primary-foreground: #fff8ef;
+  --color-secondary: #e7d6bb;
+  --color-secondary-foreground: #22160f;
+  --color-muted: #f3e7d1;
+  --color-muted-foreground: #765f4e;
+  --color-accent: #d28a2d;
+  --color-accent-foreground: #22160f;
+  --color-success: #657447;
+  --color-success-foreground: #fff8ef;
+  --color-warning: #d28a2d;
+  --color-warning-foreground: #22160f;
+
+  /*
+    FIX: destructive era idéntico a primary (#b54a32).
+    Lo diferenciamos: más oscuro y saturado para que
+    las acciones peligrosas se lean como algo distinto
+    a las acciones principales.
+  */
+  --color-destructive: #9b2515;
+  --color-destructive-foreground: #fff8ef;
+
+  --color-border: #ead8c1;
+  --color-input: #ead8c1;
+  --color-ring: #d28a2d;
+
+  /* ── Sidebar ── */
+  --color-sidebar: #17325c;
+  --color-sidebar-foreground: #f3e7d1;
+  --color-sidebar-muted: #b9c0a5;
+  --color-sidebar-border: rgba(243, 231, 209, 0.14);
+  --color-sidebar-active: #f3e7d1;
+  --color-sidebar-active-foreground: #17325c;
+  --color-sidebar-hover: rgba(181, 74, 50, 0.72);
+
+  /* ── Charts / dashboard ── */
+  --color-chart-1: #b54a32;
+  --color-chart-2: #d28a2d;
+  --color-chart-3: #657447;
+  --color-chart-4: #17325c;
+  --color-chart-5: #c7704f;
+
+  /* ── Radios ── */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* ── Sombras ── */
+  --shadow-soft: 0 2px 8px rgba(34, 22, 15, 0.06), 0 8px 24px rgba(34, 22, 15, 0.06);
+  --shadow-card: 0 1px 3px rgba(34, 22, 15, 0.05), 0 4px 16px rgba(34, 22, 15, 0.06);
+  --shadow-premium: 0 8px 32px rgba(23, 50, 92, 0.18), 0 2px 8px rgba(23, 50, 92, 0.08);
+  --shadow-glow: 0 0 0 1px rgba(210, 138, 45, 0.22), 0 4px 20px rgba(210, 138, 45, 0.14);
+  --shadow-primary-glow: 0 0 0 1px rgba(181, 74, 50, 0.2), 0 4px 20px rgba(181, 74, 50, 0.12);
+
+  /*
+    Tipografías del brandbook:
+    - Display: Fraunces (alternativa open-source a Recoleta)
+      → Títulos, headings, hero text, números grandes en dashboard
+    - Sans: Inter con optical sizing
+      → Todo el resto: labels, body, UI
+  */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-heading: 'Bebas Neue', Arial, sans-serif;
+
+  /*
+    Tokens de transición global.
+    Usamos una curva custom que se siente "hecha a mano",
+    evitando el ease genérico que se siente de fábrica.
+  */
+  --transition-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-base: 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 350ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-spring: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Spacing base (complementa Tailwind, útil en CSS manual) ── */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+}
+
+/* ─────────────────────────────────────────────
+   Reset base
+   ───────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  /*
+    Margin/padding cero solo en elementos de layout.
+    No aplicamos al * para no sobreescribir Tailwind.
+  */
+}
+
+:root {
+  color-scheme: light;
+  font-family: var(--font-sans);
+  /*
+    font-feature-settings: activa ligaduras y números tabulares.
+    Los números tabulares son críticos en dashboards y tablas de pedidos
+    para que las columnas de precios no bailen.
+  */
+  font-feature-settings:
+    'kern' 1,
+    'liga' 1,
+    'tnum' 1;
+  font-optical-sizing: auto;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #fffbf4;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  /*
+    Gradient mejorado: más sutil, menos invasivo.
+    El radial del brandbook era muy visible en pantallas grandes
+    y competía con el contenido. Lo suavizamos y agregamos
+    un segundo punto de luz para dar más profundidad.
+  */
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 0%, rgba(210, 138, 45, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 85% 100%, rgba(181, 74, 50, 0.05) 0%, transparent 50%),
+    linear-gradient(165deg, #fff8ef 0%, #f8edda 55%, #f3e7d1 100%);
+  background-attachment: fixed; /* el gradiente no hace scroll, se siente más premium */
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* ─────────────────────────────────────────────
+   Elementos de formulario
+   ───────────────────────────────────────────── */
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  /* font-feature-settings hereda desde :root */
+}
+
+button {
+  cursor: pointer;
+  /*
+    Touch action para mobile: evita el delay de 300ms en iOS.
+    Crítico para la velocidad percibida en carga de pedidos.
+  */
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select {
+  touch-action: manipulation;
+}
+
+/* ─────────────────────────────────────────────
+   Links
+   ───────────────────────────────────────────── */
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ─────────────────────────────────────────────
+   Focus visible — accesibilidad
+   Usamos :focus-visible en lugar de :focus para no mostrar
+   el ring en clicks con mouse (solo en navegación con teclado).
+   ───────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Quitamos el outline default de botones para que :focus-visible lo maneje */
+button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ─────────────────────────────────────────────
+   Selección de texto
+   ───────────────────────────────────────────── */
+
+::selection {
+  background: rgba(210, 138, 45, 0.25); /* oro horno — más visible que el rojo */
+  color: var(--color-foreground);
+}
+
+/* ─────────────────────────────────────────────
+   Scrollbar global
+   Aplicamos el estilo a todo, no solo nav.
+   ───────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(116, 95, 78, 0.2); /* muted-foreground con transparencia */
+  border-radius: 999px;
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(210, 138, 45, 0.45);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(116, 95, 78, 0.2) transparent;
+}
+
+/* ─────────────────────────────────────────────
+   Animaciones / Keyframes
+
+   Estrategia: definimos las animaciones clave acá
+   y las activamos por clase. Así cualquier componente
+   puede usarlas con @apply o className.
+   ───────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/*
+  Para el modal de nuevo pedido — entra desde abajo en mobile
+  y desde el centro en desktop (controlado por la clase del trigger)
+*/
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/*
+  Spin suave para estados de carga.
+  Usamos steps(8) para un spin más "artesanal" que el linear,
+  coherente con la estética del brandbook.
+*/
+@keyframes spin-soft {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Clases de utilidad para animaciones
+   (complementan Tailwind, se aplican en componentes)
+   ───────────────────────────────────────────── */
+
+.animate-fade-in {
+  animation: fade-in var(--transition-base) both;
+}
+
+.animate-fade-in-scale {
+  animation: fade-in-scale var(--transition-base) both;
+}
+
+.animate-slide-up {
+  animation: slide-up var(--transition-slow) both;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right var(--transition-base) both;
+}
+
+.animate-modal-enter {
+  animation: modal-enter var(--transition-spring) both;
+}
+
+/* Skeleton loader */
+.animate-skeleton {
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--color-muted) 0%,
+    var(--color-arena) 50%,
+    var(--color-muted) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-md);
+}
+
+/* Stagger helpers para listas (aplicar con nth-child en componente) */
+.stagger-1 {
+  animation-delay: 50ms;
+}
+.stagger-2 {
+  animation-delay: 100ms;
+}
+.stagger-3 {
+  animation-delay: 150ms;
+}
+.stagger-4 {
+  animation-delay: 200ms;
+}
+.stagger-5 {
+  animation-delay: 250ms;
+}
+
+/* ─────────────────────────────────────────────
+   Tipografía display
+   Clase utilitaria para activar la fuente Fraunces
+   en títulos, headings del dashboard, números grandes.
+   ───────────────────────────────────────────── */
+
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+/* ─────────────────────────────────────────────
+   Números tabulares explícito
+   Para columnas de precios y cantidades.
+   ───────────────────────────────────────────── */
+
+.tabular-nums {
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─────────────────────────────────────────────
+   Reducción de movimiento — accesibilidad
+   Respetamos la preferencia del sistema operativo.
+   ───────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
