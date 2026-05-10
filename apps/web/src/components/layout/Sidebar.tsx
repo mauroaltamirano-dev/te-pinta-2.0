@@ -1,4 +1,7 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
+
+import { useAuthStore } from '@/features/auth/auth-store';
 import { cn } from '@/lib/utils';
 import { navItems, secondaryNavItems } from './nav-items';
 import logo from '@/assets/logo-te-pinta-blanco.png';
@@ -22,12 +25,12 @@ const SidebarLink = ({ item }: { item: SidebarItem }) => {
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar',
           isActive
             ? [
-                'bg-muted text-sidebar shadow-glow',
+                'bg-card text-sidebar shadow-glow',
                 'before:absolute before:left-0 before:top-1/2 before:h-8 before:w-1.5 before:-translate-y-1/2 before:rounded-r-full before:bg-primary',
                 'after:absolute after:right-3 after:top-1/2 after:size-1.5 after:-translate-y-1/2 after:rounded-full after:bg-accent',
               ]
             : [
-                'text-sidebar-foreground/88 hover:translate-x-0.5 hover:bg-sidebar-foreground/9 hover:text-white',
+                'text-card hover:translate-x-0.5 hover:bg-sidebar-foreground/9 hover:text-white',
                 'hover:shadow-md hover:shadow-black/10',
               ],
         )
@@ -39,8 +42,8 @@ const SidebarLink = ({ item }: { item: SidebarItem }) => {
             className={cn(
               'flex size-9 shrink-0 items-center justify-center rounded-xl ring-1 transition-all duration-200',
               isActive
-                ? 'bg-primary text-muted ring-primary/20 shadow-sm'
-                : 'bg-sidebar-foreground/8 text-sidebar-foreground ring-sidebar-foreground/12 group-hover:bg-primary group-hover:text-muted group-hover:ring-primary/30',
+                ? 'bg-primary text-card ring-primary/20 shadow-sm'
+                : 'bg-sidebar-foreground/8 text-card ring-sidebar-foreground/12 group-hover:bg-primary group-hover:text-card group-hover:ring-primary/30',
             )}
           >
             <Icon
@@ -73,12 +76,22 @@ const SidebarSectionTitle = ({ children }: { children: React.ReactNode }) => {
 };
 
 export const Sidebar = () => {
+  const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const isLoggingOut = useAuthStore((state) => state.status === 'loading');
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <aside
       aria-label="Navegación principal"
       className={cn(
         'relative hidden h-dvh w-72 shrink-0 overflow-hidden border-r border-sidebar-border md:sticky md:top-0 md:flex md:flex-col',
-        'bg-sidebar text-sidebar-foreground shadow-premium',
+        'bg-sidebar text-card shadow-premium',
       )}
     >
       {/* Fondo cálido tipo papel sobre azul noche */}
@@ -141,6 +154,22 @@ export const Sidebar = () => {
             {secondaryNavItems.map((item) => (
               <SidebarLink key={item.href} item={item} />
             ))}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-sidebar-foreground/12 bg-sidebar-foreground/8 p-3">
+            <p className="truncate text-xs font-black text-white">{user?.name ?? 'Admin'}</p>
+            <p className="mt-0.5 truncate text-[0.68rem] font-semibold text-sidebar-muted">
+              Gestión interna
+            </p>
+            <button
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-sidebar-foreground/15 bg-white/10 px-3 py-2 text-xs font-black text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={isLoggingOut}
+              onClick={handleLogout}
+              type="button"
+            >
+              <LogOut className="h-4 w-4" />
+              Cerrar sesión
+            </button>
           </div>
         </div>
       </div>

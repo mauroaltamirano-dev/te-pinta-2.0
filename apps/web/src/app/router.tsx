@@ -10,6 +10,7 @@ import { OrdersPage } from '@/features/orders/OrdersPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { HomePage } from '@/routes/HomePage';
 import { LoginPage } from '@/routes/LoginPage';
+import { RafflePage } from '@/routes/RafflePage';
 
 const protectedRoutes = [
   {
@@ -46,6 +47,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/sorteo',
+    element: <RafflePage />,
   },
   {
     element: (

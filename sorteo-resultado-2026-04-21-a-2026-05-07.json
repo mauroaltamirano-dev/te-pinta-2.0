@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-05-09T00:39:42.080336+00:00",
+  "date_range_inclusive": "2026-04-21..2026-05-07",
+  "date_basis": "delivery_date; fallback created_at if delivery_date is null",
+  "filters": "status=delivered, is_active=true, is_paid=true, total_amount>0",
+  "ticket_rule": "floor(total empanadas/12), accumulated per client; winners distinct",
+  "seed": "cd047decfc14f668cddc3207fcf36afb",
+  "eligible_participants": 26,
+  "total_tickets": 41,
+  "first_place": {
+    "key": "c9095480-85d0-48c2-a916-10a42b644f42",
+    "name": "Margarita",
+    "orders": 1,
+    "empanadas": 12,
+    "docenas_exactas": "1",
+    "chances": 1,
+    "total_pagado": 15500,
+    "order_ids": "679ea6fd-b468-4170-949c-6845fde97921"
+  },
+  "second_place": {
+    "key": "85265480-4edc-4301-8c93-856319fa4a93",
+    "name": "Lucho Ferraro",
+    "orders": 1,
+    "empanadas": 12,
+    "docenas_exactas": "1",
+    "chances": 1,
+    "total_pagado": 15000,
+    "order_ids": "2370fcc2-ebdc-4981-a83f-a0a4795ed719"
+  }
+}

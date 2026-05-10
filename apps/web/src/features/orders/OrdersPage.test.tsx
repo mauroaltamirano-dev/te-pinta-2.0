@@ -61,6 +61,7 @@ const orderListItem = {
   status: 'confirmado' as const,
   isPaid: false,
   itemCount: 2,
+  totalQuantity: 24,
 };
 
 const finalizedOrderListItem = {
@@ -192,7 +193,9 @@ describe('OrdersPage', () => {
   it('opens the selected order detail in a desktop drawer and updates it when selecting another order', async () => {
     vi.mocked(listOrders).mockResolvedValue([orderListItem, afternoonOrderListItem]);
     vi.mocked(getOrder).mockImplementation(async (id) =>
-      id === 'order-3' ? { ...orderDetail, ...afternoonOrderListItem, items: orderDetail.items } : orderDetail,
+      id === 'order-3'
+        ? { ...orderDetail, ...afternoonOrderListItem, items: orderDetail.items }
+        : orderDetail,
     );
 
     renderOrdersPage();
@@ -213,7 +216,11 @@ describe('OrdersPage', () => {
     expect(screen.getByLabelText(/pedido ana pérez/i)).toHaveAttribute('aria-selected', 'true');
     expect(getOrder).toHaveBeenCalledWith('order-1');
 
-    await userEvent.click(within(screen.getByLabelText(/pedido luis gómez/i)).getByRole('button', { name: /ver detalle/i }));
+    await userEvent.click(
+      within(screen.getByLabelText(/pedido luis gómez/i)).getByRole('button', {
+        name: /ver detalle/i,
+      }),
+    );
     expect(await screen.findByRole('heading', { name: /pedido #p-00003/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/pedido luis gómez/i)).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByLabelText(/pedido ana pérez/i)).toHaveAttribute('aria-selected', 'false');
@@ -243,14 +250,18 @@ describe('OrdersPage', () => {
     const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
     await userEvent.click(orderCard.getByRole('button', { name: /ver detalle/i }));
 
-    const page = within(await screen.findByRole('region', { name: /pantalla detalle del pedido/i }));
+    const page = within(
+      await screen.findByRole('region', { name: /pantalla detalle del pedido/i }),
+    );
     expect(page.getByRole('heading', { name: /pedido #p-00001/i })).toBeInTheDocument();
     expect(page.getByRole('button', { name: /volver a pedidos/i })).toBeInTheDocument();
     expect(page.getByRole('navigation', { name: /secciones del detalle/i })).toBeInTheDocument();
     expect(page.getByLabelText(/acciones principales del pedido/i)).toHaveClass('fixed');
 
     await userEvent.click(page.getByRole('button', { name: /volver a pedidos/i }));
-    expect(screen.queryByRole('region', { name: /pantalla detalle del pedido/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: /pantalla detalle del pedido/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows active orders by default, finalized orders by filter, and formats order preview for Argentina', async () => {

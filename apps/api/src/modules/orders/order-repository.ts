@@ -176,7 +176,11 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
         const detail = mapOrderDetail(row.order, row.customer, items);
         const { items: _items, ...listItem } = detail;
         void _items;
-        return { ...listItem, itemCount: items.length };
+        return {
+          ...listItem,
+          itemCount: items.length,
+          totalQuantity: items.reduce((total, item) => total + item.quantity, 0),
+        };
       }),
     );
   },
