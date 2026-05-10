@@ -27,6 +27,12 @@ export const HomePage = () => {
           >
             Ver pedidos
           </Link>
+          <Link
+            className="rounded-2xl border border-brand-200 bg-oro-horno px-5 py-3 text-sm font-bold text-foreground transition hover:bg-brand-50"
+            to="/sorteo"
+          >
+            Filmar sorteo
+          </Link>
         </div>
       </section>
     </main>

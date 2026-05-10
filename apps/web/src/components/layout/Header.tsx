@@ -33,7 +33,6 @@ export const Header = () => {
     >
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-brand-600">Te Pinta</p>
           <h1 className="text-2xl font-black tracking-tight font-display">{title}</h1>
         </div>
         <div className="flex items-center gap-3">

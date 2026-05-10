@@ -45,6 +45,7 @@ export type OrderDetail = {
 
 export type OrderListItem = Omit<OrderDetail, 'items'> & {
   itemCount: number;
+  totalQuantity: number;
 };
 
 export const listOrders = async (filters: OrderFilters = {}): Promise<OrderListItem[]> => {

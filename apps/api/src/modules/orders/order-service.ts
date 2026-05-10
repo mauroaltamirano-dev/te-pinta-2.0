@@ -56,6 +56,7 @@ export type OrderDetail = {
 
 export type OrderListItem = Omit<OrderDetail, 'items'> & {
   itemCount: number;
+  totalQuantity: number;
 };
 
 export type PersistOrderItem = Omit<OrderItemDetail, 'id'> & { id: string };
@@ -167,7 +168,12 @@ const buildSnapshotItems = async (
 const buildPersistInput = async (
   input: CreateOrderInput,
   repository: OrderRepository,
-  options: { id?: string; status?: OrderStatus; isPaid?: boolean; existingItems?: PersistOrderItem[] } = {},
+  options: {
+    id?: string;
+    status?: OrderStatus;
+    isPaid?: boolean;
+    existingItems?: PersistOrderItem[];
+  } = {},
 ): Promise<PersistOrderInput> => {
   const customer = await resolveCustomer(input.customer, repository);
   const items = options.existingItems ?? (await buildSnapshotItems(input.items, repository));

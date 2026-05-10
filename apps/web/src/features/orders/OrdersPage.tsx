@@ -2,18 +2,22 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
-  Banknote,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Bell,
-  CalendarDays,
   CheckCircle2,
-  ChevronDown,
   CircleDollarSign,
+  Download,
   Clock,
   ClipboardList,
   Edit3,
+  Eye,
+  Filter,
   History,
   Flame,
   MapPin,
+  MoreVertical,
   Minus,
   NotebookText,
   Package,
@@ -62,6 +66,9 @@ type OrderSortOption =
   | 'name_desc'
   | 'total_desc'
   | 'total_asc';
+
+type TableSortColumn = 'date' | 'name' | 'total' | 'status' | 'method';
+type TableSortDir = 'asc' | 'desc';
 type OrderStatusFilter = 'todos' | OrderStatus;
 type OrderMethodFilter = 'todos' | 'envio' | 'retiro' | 'cocinado' | 'pagado';
 
@@ -107,7 +114,7 @@ const statusConfig: Record<
     btn: 'border-red-300 text-red-700 hover:bg-red-50',
     btnActive: 'bg-red-600 border-red-600 text-white shadow-sm',
     line: 'bg-red-500',
-    badge: 'bg-red-50 text-red-700 ring-1 ring-red-200',
+    badge: 'bg-red-600 text-white ring-1 ring-red-700/20',
   },
   preparado: {
     label: 'Preparado',
@@ -115,7 +122,7 @@ const statusConfig: Record<
     btn: 'border-amber-300 text-amber-800 hover:bg-amber-50',
     btnActive: 'bg-amber-500 border-amber-500 text-white shadow-sm',
     line: 'bg-yellow-400',
-    badge: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200',
+    badge: 'bg-amber-500 text-white ring-1 ring-amber-600/20',
   },
   entregado: {
     label: 'Entregado',
@@ -123,7 +130,7 @@ const statusConfig: Record<
     btn: 'border-emerald-300 text-emerald-700 hover:bg-emerald-50',
     btnActive: 'bg-emerald-600 border-emerald-600 text-white shadow-sm',
     line: 'bg-emerald-500',
-    badge: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+    badge: 'bg-emerald-600 text-white ring-1 ring-emerald-700/20',
   },
 };
 
@@ -164,31 +171,69 @@ const detailStatusConfig: Record<
 > = {
   confirmado: {
     label: 'En preparación',
-    badge: 'bg-orange-100 text-orange-800 ring-1 ring-orange-200',
+    badge: 'bg-orange-600 text-white ring-1 ring-orange-700/20',
     action: 'Marcar como listo',
     accent: 'text-orange-700',
   },
   preparado: {
     label: 'Listo para retirar',
-    badge: 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200',
+    badge: 'bg-emerald-600 text-white ring-1 ring-emerald-700/20',
     action: 'Marcar como listo',
     accent: 'text-emerald-700',
   },
   entregado: {
     label: 'Entregado',
-    badge: 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200',
+    badge: 'bg-emerald-600 text-white ring-1 ring-emerald-700/20',
     action: 'Entregado',
     accent: 'text-emerald-700',
   },
 };
 
+const paymentBadgeClassNames = {
+  paid: 'bg-emerald-600 text-white ring-1 ring-emerald-700/20',
+  unpaid: 'bg-red-500 text-white ring-1 ring-red-600/20',
+} as const;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatMoney = (value: number): string => `$ ${Math.round(value).toLocaleString('es-AR')}`;
 
+const MONTH_ABBR = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
+
+/** Formatea '2026-04-29' → '29 abr 2026' */
+const formatDateReadable = (date: string): string => {
+  const [year, month, day] = date.split('-');
+  if (!year || !month || !day) return date;
+  const monthName = MONTH_ABBR[parseInt(month, 10) - 1] ?? month;
+  return `${parseInt(day, 10)} ${monthName} ${year}`;
+};
+
+/** Formatea '2026-04-29' → '29-04-2026' (para exports y detalles) */
 const formatDateAr = (date: string): string => {
   const [year, month, day] = date.split('-');
   return year && month && day ? `${day}-${month}-${year}` : date;
+};
+
+const formatDozenLabel = (quantity?: number): string => {
+  if (!quantity) return '0 docenas';
+  const dozens = quantity / 12;
+  const label = Number.isInteger(dozens)
+    ? String(dozens)
+    : dozens.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  return `${label} ${dozens === 1 ? 'docena' : 'docenas'}`;
 };
 
 const toNumber = (value: string): number => Number(value || 0);
@@ -218,8 +263,7 @@ const getTodayIsoDate = (): string => new Date().toISOString().slice(0, 10);
 const normalizeText = (value: string): string => value.toLocaleLowerCase('es-AR');
 
 const buildPhoneHref = (phone: string): string => `tel:${phone.replace(/\D/g, '')}`;
-const buildWhatsAppHref = (phone: string): string =>
-  `https://wa.me/54${phone.replace(/\D/g, '')}`;
+const buildWhatsAppHref = (phone: string): string => `https://wa.me/54${phone.replace(/\D/g, '')}`;
 const buildMapsHref = (address?: string | null): string =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address ?? '')}`;
 
@@ -286,7 +330,6 @@ type OrderDetailPanelProps = {
   isLoading: boolean;
   isMobile?: boolean;
   onClose: () => void;
-  onEdit: (id: string) => void;
   onCancel: (id: string, customerName: string) => void;
   onMarkStatus: (id: string, status: OrderStatus) => void;
 };
@@ -296,7 +339,6 @@ const OrderDetailPanel = ({
   isLoading,
   isMobile = false,
   onClose,
-  onEdit,
   onCancel,
   onMarkStatus,
 }: OrderDetailPanelProps) => {
@@ -323,11 +365,14 @@ const OrderDetailPanel = ({
   const status = detailStatusConfig[detail.status];
   const deliveryMethodClass =
     detail.deliveryType === 'envio'
-      ? 'bg-sky-100 text-sky-800 ring-1 ring-sky-200'
-      : 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200';
+      ? 'bg-sky-600 text-white ring-1 ring-sky-700/20'
+      : 'bg-emerald-600 text-white ring-1 ring-emerald-700/20';
   const timeline = [
     { label: 'Pedido confirmado', active: true },
-    { label: 'Preparación lista', active: detail.status === 'preparado' || detail.status === 'entregado' },
+    {
+      label: 'Preparación lista',
+      active: detail.status === 'preparado' || detail.status === 'entregado',
+    },
     { label: 'Pedido entregado', active: detail.status === 'entregado' },
     { label: detail.isPaid ? 'Pago registrado' : 'Pago pendiente', active: detail.isPaid },
   ];
@@ -343,18 +388,13 @@ const OrderDetailPanel = ({
       aria-label="Acciones principales del pedido"
       className={[
         'grid grid-cols-2 gap-2 border-t border-border bg-card/95 p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur',
-        isMobile ? 'fixed inset-x-0 bottom-0 z-[60] pb-[calc(env(safe-area-inset-bottom)+0.75rem)]' : '',
+        isMobile
+          ? 'fixed inset-x-0 bottom-0 z-[60] pb-[calc(env(safe-area-inset-bottom)+0.75rem)]'
+          : '',
       ].join(' ')}
     >
       <button
-        className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-black text-foreground transition hover:border-primary/30 hover:text-primary"
-        onClick={() => onEdit(detail.id)}
-        type="button"
-      >
-        Editar pedido
-      </button>
-      <button
-        className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:opacity-50"
+        className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:opacity-10"
         disabled={detail.status === 'preparado'}
         onClick={() => onMarkStatus(detail.id, 'preparado')}
         type="button"
@@ -370,7 +410,7 @@ const OrderDetailPanel = ({
         Entregado
       </button>
       <button
-        className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
+        className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100 sm:col-span-1 col-span-2"
         onClick={() => onCancel(detail.id, detail.customer.name)}
         type="button"
       >
@@ -394,11 +434,13 @@ const OrderDetailPanel = ({
               <span className={`rounded-full px-2.5 py-1 text-xs font-black ${status.badge}`}>
                 {status.label}
               </span>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-black ${deliveryMethodClass}`}>
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-black ${deliveryMethodClass}`}
+              >
                 {detail.deliveryType === 'envio' ? 'Envío' : 'Retiro'}
               </span>
               {detail.cooked && (
-                <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-800 ring-1 ring-red-200">
+                <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white ring-1 ring-red-700/20">
                   Cocinado
                 </span>
               )}
@@ -419,7 +461,7 @@ const OrderDetailPanel = ({
         aria-label="Secciones del detalle"
         className={[
           'grid grid-cols-3 gap-2 border-b border-border bg-card/95 px-5 py-3 backdrop-blur',
-          isMobile ? 'fixed inset-x-3 bottom-24 z-[55] rounded-2xl border shadow-xl' : 'sticky top-[105px] z-10',
+          isMobile ? 'sticky top-[105px] z-10' : 'sticky top-[105px] z-10',
         ].join(' ')}
       >
         {tabs.map(({ id, label, icon: Icon }) => {
@@ -429,7 +471,9 @@ const OrderDetailPanel = ({
               aria-selected={isSelected}
               className={[
                 'flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-black transition',
-                isSelected ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted',
+                isSelected
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted',
               ].join(' ')}
               key={id}
               onClick={() => setActiveTab(id)}
@@ -461,31 +505,61 @@ const OrderDetailPanel = ({
                 </p>
               )}
               <div className="mt-4 grid grid-cols-3 gap-2">
-                <a className="rounded-xl bg-muted px-3 py-2 text-center text-sm font-black text-foreground" href={buildPhoneHref(detail.customer.phone)}>
+                <a
+                  className="rounded-xl bg-stone-800 px-3 py-2 text-center text-sm font-black text-white"
+                  href={buildPhoneHref(detail.customer.phone)}
+                >
                   Llamar
                 </a>
-                <a className="rounded-xl bg-emerald-100 px-3 py-2 text-center text-sm font-black text-emerald-800" href={buildWhatsAppHref(detail.customer.phone)} rel="noreferrer" target="_blank">
+                <a
+                  className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-sm font-black text-white"
+                  href={buildWhatsAppHref(detail.customer.phone)}
+                  rel="noreferrer"
+                  target="_blank"
+                >
                   WhatsApp
                 </a>
-                <a className="rounded-xl bg-sky-100 px-3 py-2 text-center text-sm font-black text-sky-800" href={buildMapsHref(detail.customer.address)} rel="noreferrer" target="_blank">
+                <a
+                  className="rounded-xl bg-sky-600 px-3 py-2 text-center text-sm font-black text-white"
+                  href={buildMapsHref(detail.customer.address)}
+                  rel="noreferrer"
+                  target="_blank"
+                >
                   Mapa
                 </a>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+            <section className="rounded-2xl border border-border bg-white p-4 shadow-sm text-foreground">
               <div className="mb-3 flex items-center gap-2">
                 <Truck className="h-4 w-4 text-primary" />
                 <h4 className="font-black text-foreground">Entrega</h4>
               </div>
               <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <p><span className="font-bold text-muted-foreground">Fecha</span><br /><b>{formatDateAr(detail.deliveryDate)}</b></p>
-                <p><span className="font-bold text-muted-foreground">Horario</span><br /><b>{deliveryTimeLabels[detail.deliveryTime]}</b></p>
-                <p><span className="font-bold text-muted-foreground">Método</span><br /><b>{detail.deliveryType === 'envio' ? 'Envío' : 'Retiro'}</b></p>
-                <p><span className="font-bold text-muted-foreground">Costo envío</span><br /><b>{formatMoney(detail.deliveryFee)}</b></p>
+                <p>
+                  <span className="font-bold text-muted-foreground">Fecha</span>
+                  <br />
+                  <b>{formatDateAr(detail.deliveryDate)}</b>
+                </p>
+                <p>
+                  <span className="font-bold text-muted-foreground">Horario</span>
+                  <br />
+                  <b>{deliveryTimeLabels[detail.deliveryTime]}</b>
+                </p>
+                <p>
+                  <span className="font-bold text-muted-foreground">Método</span>
+                  <br />
+                  <b>{detail.deliveryType === 'envio' ? 'Envío' : 'Retiro'}</b>
+                </p>
+                <p>
+                  <span className="font-bold text-muted-foreground">Costo envío</span>
+                  <br />
+                  <b>{formatMoney(detail.deliveryFee)}</b>
+                </p>
               </div>
               <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-sm font-semibold text-muted-foreground">
-                Referencia: {detail.notes?.trim() || detail.customer.address || 'Sin referencia cargada'}
+                Referencia:{' '}
+                {detail.notes?.trim() || detail.customer.address || 'Sin referencia cargada'}
               </p>
             </section>
 
@@ -496,14 +570,19 @@ const OrderDetailPanel = ({
               </div>
               <div className="divide-y divide-border">
                 {detail.items.map((item) => (
-                  <div className="grid grid-cols-[1fr_auto] gap-3 py-3 first:pt-0 last:pb-0" key={item.id}>
+                  <div
+                    className="grid grid-cols-[1fr_auto] gap-3 py-3 first:pt-0 last:pb-0"
+                    key={item.id}
+                  >
                     <div>
                       <p className="font-black text-foreground">{item.menuItemName}</p>
                       <p className="text-sm font-semibold text-muted-foreground">
                         {item.quantity} unidades · {formatMoney(item.unitPrice)}
                       </p>
                     </div>
-                    <p className="font-black tabular-nums text-foreground">{formatMoney(item.subtotal)}</p>
+                    <p className="font-black tabular-nums text-foreground">
+                      {formatMoney(item.subtotal)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -511,13 +590,23 @@ const OrderDetailPanel = ({
 
             <section className="rounded-2xl bg-primary/8 p-4">
               <div className="space-y-2 text-sm font-semibold text-muted-foreground">
-                <p className="flex justify-between"><span>Subtotal</span><b className="text-foreground">{formatMoney(detail.subtotal)}</b></p>
-                <p className="flex justify-between"><span>Envío</span><b className="text-foreground">{formatMoney(detail.deliveryFee)}</b></p>
+                <p className="flex justify-between">
+                  <span>Subtotal</span>
+                  <b className="text-foreground">{formatMoney(detail.subtotal)}</b>
+                </p>
+                <p className="flex justify-between">
+                  <span>Envío</span>
+                  <b className="text-foreground">{formatMoney(detail.deliveryFee)}</b>
+                </p>
                 {detail.discountPercent > 0 && (
-                  <p className="flex justify-between"><span>Descuento</span><b className="text-emerald-700">{detail.discountPercent}%</b></p>
+                  <p className="flex justify-between">
+                    <span>Descuento</span>
+                    <b className="text-emerald-700">{detail.discountPercent}%</b>
+                  </p>
                 )}
                 <p className="flex justify-between border-t border-primary/20 pt-3 text-lg text-foreground">
-                  <span>Total</span><b className="text-2xl text-primary">{formatMoney(detail.total)}</b>
+                  <span>Total</span>
+                  <b className="text-2xl text-primary">{formatMoney(detail.total)}</b>
                 </p>
               </div>
             </section>
@@ -530,13 +619,25 @@ const OrderDetailPanel = ({
             <div className="space-y-4">
               {timeline.map((event, index) => (
                 <div className="flex gap-3" key={event.label}>
-                  <span className={`mt-1 h-3 w-3 rounded-full ${event.active ? 'bg-primary' : 'bg-muted-foreground/25'}`} />
+                  <span
+                    className={`mt-1 h-3 w-3 rounded-full ${event.active ? 'bg-primary' : 'bg-muted-foreground/25'}`}
+                  />
                   <div>
-                    <p className={event.active ? 'font-black text-foreground' : 'font-semibold text-muted-foreground'}>
+                    <p
+                      className={
+                        event.active
+                          ? 'font-black text-foreground'
+                          : 'font-semibold text-muted-foreground'
+                      }
+                    >
                       {event.label}
                     </p>
                     <p className="text-xs font-semibold text-muted-foreground">
-                      {event.active ? (index === 0 ? formatDateAr(detail.deliveryDate) : 'Actualizado recientemente') : 'Pendiente'}
+                      {event.active
+                        ? index === 0
+                          ? formatDateAr(detail.deliveryDate)
+                          : 'Actualizado recientemente'
+                        : 'Pendiente'}
                     </p>
                   </div>
                 </div>
@@ -574,6 +675,12 @@ export const OrdersPage = () => {
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('todos');
   const [methodFilter, setMethodFilter] = useState<OrderMethodFilter>('todos');
   const [sortOption, setSortOption] = useState<OrderSortOption>('date_asc');
+  const [tableSortCol, setTableSortCol] = useState<TableSortColumn>('date');
+  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('asc');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(() => new Set());
+  const [isGeneratingKitchenList, setIsGeneratingKitchenList] = useState(false);
+  const [kitchenListFeedback, setKitchenListFeedback] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -635,20 +742,25 @@ export const OrdersPage = () => {
       return matchesVisibility && matchesDate && matchesSearch && matchesStatus && matchesMethod;
     });
 
+    const dir = tableSortDir === 'asc' ? 1 : -1;
     return [...filteredOrders].sort((a, b) => {
-      switch (sortOption) {
-        case 'date_asc':
-          return compareByDate(a, b) || a.customer.name.localeCompare(b.customer.name, 'es-AR');
-        case 'date_desc':
-          return compareByDate(b, a) || a.customer.name.localeCompare(b.customer.name, 'es-AR');
-        case 'name_asc':
-          return a.customer.name.localeCompare(b.customer.name, 'es-AR');
-        case 'name_desc':
-          return b.customer.name.localeCompare(a.customer.name, 'es-AR');
-        case 'total_desc':
-          return b.total - a.total;
-        case 'total_asc':
-          return a.total - b.total;
+      switch (tableSortCol) {
+        case 'date':
+          return (
+            dir *
+            (a.deliveryDate.localeCompare(b.deliveryDate) ||
+              a.customer.name.localeCompare(b.customer.name, 'es-AR'))
+          );
+        case 'name':
+          return dir * a.customer.name.localeCompare(b.customer.name, 'es-AR');
+        case 'total':
+          return dir * (a.total - b.total);
+        case 'status':
+          return dir * a.status.localeCompare(b.status);
+        case 'method':
+          return dir * a.deliveryType.localeCompare(b.deliveryType);
+        default:
+          return 0;
       }
     });
   }, [
@@ -656,7 +768,8 @@ export const OrdersPage = () => {
     deliveryDateFilter,
     methodFilter,
     orderSearch,
-    sortOption,
+    tableSortCol,
+    tableSortDir,
     statusFilter,
     visibilityFilter,
   ]);
@@ -842,6 +955,61 @@ export const OrdersPage = () => {
     setExpandedOrderId((current) => (current === id ? null : current));
   };
 
+  const exportVisibleOrders = () => {
+    const csvEscape = (value: string | number | boolean) =>
+      `"${String(value).replaceAll('"', '""')}"`;
+    const rows = visibleOrders.map((order) => [
+      getOrderCode(order.id),
+      order.customer.name,
+      order.customer.phone,
+      order.customer.address ?? '',
+      formatDateAr(order.deliveryDate),
+      deliveryTimeLabels[order.deliveryTime],
+      order.deliveryType === 'envio' ? 'Envío' : 'Retiro',
+      order.cooked ? 'Cocinado' : 'Crudo',
+      statusConfig[order.status].label,
+      order.isPaid ? 'Pagado' : 'No pagado',
+      order.itemCount,
+      order.total,
+    ]);
+    const csv = [
+      [
+        'Pedido',
+        'Cliente',
+        'Teléfono',
+        'Dirección',
+        'Entrega',
+        'Horario',
+        'Método',
+        'Cocción',
+        'Estado',
+        'Pago',
+        'Productos',
+        'Total',
+      ],
+      ...rows,
+    ]
+      .map((row) => row.map(csvEscape).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `pedidos-${visibilityFilter}-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleTableSort = (col: TableSortColumn) => {
+    if (tableSortCol === col) {
+      setTableSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setTableSortCol(col);
+      setTableSortDir('asc');
+    }
+  };
+
   const toggleOrderDetail = (id: string) => {
     setExpandedOrderId((current) => {
       if (current === id) return null;
@@ -864,17 +1032,72 @@ export const OrdersPage = () => {
     void removeOrder(id, customerName);
   };
 
-  const editOrderFromDetail = (id: string) => {
-    void editOrder(id);
-  };
-
   const markStatusFromDetail = (id: string, status: OrderStatus) => {
     void markStatus(id, status);
   };
 
+  const toggleOrderSelection = (id: string) => {
+    setKitchenListFeedback(null);
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearOrderSelection = () => {
+    setSelectedOrderIds(new Set());
+    setKitchenListFeedback(null);
+  };
+
+  const generateKitchenList = async () => {
+    if (selectedOrderIds.size === 0) return;
+    setIsGeneratingKitchenList(true);
+    setKitchenListFeedback(null);
+
+    try {
+      const selectedDetails = await Promise.all([...selectedOrderIds].map((id) => getOrder(id)));
+      const sortedDetails = selectedDetails.sort(
+        (a, b) =>
+          a.deliveryDate.localeCompare(b.deliveryDate) ||
+          a.deliveryTime.localeCompare(b.deliveryTime) ||
+          a.customer.name.localeCompare(b.customer.name, 'es-AR'),
+      );
+      const totalUnits = sortedDetails.reduce(
+        (total, order) => total + order.items.reduce((sum, item) => sum + item.quantity, 0),
+        0,
+      );
+      const totalMoney = sortedDetails.reduce((total, order) => total + order.total, 0);
+      const lines = [
+        `*Lista de cocina · ${sortedDetails.length} pedido${sortedDetails.length === 1 ? '' : 's'}*`,
+        `Total: ${totalUnits} unidades · ${formatMoney(totalMoney)}`,
+        '',
+        ...sortedDetails.flatMap((order, index) => [
+          `${index + 1}. ${getOrderCode(order.id)} · ${order.customer.name}`,
+          `Tel: ${order.customer.phone}${order.customer.address ? ` · ${order.customer.address}` : ''}`,
+          `Entrega: ${formatDateAr(order.deliveryDate)} · ${deliveryTimeLabels[order.deliveryTime]} · ${order.deliveryType === 'envio' ? 'ENVÍO' : 'RETIRO'} · ${order.cooked ? 'COCINADO' : 'CRUDO'}`,
+          ...order.items.map((item) => `- ${item.menuItemName}: ${item.quantity} u.`),
+          `Total pedido: ${formatMoney(order.total)}`,
+          order.notes?.trim() ? `Notas: ${order.notes.trim()}` : '',
+          '',
+        ]),
+      ].filter(Boolean);
+
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setKitchenListFeedback('Lista copiada. Ya podés pegarla en WhatsApp o imprimirla.');
+    } catch {
+      setKitchenListFeedback('No se pudo generar la lista. Intentá de nuevo.');
+    } finally {
+      setIsGeneratingKitchenList(false);
+    }
+  };
+
   const renderOrderCard = (order: (typeof visibleOrders)[number]) => {
     const isExpanded = expandedOrderId === order.id;
-    const productLabel = `${order.itemCount} ${order.itemCount === 1 ? 'producto' : 'productos'}`;
+    const dozenLabel = formatDozenLabel(order.totalQuantity);
+    const isMenuOpen = openMenuId === order.id;
+    const isSelectedForKitchen = selectedOrderIds.has(order.id);
 
     return (
       <article
@@ -883,26 +1106,42 @@ export const OrdersPage = () => {
         key={order.id}
         onClick={() => toggleOrderDetail(order.id)}
         className={[
-          'relative cursor-pointer overflow-hidden rounded-2xl border bg-white shadow-sm shadow-foreground/3 transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md',
-          isExpanded
-            ? 'border-primary/40 ring-2 ring-primary/15'
-            : 'border-border/80',
+          'relative cursor-pointer overflow-visible rounded-2xl border bg-white/95 shadow-card transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-soft',
+          isExpanded ? 'border-primary/40 ring-2 ring-primary/15' : 'border-border/70',
         ].join(' ')}
       >
         <span
           aria-label={`Indicador de estado ${statusConfig[order.status].label}`}
-          className={`absolute inset-y-0 left-0 w-1 ${statusConfig[order.status].line}`}
+          className={`absolute bottom-4 left-0 top-4 w-1 rounded-r-full ${statusConfig[order.status].line}`}
         />
 
-        <div className="grid gap-4 p-4 pl-5 lg:grid-cols-[1.05fr_1.55fr_1.25fr_1fr_1.1fr_0.9fr_1.3fr] lg:items-center lg:gap-5">
+        <div className="grid gap-4 p-4 pl-5 lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto] lg:items-center lg:gap-5">
+          <label
+            className="flex items-center gap-2 text-xs font-black text-muted-foreground"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <input
+              aria-label={`Seleccionar pedido ${getOrderCode(order.id)} para lista de cocina`}
+              checked={isSelectedForKitchen}
+              className="h-4 w-4 rounded border-border accent-primary"
+              onChange={() => toggleOrderSelection(order.id)}
+              type="checkbox"
+            />
+            <span className="lg:hidden">Seleccionar</span>
+          </label>
+
+          {/* Pedido */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Pedido
             </p>
             <p className="font-black text-foreground tabular-nums">{getOrderCode(order.id)}</p>
-            <p className="mt-1 text-xs font-semibold text-muted-foreground">Pedido registrado</p>
+            <p className="mt-1 inline-flex rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+              {dozenLabel}
+            </p>
           </div>
 
+          {/* Cliente */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Cliente
@@ -918,13 +1157,13 @@ export const OrdersPage = () => {
             )}
           </div>
 
+          {/* Entrega — fecha legible + badge franja */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Entrega
             </p>
-            <p className="flex items-center gap-1 text-sm font-bold text-foreground">
-              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-              {formatDateAr(order.deliveryDate)}
+            <p className="text-sm font-bold text-foreground">
+              {formatDateReadable(order.deliveryDate)}
             </p>
             <span
               className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${deliveryTimeBadgeClassNames[order.deliveryTime]}`}
@@ -933,48 +1172,61 @@ export const OrdersPage = () => {
             </span>
           </div>
 
+          {/* Método — badges en columna */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Método
             </p>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-col gap-1">
               <span
                 className={[
-                  'rounded-full px-2.5 py-0.5 text-xs font-bold',
+                  'inline-flex h-6 w-fit items-center rounded-full px-2.5 text-xs font-black leading-none',
                   order.deliveryType === 'envio'
-                    ? 'bg-sky-100 text-sky-800 ring-1 ring-sky-200'
-                    : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+                    ? 'bg-sky-600 text-white ring-1 ring-sky-700/20'
+                    : 'bg-emerald-600 text-white ring-1 ring-emerald-700/20',
                 ].join(' ')}
               >
                 {order.deliveryType === 'envio' ? 'Envío' : 'Retiro'}
               </span>
               {order.cooked && (
-                <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-800 ring-1 ring-red-200">
+                <span className="inline-flex h-6 w-fit items-center rounded-full bg-red-600 px-2.5 text-xs font-black leading-none text-white ring-1 ring-red-700/20">
                   Cocinado
                 </span>
               )}
             </div>
-            {order.deliveryFee > 0 && (
-              <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                + {formatMoney(order.deliveryFee)}
-              </p>
-            )}
           </div>
 
+          {/* Estado + indicador de pago */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Estado
             </p>
-            <span
-              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-black ${statusConfig[order.status].badge}`}
-            >
-              {statusConfig[order.status].label}
-            </span>
-            <p className="mt-1 text-xs font-semibold text-muted-foreground">
-              {order.isPaid ? 'Pagado' : 'No pagado'}
-            </p>
+            <div className="flex flex-col items-start gap-1">
+              <span
+                className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-black leading-none ${statusConfig[order.status].badge}`}
+              >
+                {statusConfig[order.status].label}
+              </span>
+              <button
+                aria-label={order.isPaid ? 'Marcar como no pagado' : 'Marcar como pagado'}
+                aria-pressed={order.isPaid}
+                className={[
+                  'inline-flex h-6 items-center rounded-full px-2.5 text-xs font-black leading-none transition-all duration-150 disabled:opacity-60',
+                  order.isPaid ? paymentBadgeClassNames.paid : paymentBadgeClassNames.unpaid,
+                ].join(' ')}
+                disabled={updateOrderPayment.isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void markPayment(order.id, !order.isPaid);
+                }}
+                type="button"
+              >
+                {order.isPaid ? 'Pagado' : 'No pagado'}
+              </button>
+            </div>
           </div>
 
+          {/* Total */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Total
@@ -985,75 +1237,79 @@ export const OrdersPage = () => {
             >
               {formatMoney(order.total)}
             </p>
-            <p className="mt-1 text-xs font-semibold text-muted-foreground">{productLabel}</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 lg:justify-end" onClick={(event) => event.stopPropagation()}>
-            {orderStatuses.map((status) => {
-              const isActive = order.status === status;
-              return (
-                <button
-                  aria-label={`Estado ${statusConfig[status].label}`}
-                  aria-pressed={isActive}
-                  className={[
-                    'h-8 w-8 rounded-xl border text-sm font-black transition-all duration-150 disabled:opacity-60',
-                    isActive
-                      ? statusConfig[status].btnActive
-                      : `bg-card ${statusConfig[status].btn}`,
-                  ].join(' ')}
-                  disabled={updateOrderStatus.isPending}
-                  key={status}
-                  onClick={() => markStatus(order.id, status)}
-                  type="button"
-                >
-                  {statusConfig[status].shortLabel}
-                </button>
-              );
-            })}
-            <button
-              aria-label={order.isPaid ? 'Marcar como no pagado' : 'Marcar como pagado'}
-              aria-pressed={order.isPaid}
-              className={[
-                'flex h-8 w-8 items-center justify-center rounded-xl border transition-all duration-150 disabled:opacity-60',
-                order.isPaid
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                  : 'border-gray-200 bg-card text-gray-400 line-through hover:bg-gray-50',
-              ].join(' ')}
-              disabled={updateOrderPayment.isPending}
-              onClick={() => markPayment(order.id, !order.isPaid)}
-              type="button"
-            >
-              <Banknote className="h-4 w-4" />
-            </button>
+          {/* Acciones: ojo + menú 3 puntos */}
+          <div
+            className="flex items-center gap-1.5 lg:justify-end"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               aria-label={isExpanded ? 'Cerrar detalle' : 'Ver detalle'}
               aria-expanded={isExpanded}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+              className={[
+                'flex h-8 w-8 items-center justify-center rounded-full border transition',
+                isExpanded
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-primary',
+              ].join(' ')}
               onClick={() => toggleOrderDetail(order.id)}
               type="button"
             >
-              <ChevronDown
-                className={`h-4 w-4 transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`}
-              />
+              <Eye className="h-4 w-4" />
             </button>
-            <button
-              aria-label={`Editar pedido de ${order.customer.name}`}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary disabled:opacity-60"
-              disabled={updateOrder.isPending}
-              onClick={() => void editOrder(order.id)}
-              type="button"
-            >
-              <Edit3 className="h-4 w-4" />
-            </button>
-            <button
-              aria-label={`Eliminar pedido de ${order.customer.name}`}
-              className="flex h-8 w-8 items-center justify-center rounded-xl border border-destructive/20 bg-card text-destructive transition hover:bg-destructive/8 disabled:opacity-60"
-              disabled={deleteOrder.isPending}
-              onClick={() => void removeOrder(order.id, order.customer.name)}
-              type="button"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+
+            {/* Menú 3 puntos */}
+            <div className="relative">
+              <button
+                aria-label="Más opciones"
+                aria-haspopup="true"
+                aria-expanded={isMenuOpen}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+                onClick={() => setOpenMenuId(isMenuOpen ? null : order.id)}
+                type="button"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+
+              {isMenuOpen && (
+                <>
+                  {/* Overlay para cerrar */}
+                  <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
+                  <div
+                    className="absolute right-0 top-9 z-50 min-w-[140px] overflow-hidden rounded-xl border border-border bg-white shadow-xl"
+                    role="menu"
+                  >
+                    <button
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60"
+                      disabled={updateOrder.isPending}
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        void editOrder(order.id);
+                      }}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <Edit3 className="h-4 w-4 text-muted-foreground" />
+                      Editar
+                    </button>
+                    <button
+                      className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/8 disabled:opacity-60"
+                      disabled={deleteOrder.isPending}
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        void removeOrder(order.id, order.customer.name);
+                      }}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Eliminar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </article>
@@ -1101,11 +1357,11 @@ export const OrdersPage = () => {
               <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
               <input
                 aria-label="Buscar cliente"
-                className="w-full bg-transparent outline-none placeholder:text-muted-foreground/60"
+                className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/60"
                 onChange={(e) => setCustomerSearch(e.target.value)}
                 placeholder="Nombre, teléfono o dirección..."
                 role="searchbox"
-                type="search"
+                type="text"
                 value={customerSearch}
               />
               {customerSearch && (
@@ -1337,7 +1593,7 @@ export const OrdersPage = () => {
                 <div className="mt-2.5 flex gap-1.5">
                   <button
                     aria-label="+ Docena"
-                    className="flex-1 rounded-lg bg-orange-100/80 py-1.5 text-xs font-bold text-orange-900 transition hover:bg-orange-200/80 active:scale-95"
+                    className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 active:scale-95"
                     onClick={() => setQuantity(menuItem.id, 12)}
                     type="button"
                   >
@@ -1345,7 +1601,7 @@ export const OrdersPage = () => {
                   </button>
                   <button
                     aria-label="+ Media"
-                    className="flex-1 rounded-lg bg-amber-100/80 py-1.5 text-xs font-bold text-amber-900 transition hover:bg-amber-200/80 active:scale-95"
+                    className="flex-1 rounded-lg bg-amber-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
                     onClick={() => setQuantity(menuItem.id, 6)}
                     type="button"
                   >
@@ -1353,7 +1609,7 @@ export const OrdersPage = () => {
                   </button>
                   <button
                     aria-label="+ Unidad"
-                    className="flex-1 rounded-lg bg-primary/10 py-1.5 text-xs font-bold text-primary transition hover:bg-primary/20 active:scale-95"
+                    className="flex-1 rounded-lg bg-primary py-2 text-sm font-black text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-95"
                     onClick={() => setQuantity(menuItem.id, 1)}
                     type="button"
                   >
@@ -1530,24 +1786,43 @@ export const OrdersPage = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <section className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="font-display text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
             Pedidos
-          </h2>
-          <p className="mt-1 text-sm font-medium text-muted-foreground">
+          </h1>
+          <p className="mt-2 text-sm font-medium text-muted-foreground">
             Administrá y seguí todos los pedidos de tu emprendimiento.
           </p>
         </div>
-        <div className="hidden items-center gap-3 sm:flex">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <button
-            className="relative rounded-xl border border-border bg-card p-2.5 text-muted-foreground shadow-sm"
+            aria-label="Notificaciones de pedidos"
+            className="relative rounded-full border border-border bg-card p-2.5 text-muted-foreground shadow-card transition hover:border-primary/30 hover:text-primary"
             type="button"
           >
             <Bell className="h-4 w-4" />
             <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-black text-primary-foreground">
               {summary.pending}
             </span>
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm font-black text-foreground shadow-card transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={visibleOrders.length === 0}
+            onClick={exportVisibleOrders}
+            type="button"
+          >
+            <Download className="h-4 w-4" />
+            Exportar
+          </button>
+          <button
+            aria-label="+ Nuevo pedido"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+            onClick={openCreateDialog}
+            type="button"
+          >
+            <Plus className="h-4 w-4" />
+            Nuevo pedido
           </button>
         </div>
       </section>
@@ -1556,10 +1831,10 @@ export const OrdersPage = () => {
         {summaryCards.map(({ label, value, hint, icon: Icon, tone }) => (
           <article
             key={label}
-            className="rounded-2xl border border-border/80 bg-white/80 p-5 shadow-sm shadow-foreground/3"
+            className="rounded-2xl border border-border/70 bg-white/85 p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
           >
             <div className="flex items-start gap-4">
-              <span className={`rounded-xl p-3 ${tone}`}>
+              <span className={`rounded-2xl p-3 ${tone}`}>
                 <Icon className="h-5 w-5" />
               </span>
               <div>
@@ -1600,10 +1875,10 @@ export const OrdersPage = () => {
           })}
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(220px,1fr)_180px_170px_170px_180px_auto] xl:items-end">
-          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Buscar pedido
-            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2.5 text-sm shadow-sm transition focus-within:ring-2 focus-within:ring-ring/30">
+        <div className="grid gap-3 rounded-2xl border border-border/70 bg-white/75 p-3 shadow-card xl:grid-cols-[minmax(260px,1fr)_170px_170px_170px_180px] xl:items-center">
+          <label className="block">
+            <span className="sr-only">Buscar pedido</span>
+            <div className="flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2.5 text-sm shadow-sm transition focus-within:ring-2 focus-within:ring-ring/30">
               <Search className="h-4 w-4 text-muted-foreground" />
               <input
                 aria-label="Buscar pedido"
@@ -1617,21 +1892,21 @@ export const OrdersPage = () => {
             </div>
           </label>
 
-          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Fecha entrega
+          <label className="block">
+            <span className="sr-only">Fecha entrega</span>
             <input
               aria-label="Filtrar por fecha de entrega"
-              className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+              className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
               onChange={(event) => setDeliveryDateFilter(event.target.value)}
               type="date"
               value={deliveryDateFilter}
             />
           </label>
 
-          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Estado
+          <label className="block">
+            <span className="sr-only">Estado</span>
             <select
-              className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+              className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
               onChange={(event) => setStatusFilter(event.target.value as OrderStatusFilter)}
               value={statusFilter}
             >
@@ -1644,10 +1919,10 @@ export const OrdersPage = () => {
             </select>
           </label>
 
-          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Método
+          <label className="block">
+            <span className="sr-only">Método</span>
             <select
-              className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+              className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
               onChange={(event) => setMethodFilter(event.target.value as OrderMethodFilter)}
               value={methodFilter}
             >
@@ -1659,42 +1934,96 @@ export const OrdersPage = () => {
             </select>
           </label>
 
-          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Ordenar por
-            <select
-              className="mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-              onChange={(event) => setSortOption(event.target.value as OrderSortOption)}
-              value={sortOption}
-            >
-              {(Object.keys(orderSortLabels) as OrderSortOption[]).map((option) => (
-                <option key={option} value={option}>
-                  {orderSortLabels[option]}
-                </option>
-              ))}
-            </select>
+          <label className="block">
+            <span className="sr-only">Más filtros</span>
+            <div className="relative">
+              <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <select
+                aria-label="Ordenar por"
+                className="w-full rounded-full border border-border bg-white py-2.5 pl-9 pr-3 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+                onChange={(event) => setSortOption(event.target.value as OrderSortOption)}
+                value={sortOption}
+              >
+                {(Object.keys(orderSortLabels) as OrderSortOption[]).map((option) => (
+                  <option key={option} value={option}>
+                    {orderSortLabels[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
           </label>
-
-          <button
-            aria-label="+ Nuevo pedido"
-            className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-black text-primary-foreground shadow-md shadow-primary/20 transition hover:bg-primary/90 active:scale-[0.98]"
-            onClick={openCreateDialog}
-            type="button"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo pedido
-          </button>
         </div>
 
+        {selectedOrderIds.size > 0 && (
+          <div
+            aria-live="polite"
+            className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/8 p-4 shadow-card sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="text-sm font-black text-foreground">
+                {selectedOrderIds.size} pedido{selectedOrderIds.size === 1 ? '' : 's'} seleccionado
+                {selectedOrderIds.size === 1 ? '' : 's'}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                Generá una lista para cocina y se copia automáticamente.
+              </p>
+              {kitchenListFeedback && (
+                <p className="mt-2 text-xs font-black text-primary">{kitchenListFeedback}</p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="rounded-full border border-border bg-white px-4 py-2 text-sm font-black text-foreground transition hover:border-primary/30"
+                onClick={clearOrderSelection}
+                type="button"
+              >
+                Limpiar
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 disabled:opacity-60"
+                disabled={isGeneratingKitchenList}
+                onClick={generateKitchenList}
+                type="button"
+              >
+                <ClipboardList className="h-4 w-4" />
+                {isGeneratingKitchenList ? 'Generando...' : 'Generar lista'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Header de tabla con sort clickeable */}
         <div
           aria-label="Encabezado de tabla de pedidos"
-          className="hidden rounded-sm bg-foreground/5 border-border border-1 px-5 py-3 text-xs font-bold uppercase tracking-wide text-black lg:grid lg:grid-cols-[1.05fr_1.55fr_1.25fr_1fr_1.1fr_0.9fr_1.3fr] lg:gap-5"
+          className="hidden rounded-xl border border-border/70 bg-foreground/5 px-5 py-3 text-xs font-black uppercase tracking-wide text-foreground/70 lg:grid lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto] lg:gap-5"
         >
+          <span aria-hidden="true" />
           <span>Pedido</span>
-          <span>Cliente</span>
-          <span>Entrega</span>
-          <span>Método</span>
-          <span>Estado</span>
-          <span>Total</span>
+          {(['name', 'date', 'method', 'status', 'total'] as TableSortColumn[]).map((col) => {
+            const labels: Record<TableSortColumn, string> = {
+              name: 'Cliente',
+              date: 'Entrega',
+              method: 'Método',
+              status: 'Estado',
+              total: 'Total',
+            };
+            const isActive = tableSortCol === col;
+            const Icon = isActive ? (tableSortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+            return (
+              <button
+                key={col}
+                className={[
+                  'flex items-center gap-1 transition-colors hover:text-foreground',
+                  isActive ? 'text-primary' : '',
+                ].join(' ')}
+                onClick={() => toggleTableSort(col)}
+                type="button"
+              >
+                {labels[col]}
+                <Icon className="h-3 w-3" />
+              </button>
+            );
+          })}
           <span className="text-right">Acciones</span>
         </div>
 
@@ -1740,7 +2069,6 @@ export const OrdersPage = () => {
                 isLoading={orderDetailQuery.isLoading}
                 onCancel={cancelOrderFromDetail}
                 onClose={closeOrderDetail}
-                onEdit={editOrderFromDetail}
                 onMarkStatus={markStatusFromDetail}
               />
             </aside>
@@ -1762,7 +2090,6 @@ export const OrdersPage = () => {
               isMobile
               onCancel={cancelOrderFromDetail}
               onClose={closeOrderDetail}
-              onEdit={editOrderFromDetail}
               onMarkStatus={markStatusFromDetail}
             />
           </section>,
