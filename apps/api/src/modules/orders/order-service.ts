@@ -36,6 +36,7 @@ export type OrderItemDetail = {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  priceHalfDozen?: number;
 };
 
 export type OrderAddonDetail = {
@@ -185,6 +186,7 @@ const buildSnapshotItems = async (
       quantity: item.quantity,
       unitPrice: calculated.total,
       subtotal: calculated.total,
+      priceHalfDozen: menuItem.priceHalfDozen,
     };
   });
 };
@@ -245,8 +247,7 @@ const buildPersistInput = async (
     repository.getSetting('promo_combined_dozen_quantity'),
     repository.getSetting('promo_combined_dozen_price'),
   ]);
-  const deliveryFee =
-    input.deliveryType === 'envio' ? parseMoneySetting(deliveryFeeSetting) : 0;
+  const deliveryFee = input.deliveryType === 'envio' ? parseMoneySetting(deliveryFeeSetting) : 0;
   const pricing = calculateOrderPromotion({
     items,
     addons,
@@ -344,7 +345,8 @@ export const updateOrder = async (
         discountPercent: input.discountPercent ?? current.discountPercent,
         deliveryFee: input.deliveryFee ?? current.deliveryFee,
         items: input.items,
-        addons: input.addons ?? current.addons.map(({ addonId, quantity }) => ({ addonId, quantity })),
+        addons:
+          input.addons ?? current.addons.map(({ addonId, quantity }) => ({ addonId, quantity })),
       })
     : toCreateOrderInput({
         customer: input.customer ?? { existingCustomerId: current.customer.id },
@@ -359,7 +361,8 @@ export const updateOrder = async (
           menuItemId: item.menuItemId,
           quantity: item.quantity,
         })),
-        addons: input.addons ?? current.addons.map(({ addonId, quantity }) => ({ addonId, quantity })),
+        addons:
+          input.addons ?? current.addons.map(({ addonId, quantity }) => ({ addonId, quantity })),
       });
 
   const existingItems = input.items

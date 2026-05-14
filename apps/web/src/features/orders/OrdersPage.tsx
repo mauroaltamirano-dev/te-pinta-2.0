@@ -967,6 +967,7 @@ export const OrdersPage = () => {
         priceHalfDozen: menuItem.priceHalfDozen,
         priceDozen: menuItem.priceDozen,
       }).total,
+      priceHalfDozen: menuItem.priceHalfDozen,
     }));
     const deliveryFee = form.deliveryType === 'envio' ? (deliveryFeeQuery.data ?? 0) : 0;
     const pricing = calculateOrderPromotion({
@@ -1310,7 +1311,7 @@ export const OrdersPage = () => {
           className={[
             'grid gap-4 p-4 pl-5 lg:items-center lg:gap-5',
             isDesktopDetailOpen
-              ? 'lg:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_auto]'
+              ? 'lg:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_auto] 2xl:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_0.9fr_auto]'
               : 'lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto]',
           ].join(' ')}
         >
@@ -2321,7 +2322,7 @@ export const OrdersPage = () => {
             className={[
               'hidden rounded-xl border border-border/70 bg-foreground/5 px-5 py-3 text-xs font-black uppercase tracking-wide text-foreground/70 lg:grid lg:gap-5',
               isDesktopDetailOpen
-                ? 'lg:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_auto]'
+                ? 'lg:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_auto] 2xl:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_0.9fr_auto]'
                 : 'lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto]',
             ].join(' ')}
           >
@@ -2329,7 +2330,7 @@ export const OrdersPage = () => {
             <span>Pedido</span>
             {(
               (isDesktopDetailOpen
-                ? ['name', 'date', 'method', 'status']
+                ? ['name', 'date', 'method', 'status', 'total']
                 : ['name', 'date', 'method', 'status', 'total']) as TableSortColumn[]
             ).map((col) => {
               const labels: Record<TableSortColumn, string> = {
@@ -2346,6 +2347,7 @@ export const OrdersPage = () => {
                   key={col}
                   className={[
                     'flex items-center gap-1 transition-colors hover:text-foreground',
+                    col === 'total' && isDesktopDetailOpen ? 'hidden 2xl:flex' : '',
                     isActive ? 'text-primary' : '',
                   ].join(' ')}
                   onClick={() => toggleTableSort(col)}

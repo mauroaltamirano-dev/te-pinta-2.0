@@ -7,7 +7,14 @@ import type {
   OrderDetail,
   OrderRepository,
 } from './order-service';
-import { createOrder, deleteOrder, getOrder, updateOrder, updateOrderPayment, updateOrderStatus } from './order-service';
+import {
+  createOrder,
+  deleteOrder,
+  getOrder,
+  updateOrder,
+  updateOrderPayment,
+  updateOrderStatus,
+} from './order-service';
 
 const customer = (overrides: Partial<CustomerSnapshot> = {}): CustomerSnapshot => ({
   id: 'customer-1',
@@ -203,6 +210,65 @@ describe('order service', () => {
     });
   });
 
+  it('prices several split dozens as combined dozens before discount and delivery', async () => {
+    let persisted: Parameters<OrderRepository['createOrderWithItems']>[0] | undefined;
+    const repository = createRepository({
+      getMenuItemsByIds: async () => [
+        menuItem({ id: 'caprese', name: 'Caprese', priceHalfDozen: 8000 }),
+        menuItem({ id: 'criolla', name: 'Criolla Salada', priceHalfDozen: 8500 }),
+        menuItem({ id: 'saltena', name: 'Salteña', priceHalfDozen: 9000 }),
+        menuItem({ id: 'hongos', name: 'Hongos al Puerro', priceHalfDozen: 8500 }),
+        menuItem({ id: 'jyq', name: 'Jamón y Queso', priceHalfDozen: 8000 }),
+        menuItem({ id: 'humita', name: 'Humita', priceHalfDozen: 8000 }),
+      ],
+      getSetting: async (key) => {
+        const settings: Record<string, string> = {
+          delivery_fee: '1500',
+          promo_bulk_dozen_threshold: '3',
+          promo_bulk_discount_percent: '10',
+          promo_combined_dozen_quantity: '12',
+          promo_combined_dozen_price: '15000',
+          addon_yasgua_salsa_price: '500',
+          addon_yasgua_cremosa_price: '1000',
+        };
+        return settings[key] ?? null;
+      },
+      createOrderWithItems: async (input) => {
+        persisted = input;
+        return orderDetail(input);
+      },
+    });
+
+    await createOrder(
+      {
+        customer: { existingCustomerId: 'customer-1' },
+        deliveryDate: '2026-05-15',
+        deliveryTime: 'noche',
+        deliveryType: 'envio',
+        cooked: false,
+        discountPercent: 0,
+        deliveryFee: 0,
+        items: [
+          { menuItemId: 'caprese', quantity: 6 },
+          { menuItemId: 'criolla', quantity: 6 },
+          { menuItemId: 'saltena', quantity: 6 },
+          { menuItemId: 'hongos', quantity: 6 },
+          { menuItemId: 'jyq', quantity: 6 },
+          { menuItemId: 'humita', quantity: 6 },
+        ],
+        addons: [{ addonId: 'yasgua_salsa', quantity: 1 }],
+      },
+      repository,
+    );
+
+    expect(persisted).toMatchObject({
+      subtotal: 45500,
+      discountPercent: 10,
+      deliveryFee: 1500,
+      total: 42450,
+    });
+  });
+
   it('applies the 3+ dozen discount from settings', async () => {
     let persisted: Parameters<OrderRepository['createOrderWithItems']>[0] | undefined;
     const repository = createRepository({
@@ -382,9 +448,9 @@ describe('order service', () => {
     expect(updatedStatuses).toEqual(['preparado', 'confirmado']);
 
     const missingRepository = createRepository({ updateStatus: async () => null });
-    await expect(updateOrderStatus('missing', 'preparado', missingRepository)).rejects.toMatchObject(
-      new ApiError(404, 'Order not found', 'ORDER_NOT_FOUND'),
-    );
+    await expect(
+      updateOrderStatus('missing', 'preparado', missingRepository),
+    ).rejects.toMatchObject(new ApiError(404, 'Order not found', 'ORDER_NOT_FOUND'));
   });
 
   it('updates payment state and throws 404 for missing orders', async () => {
