@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   calculateItemPrice,
+  calculateOrderPromotion,
   type CreateOrderInput,
   type DeliveryTime,
   type DeliveryType,
@@ -37,6 +38,15 @@ export type OrderItemDetail = {
   subtotal: number;
 };
 
+export type OrderAddonDetail = {
+  id: string;
+  addonId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+};
+
 export type OrderDetail = {
   id: string;
   customer: CustomerSnapshot;
@@ -52,14 +62,16 @@ export type OrderDetail = {
   status: OrderStatus;
   isPaid: boolean;
   items: OrderItemDetail[];
+  addons: OrderAddonDetail[];
 };
 
-export type OrderListItem = Omit<OrderDetail, 'items'> & {
+export type OrderListItem = Omit<OrderDetail, 'items' | 'addons'> & {
   itemCount: number;
   totalQuantity: number;
 };
 
 export type PersistOrderItem = Omit<OrderItemDetail, 'id'> & { id: string };
+export type PersistOrderAddon = Omit<OrderAddonDetail, 'id'> & { id: string };
 
 export type PersistOrderInput = {
   id: string;
@@ -76,6 +88,7 @@ export type PersistOrderInput = {
   status: OrderStatus;
   isPaid: boolean;
   items: PersistOrderItem[];
+  addons: PersistOrderAddon[];
 };
 
 export type OrderRepository = {
@@ -100,6 +113,17 @@ const parseMoneySetting = (value: string | null): number => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 };
+
+const parseNumberSetting = parseMoneySetting;
+
+const addonDefinitions = [
+  { addonId: 'yasgua_salsa', name: 'Yasgua salsa', settingKey: 'addon_yasgua_salsa_price' },
+  {
+    addonId: 'yasgua_cremosa',
+    name: 'Yasgua cremosa',
+    settingKey: 'addon_yasgua_cremosa_price',
+  },
+] as const;
 
 const resolveCustomer = async (
   input: CreateOrderInput['customer'],
@@ -165,6 +189,35 @@ const buildSnapshotItems = async (
   });
 };
 
+const buildSnapshotAddons = async (
+  addons: CreateOrderInput['addons'],
+  repository: OrderRepository,
+): Promise<PersistOrderAddon[]> => {
+  const selectedAddons = addons ?? [];
+  if (selectedAddons.length === 0) {
+    return [];
+  }
+
+  return Promise.all(
+    selectedAddons.map(async (addon) => {
+      const definition = addonDefinitions.find((item) => item.addonId === addon.addonId);
+      if (!definition) {
+        throw new ApiError(404, 'Addon not found', 'ADDON_NOT_FOUND');
+      }
+
+      const unitPrice = parseMoneySetting(await repository.getSetting(definition.settingKey));
+      return {
+        id: randomUUID(),
+        addonId: addon.addonId,
+        name: definition.name,
+        quantity: addon.quantity,
+        unitPrice,
+        subtotal: roundMoney(unitPrice * addon.quantity),
+      };
+    }),
+  );
+};
+
 const buildPersistInput = async (
   input: CreateOrderInput,
   repository: OrderRepository,
@@ -173,17 +226,39 @@ const buildPersistInput = async (
     status?: OrderStatus;
     isPaid?: boolean;
     existingItems?: PersistOrderItem[];
+    existingAddons?: PersistOrderAddon[];
   } = {},
 ): Promise<PersistOrderInput> => {
   const customer = await resolveCustomer(input.customer, repository);
   const items = options.existingItems ?? (await buildSnapshotItems(input.items, repository));
-  const subtotal = roundMoney(items.reduce((total, item) => total + item.subtotal, 0));
+  const addons = options.existingAddons ?? (await buildSnapshotAddons(input.addons, repository));
+  const [
+    deliveryFeeSetting,
+    bulkDozenThresholdSetting,
+    bulkDiscountPercentSetting,
+    combinedDozenQuantitySetting,
+    combinedDozenPriceSetting,
+  ] = await Promise.all([
+    repository.getSetting('delivery_fee'),
+    repository.getSetting('promo_bulk_dozen_threshold'),
+    repository.getSetting('promo_bulk_discount_percent'),
+    repository.getSetting('promo_combined_dozen_quantity'),
+    repository.getSetting('promo_combined_dozen_price'),
+  ]);
   const deliveryFee =
-    input.deliveryType === 'envio'
-      ? parseMoneySetting(await repository.getSetting('delivery_fee'))
-      : 0;
-  const discountAmount = roundMoney(subtotal * (input.discountPercent / 100));
-  const total = roundMoney(subtotal - discountAmount + deliveryFee);
+    input.deliveryType === 'envio' ? parseMoneySetting(deliveryFeeSetting) : 0;
+  const pricing = calculateOrderPromotion({
+    items,
+    addons,
+    manualDiscountPercent: input.discountPercent,
+    deliveryFee,
+    promotions: {
+      bulkDozenThreshold: parseNumberSetting(bulkDozenThresholdSetting) || undefined,
+      bulkDiscountPercent: parseNumberSetting(bulkDiscountPercentSetting) || undefined,
+      combinedDozenQuantity: parseNumberSetting(combinedDozenQuantitySetting) || undefined,
+      combinedDozenPrice: parseMoneySetting(combinedDozenPriceSetting) || undefined,
+    },
+  });
 
   return {
     id: options.id ?? randomUUID(),
@@ -193,13 +268,14 @@ const buildPersistInput = async (
     deliveryType: input.deliveryType,
     cooked: input.cooked,
     notes: input.notes || null,
-    discountPercent: input.discountPercent,
+    discountPercent: pricing.discountPercent,
     deliveryFee,
-    subtotal,
-    total,
+    subtotal: pricing.promoSubtotal,
+    total: roundMoney(pricing.total),
     status: options.status ?? 'confirmado',
     isPaid: options.isPaid ?? false,
     items,
+    addons,
   };
 };
 
@@ -224,6 +300,7 @@ const toCreateOrderInput = (input: CreateOrderInput | UpdateOrderInput): CreateO
     discountPercent: input.discountPercent ?? 0,
     deliveryFee: input.deliveryFee ?? 0,
     items: input.items,
+    addons: input.addons ?? [],
   };
 };
 
@@ -267,6 +344,7 @@ export const updateOrder = async (
         discountPercent: input.discountPercent ?? current.discountPercent,
         deliveryFee: input.deliveryFee ?? current.deliveryFee,
         items: input.items,
+        addons: input.addons ?? current.addons.map(({ addonId, quantity }) => ({ addonId, quantity })),
       })
     : toCreateOrderInput({
         customer: input.customer ?? { existingCustomerId: current.customer.id },
@@ -281,6 +359,7 @@ export const updateOrder = async (
           menuItemId: item.menuItemId,
           quantity: item.quantity,
         })),
+        addons: input.addons ?? current.addons.map(({ addonId, quantity }) => ({ addonId, quantity })),
       });
 
   const existingItems = input.items
@@ -289,11 +368,18 @@ export const updateOrder = async (
         ...item,
         id: item.id,
       }));
+  const existingAddons = input.addons
+    ? undefined
+    : current.addons.map((addon) => ({
+        ...addon,
+        id: addon.id,
+      }));
   const persistInput = await buildPersistInput(effectiveInput, repository, {
     id,
     status: input.status ?? current.status,
     isPaid: input.isPaid ?? current.isPaid,
     existingItems,
+    existingAddons,
   });
   const updated = await repository.replaceOrder(id, persistInput);
 

@@ -13,6 +13,7 @@ import type {
   deliveryTypeSchema,
   ingredientUnitSchema,
   orderFiltersSchema,
+  orderAddonInputSchema,
   orderItemInputSchema,
   orderStatusSchema,
   updateCustomerSchema,
@@ -43,6 +44,7 @@ export type UpdateIngredientInput = z.infer<typeof updateIngredientSchema>;
 export type UpdateSettingInput = z.infer<typeof updateSettingSchema>;
 
 export type OrderItemInput = z.infer<typeof orderItemInputSchema>;
+export type OrderAddonInput = z.infer<typeof orderAddonInputSchema>;
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
 export type OrderFilters = z.infer<typeof orderFiltersSchema>;

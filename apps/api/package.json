@@ -13,7 +13,8 @@
     "test:run": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "start": "node dist/src/server.js"
   },
   "dependencies": {
     "@te-pinta/shared": "workspace:*",

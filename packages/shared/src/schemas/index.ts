@@ -65,6 +65,11 @@ export const orderItemInputSchema = z.object({
   quantity: positiveIntegerSchema,
 });
 
+export const orderAddonInputSchema = z.object({
+  addonId: idSchema,
+  quantity: positiveIntegerSchema,
+});
+
 export const existingOrderCustomerSchema = z.object({
   existingCustomerId: idSchema,
 });
@@ -85,6 +90,7 @@ export const createOrderSchema = z.object({
   discountPercent: percentSchema.default(0),
   deliveryFee: moneySchema.default(0),
   items: z.array(orderItemInputSchema).min(1),
+  addons: z.array(orderAddonInputSchema).default([]),
 });
 
 export const updateOrderSchema = createOrderSchema.partial().extend({

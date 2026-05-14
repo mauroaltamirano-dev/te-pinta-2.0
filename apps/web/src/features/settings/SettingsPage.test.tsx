@@ -28,15 +28,24 @@ describe('SettingsPage', () => {
     vi.resetAllMocks();
     vi.mocked(listSettings).mockResolvedValue([
       { key: 'delivery_fee', value: '1500' },
+      { key: 'promo_bulk_dozen_threshold', value: '3' },
+      { key: 'promo_bulk_discount_percent', value: '10' },
+      { key: 'promo_combined_dozen_quantity', value: '12' },
+      { key: 'promo_combined_dozen_price', value: '15000' },
+      { key: 'addon_yasgua_salsa_price', value: '500' },
+      { key: 'addon_yasgua_cremosa_price', value: '1000' },
       { key: 'store_name', value: 'Te Pinta' },
     ]);
   });
 
-  it('lists settings and highlights the delivery fee', async () => {
+  it('lists settings and highlights operational promos', async () => {
     renderSettingsPage();
 
     expect(await screen.findByText('delivery_fee')).toBeInTheDocument();
     expect(screen.getAllByText('$ 1.500')).toHaveLength(2);
+    expect(screen.getByText('Promos')).toBeInTheDocument();
+    expect(screen.getAllByText('Adicionales').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('$ 15.000').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('store_name')).toBeInTheDocument();
   });
 

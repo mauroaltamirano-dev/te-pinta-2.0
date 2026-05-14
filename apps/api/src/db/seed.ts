@@ -4,6 +4,7 @@ import type { AdminEnv } from '@te-pinta/shared';
 
 import { loadEnvFile } from '../config/dotenv';
 import { getEnv } from '../config/env';
+import { defaultSettings } from '../modules/settings/settings-service';
 import { createDbClientFromEnv } from './index';
 import { settings, users } from './schema';
 
@@ -14,7 +15,7 @@ export type AdminSeedUser = {
   passwordHash: string;
 };
 
-export const initialSettings = [{ key: 'delivery_fee', value: '0' }] as const;
+export const initialSettings = defaultSettings;
 
 export const buildAdminSeedUser = async ({
   ADMIN_EMAIL,

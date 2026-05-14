@@ -13,8 +13,23 @@ export type SettingsRepository = {
   update(setting: Setting): Promise<Setting>;
 };
 
-export const listSettings = (repository: SettingsRepository): Promise<Setting[]> =>
-  repository.list();
+export const defaultSettings: Setting[] = [
+  { key: 'delivery_fee', value: '0' },
+  { key: 'promo_bulk_dozen_threshold', value: '3' },
+  { key: 'promo_bulk_discount_percent', value: '10' },
+  { key: 'promo_combined_dozen_quantity', value: '12' },
+  { key: 'promo_combined_dozen_price', value: '15000' },
+  { key: 'addon_yasgua_salsa_price', value: '500' },
+  { key: 'addon_yasgua_cremosa_price', value: '1000' },
+];
+
+export const listSettings = async (repository: SettingsRepository): Promise<Setting[]> => {
+  const settingsByKey = new Map(defaultSettings.map((setting) => [setting.key, setting]));
+  for (const setting of await repository.list()) {
+    settingsByKey.set(setting.key, setting);
+  }
+  return [...settingsByKey.values()].sort((a, b) => a.key.localeCompare(b.key));
+};
 
 export const getSetting = async (key: string, repository: SettingsRepository): Promise<Setting> => {
   const setting = await repository.get(key);

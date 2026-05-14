@@ -88,6 +88,18 @@ export const orderItems = pgTable('order_items', {
   subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
 });
 
+export const orderAddons = pgTable('order_addons', {
+  id: id(),
+  orderId: text('order_id')
+    .notNull()
+    .references(() => orders.id),
+  addonId: varchar('addon_id', { length: 120 }).notNull(),
+  name: varchar('name', { length: 160 }).notNull(),
+  quantity: integer('quantity').notNull(),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+  subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
+});
+
 export const settings = pgTable('settings', {
   key: varchar('key', { length: 120 }).primaryKey(),
   value: text('value').notNull(),

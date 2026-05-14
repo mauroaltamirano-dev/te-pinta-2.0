@@ -16,7 +16,7 @@ import {
   updateOrderPayment,
   updateOrderStatus,
 } from './orders-api';
-import { getDeliveryFee } from './settings-api';
+import { getDeliveryFee, getOrderPromotionSettings } from './settings-api';
 import { OrdersPage } from './OrdersPage';
 
 vi.mock('../customers/customers-api', () => ({
@@ -29,6 +29,7 @@ vi.mock('../menu/menu-api', () => ({
 
 vi.mock('./settings-api', () => ({
   getDeliveryFee: vi.fn(),
+  getOrderPromotionSettings: vi.fn(),
 }));
 
 vi.mock('./orders-api', () => ({
@@ -99,6 +100,7 @@ const orderList = [orderListItem];
 
 const orderDetail = {
   ...orderListItem,
+  addons: [],
   items: [
     {
       id: 'item-1',
@@ -145,6 +147,19 @@ const mockDesktopViewport = (isDesktop: boolean) => {
   });
 };
 
+const toLocalIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
 describe('OrdersPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -188,6 +203,16 @@ describe('OrdersPage', () => {
       },
     ]);
     vi.mocked(getDeliveryFee).mockResolvedValue(1500);
+    vi.mocked(getOrderPromotionSettings).mockResolvedValue({
+      bulkDozenThreshold: 3,
+      bulkDiscountPercent: 10,
+      combinedDozenQuantity: 12,
+      combinedDozenPrice: 15000,
+      addons: [
+        { addonId: 'yasgua_salsa', name: 'Yasgua salsa', price: 500 },
+        { addonId: 'yasgua_cremosa', name: 'Yasgua cremosa', price: 1000 },
+      ],
+    });
   });
 
   it('opens the selected order detail in a desktop drawer and updates it when selecting another order', async () => {
@@ -208,7 +233,7 @@ describe('OrdersPage', () => {
     await userEvent.click(orderCard.getByRole('button', { name: /ver detalle/i }));
 
     const drawer = within(await screen.findByRole('dialog', { name: /detalle del pedido/i }));
-    expect(drawer.getByRole('heading', { name: /pedido #p-00001/i })).toBeInTheDocument();
+    expect(drawer.getByRole('heading', { name: /#p-00001/i })).toBeInTheDocument();
     expect(drawer.getByRole('tab', { name: /resumen/i })).toHaveAttribute('aria-selected', 'true');
     expect(drawer.getByText('Carne suave')).toBeInTheDocument();
     expect(drawer.getByText('Humita')).toBeInTheDocument();
@@ -221,12 +246,12 @@ describe('OrdersPage', () => {
         name: /ver detalle/i,
       }),
     );
-    expect(await screen.findByRole('heading', { name: /pedido #p-00003/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /#p-00003/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/pedido luis gómez/i)).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByLabelText(/pedido ana pérez/i)).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('closes the desktop detail drawer with Escape and outside click', async () => {
+  it('closes the desktop detail panel with Escape and the close button', async () => {
     renderOrdersPage();
 
     const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
@@ -238,8 +263,8 @@ describe('OrdersPage', () => {
     expect(screen.queryByRole('dialog', { name: /detalle del pedido/i })).not.toBeInTheDocument();
 
     await userEvent.click(orderCard.getByRole('button', { name: /ver detalle/i }));
-    const overlay = await screen.findByLabelText(/cerrar detalle del pedido/i);
-    await userEvent.click(overlay);
+    const detail = within(await screen.findByRole('dialog', { name: /detalle del pedido/i }));
+    await userEvent.click(detail.getByRole('button', { name: /cerrar detalle/i }));
     expect(screen.queryByRole('dialog', { name: /detalle del pedido/i })).not.toBeInTheDocument();
   });
 
@@ -253,7 +278,7 @@ describe('OrdersPage', () => {
     const page = within(
       await screen.findByRole('region', { name: /pantalla detalle del pedido/i }),
     );
-    expect(page.getByRole('heading', { name: /pedido #p-00001/i })).toBeInTheDocument();
+    expect(page.getByRole('heading', { name: /#p-00001/i })).toBeInTheDocument();
     expect(page.getByRole('button', { name: /volver a pedidos/i })).toBeInTheDocument();
     expect(page.getByRole('navigation', { name: /secciones del detalle/i })).toBeInTheDocument();
     expect(page.getByLabelText(/acciones principales del pedido/i)).toHaveClass('fixed');
@@ -270,7 +295,8 @@ describe('OrdersPage', () => {
     renderOrdersPage();
 
     const activeCard = within(await screen.findByLabelText(/pedido ana pérez/i));
-    expect(activeCard.getByText(/06-05-2026/)).toBeInTheDocument();
+    expect(activeCard.getByText(/miércoles/i)).toBeInTheDocument();
+    expect(activeCard.getByText(/6 may 2026/i)).toBeInTheDocument();
     expect(activeCard.getByText(/1122334455/)).toBeInTheDocument();
     expect(activeCard.getByText(/av. siempre viva 742/i)).toBeInTheDocument();
     expect(activeCard.getByLabelText(/total del pedido/i)).toHaveTextContent('$ 23.100');
@@ -280,7 +306,8 @@ describe('OrdersPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /finalizados/i }));
 
     const finalizedCard = within(await screen.findByLabelText(/pedido mauro altamirano/i));
-    expect(finalizedCard.getByText(/08-05-2026/)).toBeInTheDocument();
+    expect(finalizedCard.getByText(/viernes/i)).toBeInTheDocument();
+    expect(finalizedCard.getByText(/8 may 2026/i)).toBeInTheDocument();
     expect(finalizedCard.getByText(/3537559269/)).toBeInTheDocument();
     expect(finalizedCard.getByLabelText(/total del pedido/i)).toHaveTextContent('$ 39.500');
     expect(screen.queryByLabelText(/pedido ana pérez/i)).not.toBeInTheDocument();
@@ -309,6 +336,30 @@ describe('OrdersPage', () => {
     ]) {
       expect(header.getByText(column)).toBeInTheDocument();
     }
+  });
+
+  it('highlights delivery dates that are today or tomorrow in the order preview', async () => {
+    const today = new Date();
+    const todayIso = toLocalIsoDate(today);
+    const tomorrowIso = toLocalIsoDate(addDays(today, 1));
+
+    vi.mocked(listOrders).mockResolvedValue([
+      { ...orderListItem, deliveryDate: todayIso },
+      {
+        ...afternoonOrderListItem,
+        id: 'order-tomorrow',
+        customer: { ...afternoonOrderListItem.customer, name: 'Pedido Mañana' },
+        deliveryDate: tomorrowIso,
+      },
+    ]);
+
+    renderOrdersPage();
+
+    const todayCard = within(await screen.findByLabelText(/pedido ana pérez/i));
+    const tomorrowCard = within(await screen.findByLabelText(/pedido pedido mañana/i));
+
+    expect(todayCard.getByText('HOY')).toBeInTheDocument();
+    expect(tomorrowCard.getByText('MAÑANA')).toBeInTheDocument();
   });
 
   it('filters active orders by delivery date in the table', async () => {
@@ -411,11 +462,14 @@ describe('OrdersPage', () => {
     const carneCard = within(dialog.getByLabelText(/variedad carne suave/i));
     await userEvent.click(carneCard.getByRole('button', { name: /\+ docena/i }));
     await userEvent.click(carneCard.getByRole('button', { name: /\+ unidad/i }));
+    const yasguaCard = within(dialog.getByLabelText(/topping yasgua salsa/i));
+    await userEvent.click(yasguaCard.getByRole('button', { name: /sumar yasgua salsa/i }));
 
     const preview = within(dialog.getByLabelText(/preview de total/i));
-    expect(preview.getByText(/subtotal/i)).toHaveTextContent('$ 13.200');
+    expect(preview.getByText(/subtotal/i)).toHaveTextContent('$ 13.700');
+    expect(preview.getByText(/toppings/i)).toHaveTextContent('$ 500');
     expect(preview.getByText(/delivery/i)).toHaveTextContent('$ 1.500');
-    expect(preview.getByText(/^total/i)).toHaveTextContent('$ 13.380');
+    expect(preview.getByText(/^total/i)).toHaveTextContent('$ 13.830');
 
     await userEvent.click(dialog.getByRole('button', { name: /^crear pedido$/i }));
 
@@ -429,6 +483,7 @@ describe('OrdersPage', () => {
       discountPercent: 10,
       deliveryFee: 1500,
       items: [{ menuItemId: 'menu-1', quantity: 13 }],
+      addons: [{ addonId: 'yasgua_salsa', quantity: 1 }],
     });
     expect(screen.queryByRole('dialog', { name: /nuevo pedido/i })).not.toBeInTheDocument();
   });
@@ -488,7 +543,8 @@ describe('OrdersPage', () => {
     renderOrdersPage();
 
     const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
-    await userEvent.click(orderCard.getByRole('button', { name: /editar pedido de ana pérez/i }));
+    await userEvent.click(orderCard.getByRole('button', { name: /más opciones/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /editar pedido de ana pérez/i }));
 
     const dialog = within(await screen.findByRole('dialog', { name: /editar pedido/i }));
     expect(dialog.getByLabelText(/fecha de entrega/i)).toHaveValue('2026-05-06');
@@ -512,6 +568,7 @@ describe('OrdersPage', () => {
         { menuItemId: 'menu-1', quantity: 13 },
         { menuItemId: 'menu-2', quantity: 12 },
       ],
+      addons: [],
     });
   });
 
@@ -521,35 +578,29 @@ describe('OrdersPage', () => {
     renderOrdersPage();
 
     const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
-    await userEvent.click(orderCard.getByRole('button', { name: /eliminar pedido de ana pérez/i }));
+    await userEvent.click(orderCard.getByRole('button', { name: /más opciones/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /eliminar pedido de ana pérez/i }));
 
     expect(confirmSpy).toHaveBeenCalledWith('¿Eliminar el pedido de Ana Pérez?');
     expect(vi.mocked(deleteOrder).mock.calls[0]?.[0]).toBe('order-1');
     confirmSpy.mockRestore();
   });
 
-  it('shows compact status, payment, delivery, cooked and shift controls in the order preview', async () => {
+  it('shows compact status, payment, delivery and shift badges in the order preview', async () => {
     renderOrdersPage();
 
     const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
-    const confirmedButton = orderCard.getByRole('button', { name: /estado confirmado/i });
-    const preparedButton = orderCard.getByRole('button', { name: /estado preparado/i });
-    const deliveredButton = orderCard.getByRole('button', { name: /estado entregado/i });
     const paymentButton = orderCard.getByRole('button', { name: /marcar como pagado/i });
 
-    expect(orderCard.getByText(/^Confirmado$/i)).toBeInTheDocument();
-    expect(orderCard.getByText(/envío/i)).toHaveClass('bg-sky-100');
+    const statusBadge = orderCard.getByText(/^Confirmado$/i);
+    const deliveryBadge = orderCard.getByText(/envío/i);
+    expect(statusBadge).toHaveClass('h-[1.45rem]', 'rounded-full', 'bg-violet-600');
+    expect(deliveryBadge).toHaveClass('h-[1.45rem]', 'rounded-full', 'bg-sky-600');
     expect(orderCard.queryByText(/crudo/i)).not.toBeInTheDocument();
     expect(orderCard.getByText(/noche/i)).toHaveClass('bg-indigo-100');
-    expect(screen.getByLabelText(/indicador de estado confirmado/i)).toHaveClass('bg-red-500');
-    expect(confirmedButton).toHaveTextContent('C');
-    expect(confirmedButton).toHaveAttribute('aria-pressed', 'true');
-    expect(confirmedButton).toHaveClass('bg-red-600');
-    expect(preparedButton).toHaveTextContent('P');
-    expect(preparedButton).toHaveClass('border-amber-300');
-    expect(deliveredButton).toHaveTextContent('E');
-    expect(deliveredButton).toHaveClass('border-emerald-300');
-    expect(paymentButton).toHaveClass('text-gray-400', 'line-through');
+    expect(screen.getByLabelText(/indicador de estado confirmado/i)).toHaveClass('bg-violet-500');
+    expect(paymentButton).toHaveClass('h-[1.45rem]', 'rounded-full', 'bg-red-500');
+    expect(paymentButton).toHaveTextContent('No pagado');
   });
 
   it('updates payment from the order preview', async () => {
@@ -566,7 +617,7 @@ describe('OrdersPage', () => {
     expect(updateOrderPayment).toHaveBeenCalledWith('order-1', true);
   });
 
-  it('updates an order status from the order preview', async () => {
+  it('updates an order status from the detail panel actions', async () => {
     vi.mocked(updateOrderStatus).mockResolvedValue({
       ...orderDetail,
       status: 'preparado',
@@ -575,7 +626,9 @@ describe('OrdersPage', () => {
     renderOrdersPage();
 
     const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
-    await userEvent.click(orderCard.getByRole('button', { name: /estado preparado/i }));
+    await userEvent.click(orderCard.getByRole('button', { name: /ver detalle/i }));
+    const detail = within(await screen.findByRole('dialog', { name: /detalle del pedido/i }));
+    await userEvent.click(detail.getByRole('button', { name: /marcar como listo/i }));
 
     expect(updateOrderStatus).toHaveBeenCalledWith('order-1', 'preparado');
   });

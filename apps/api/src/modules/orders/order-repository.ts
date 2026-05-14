@@ -3,8 +3,9 @@ import { and, asc, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import type { OrderFilters, OrderStatus } from '@te-pinta/shared';
 
 import type { createDbClient } from '../../db/index';
-import { customers, menuItems, orderItems, orders, settings } from '../../db/schema';
+import { customers, menuItems, orderAddons, orderItems, orders, settings } from '../../db/schema';
 import type {
+  OrderAddonDetail,
   CustomerSnapshot,
   MenuItemPricing,
   OrderDetail,
@@ -18,6 +19,7 @@ type DbClient = ReturnType<typeof createDbClient>['db'];
 type OrderRow = typeof orders.$inferSelect;
 type CustomerRow = typeof customers.$inferSelect;
 type OrderItemRow = typeof orderItems.$inferSelect;
+type OrderAddonRow = typeof orderAddons.$inferSelect;
 type MenuItemRow = typeof menuItems.$inferSelect;
 
 const requireReturnedRow = <T>(row: T | undefined): T => {
@@ -56,10 +58,20 @@ const mapOrderItem = (row: OrderItemRow, menuItemName: string): OrderItemDetail 
   subtotal: moneyFromDb(row.subtotal),
 });
 
+const mapOrderAddon = (row: OrderAddonRow): OrderAddonDetail => ({
+  id: row.id,
+  addonId: row.addonId,
+  name: row.name,
+  quantity: row.quantity,
+  unitPrice: moneyFromDb(row.unitPrice),
+  subtotal: moneyFromDb(row.subtotal),
+});
+
 const mapOrderDetail = (
   order: OrderRow,
   customer: CustomerRow,
   items: OrderItemDetail[],
+  addons: OrderAddonDetail[],
 ): OrderDetail => ({
   id: order.id,
   customer: mapCustomer(customer),
@@ -75,6 +87,7 @@ const mapOrderDetail = (
   status: order.status,
   isPaid: order.isPaid,
   items,
+  addons,
 });
 
 const toOrderValues = (input: PersistOrderInput): typeof orders.$inferInsert => ({
@@ -102,6 +115,17 @@ const toOrderItemValues = (input: PersistOrderInput): (typeof orderItems.$inferI
     quantity: item.quantity,
     unitPrice: moneyToDb(item.unitPrice),
     subtotal: moneyToDb(item.subtotal),
+  }));
+
+const toOrderAddonValues = (input: PersistOrderInput): (typeof orderAddons.$inferInsert)[] =>
+  input.addons.map((addon) => ({
+    id: addon.id,
+    orderId: input.id,
+    addonId: addon.addonId,
+    name: addon.name,
+    quantity: addon.quantity,
+    unitPrice: moneyToDb(addon.unitPrice),
+    subtotal: moneyToDb(addon.subtotal),
   }));
 
 const buildFilterConditions = (filters: OrderFilters = {}): SQL[] => {
@@ -138,6 +162,16 @@ const getOrderItems = async (db: DbClient, orderId: string): Promise<OrderItemDe
   return rows.map((row) => mapOrderItem(row.orderItem, row.menuItemName));
 };
 
+const getOrderAddons = async (db: DbClient, orderId: string): Promise<OrderAddonDetail[]> => {
+  const rows = await db
+    .select()
+    .from(orderAddons)
+    .where(eq(orderAddons.orderId, orderId))
+    .orderBy(asc(orderAddons.id));
+
+  return rows.map(mapOrderAddon);
+};
+
 const getOrderDetail = async (db: DbClient, id: string): Promise<OrderDetail | null> => {
   const [row] = await db
     .select({ order: orders, customer: customers })
@@ -151,7 +185,8 @@ const getOrderDetail = async (db: DbClient, id: string): Promise<OrderDetail | n
   }
 
   const items = await getOrderItems(db, id);
-  return mapOrderDetail(row.order, row.customer, items);
+  const addons = await getOrderAddons(db, id);
+  return mapOrderDetail(row.order, row.customer, items, addons);
 };
 
 export const createOrderRepository = (db: DbClient): OrderRepository => ({
@@ -173,9 +208,11 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
     return Promise.all(
       rows.map(async (row) => {
         const items = await getOrderItems(db, row.order.id);
-        const detail = mapOrderDetail(row.order, row.customer, items);
-        const { items: _items, ...listItem } = detail;
+        const addons = await getOrderAddons(db, row.order.id);
+        const detail = mapOrderDetail(row.order, row.customer, items, addons);
+        const { items: _items, addons: _addons, ...listItem } = detail;
         void _items;
+        void _addons;
         return {
           ...listItem,
           itemCount: items.length,
@@ -225,6 +262,10 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
       if (itemValues.length > 0) {
         await tx.insert(orderItems).values(itemValues);
       }
+      const addonValues = toOrderAddonValues(input);
+      if (addonValues.length > 0) {
+        await tx.insert(orderAddons).values(addonValues);
+      }
     });
 
     const detail = await getOrderDetail(db, input.id);
@@ -251,9 +292,14 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
       }
 
       await tx.delete(orderItems).where(eq(orderItems.orderId, id));
+      await tx.delete(orderAddons).where(eq(orderAddons.orderId, id));
       const itemValues = toOrderItemValues({ ...input, id });
       if (itemValues.length > 0) {
         await tx.insert(orderItems).values(itemValues);
+      }
+      const addonValues = toOrderAddonValues({ ...input, id });
+      if (addonValues.length > 0) {
+        await tx.insert(orderAddons).values(addonValues);
       }
     });
 
@@ -285,6 +331,7 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
 
     await db.transaction(async (tx) => {
       await tx.delete(orderItems).where(eq(orderItems.orderId, id));
+      await tx.delete(orderAddons).where(eq(orderAddons.orderId, id));
       const [row] = await tx.delete(orders).where(eq(orders.id, id)).returning({ id: orders.id });
       deleted = Boolean(row);
     });
