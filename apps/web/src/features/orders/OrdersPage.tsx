@@ -37,6 +37,7 @@ import {
 import {
   calculateItemPrice,
   calculateOrderPromotion,
+  type AppliedPromotion,
   type CreateOrderInput,
   type DeliveryTime,
   type OrderStatus,
@@ -208,6 +209,8 @@ const compactBadgeStackClassName = 'flex flex-col items-start gap-1.5';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+
 const formatMoney = (value: number): string => `$ ${Math.round(value).toLocaleString('es-AR')}`;
 
 const MONTH_ABBR = [
@@ -342,6 +345,58 @@ const formatDozenLabel = (quantity?: number): string => {
     ? String(dozens)
     : dozens.toLocaleString('es-AR', { maximumFractionDigits: 2 });
   return `${label} ${dozens === 1 ? 'docena' : 'docenas'}`;
+};
+
+const getPromotionDisplayLabel = (promotion: AppliedPromotion, discountPercent: number): string => {
+  if (promotion.key === 'bulk_dozen') {
+    return `${discountPercent}% descuento 3+ docenas`;
+  }
+
+  return promotion.label;
+};
+
+const getOrderDetailPricing = (detail: OrderDetail) => {
+  const itemsSubtotal = roundMoney(detail.items.reduce((total, item) => total + item.subtotal, 0));
+  const addonsSubtotal = roundMoney(
+    detail.addons.reduce((total, addon) => total + addon.subtotal, 0),
+  );
+  const baseSubtotal = roundMoney(itemsSubtotal + addonsSubtotal);
+  const promoSubtotal = detail.subtotal;
+  const promoSavings = Math.max(0, roundMoney(baseSubtotal - promoSubtotal));
+  const discount = Math.max(0, roundMoney(promoSubtotal + detail.deliveryFee - detail.total));
+  const totalQuantity = detail.items.reduce((total, item) => total + item.quantity, 0);
+  const halfDozenGroups = detail.items.reduce(
+    (total, item) => total + Math.floor((item.quantity % 12) / 6),
+    0,
+  );
+  const combinedDozens = Math.floor(halfDozenGroups / 2);
+  const fullDozens = Math.floor(totalQuantity / 12);
+
+  const promotionLabels: string[] = [];
+  if (promoSavings > 0) {
+    promotionLabels.push(
+      combinedDozens > 1 ? `${combinedDozens} docenas combinadas` : 'Docena combinada',
+    );
+  }
+  if (detail.discountPercent > 0) {
+    promotionLabels.push(
+      fullDozens >= 3
+        ? `${detail.discountPercent}% descuento 3+ docenas`
+        : `${detail.discountPercent}% descuento manual`,
+    );
+  }
+
+  return {
+    itemsSubtotal,
+    addonsSubtotal,
+    baseSubtotal,
+    promoSubtotal,
+    promoSavings,
+    discount,
+    totalQuantity,
+    combinedDozens,
+    promotionLabels,
+  };
 };
 
 const toNumber = (value: string): number => Number(value || 0);
@@ -492,6 +547,8 @@ const OrderDetailPanel = ({
     { id: 'history', label: 'Historial', icon: History },
     { id: 'notes', label: 'Notas', icon: StickyNote },
   ];
+
+  const pricing = getOrderDetailPricing(detail);
 
   const actions = (
     <div
@@ -725,19 +782,48 @@ const OrderDetailPanel = ({
 
             <section className="rounded-3xl bg-primary/8 p-4">
               <div className="space-y-2 text-sm font-semibold text-muted-foreground">
-                <p className="flex justify-between">
-                  <span>Subtotal</span>
-                  <b className="text-foreground">{formatMoney(detail.subtotal)}</b>
+                <p className="flex justify-between gap-4">
+                  <span>Empanadas</span>
+                  <b className="text-foreground">{formatMoney(pricing.itemsSubtotal)}</b>
                 </p>
-                <p className="flex justify-between">
+                {pricing.addonsSubtotal > 0 && (
+                  <p className="flex justify-between gap-4">
+                    <span>Toppings / salsas</span>
+                    <b className="text-foreground">{formatMoney(pricing.addonsSubtotal)}</b>
+                  </p>
+                )}
+                <p className="flex justify-between gap-4">
+                  <span>Subtotal original</span>
+                  <b className="text-foreground">{formatMoney(pricing.baseSubtotal)}</b>
+                </p>
+                {pricing.promoSavings > 0 && (
+                  <>
+                    <p className="flex justify-between gap-4">
+                      <span>Promo docena</span>
+                      <b className="text-emerald-700">−{formatMoney(pricing.promoSavings)}</b>
+                    </p>
+                    <p className="flex justify-between gap-4">
+                      <span>Subtotal con promo</span>
+                      <b className="text-emerald-700">{formatMoney(pricing.promoSubtotal)}</b>
+                    </p>
+                  </>
+                )}
+                <p className="flex justify-between gap-4">
                   <span>Envío</span>
                   <b className="text-foreground">{formatMoney(detail.deliveryFee)}</b>
                 </p>
-                {detail.discountPercent > 0 && (
-                  <p className="flex justify-between">
-                    <span>Descuento</span>
-                    <b className="text-emerald-700">{detail.discountPercent}%</b>
+                {pricing.discount > 0 && (
+                  <p className="flex justify-between gap-4">
+                    <span>Descuento {detail.discountPercent}%</span>
+                    <b className="text-emerald-700">−{formatMoney(pricing.discount)}</b>
                   </p>
+                )}
+                {pricing.promotionLabels.length > 0 && (
+                  <div className="flex flex-wrap gap-2 rounded-xl bg-emerald-50 px-2.5 py-2 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+                    {pricing.promotionLabels.map((label) => (
+                      <span key={label}>{label}</span>
+                    ))}
+                  </div>
                 )}
                 <p className="flex justify-between border-t border-primary/20 pt-3 text-lg text-foreground">
                   <span>Total</span>
@@ -1980,7 +2066,9 @@ export const OrdersPage = () => {
             )}
             {preview.appliedPromotions.length > 0 && (
               <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
-                {preview.appliedPromotions.map((promotion) => promotion.label).join(' + ')}
+                {preview.appliedPromotions
+                  .map((promotion) => getPromotionDisplayLabel(promotion, preview.discountPercent))
+                  .join(' + ')}
               </div>
             )}
           </div>
