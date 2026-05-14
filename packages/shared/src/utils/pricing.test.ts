@@ -75,6 +75,85 @@ describe('calculateOrderPromotion', () => {
     });
   });
 
+  it('applies the combined dozen promo to several split dozens', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [
+          { quantity: 6, subtotal: 8000 },
+          { quantity: 6, subtotal: 8500 },
+          { quantity: 6, subtotal: 9000 },
+          { quantity: 6, subtotal: 8500 },
+          { quantity: 6, subtotal: 8000 },
+          { quantity: 6, subtotal: 8000 },
+        ],
+      }),
+    ).toMatchObject({
+      subtotal: 50000,
+      totalQuantity: 36,
+      promoSubtotal: 45000,
+      discountPercent: 10,
+      discount: 4500,
+      total: 40500,
+      appliedPromotions: [
+        { key: 'combined_dozen', amount: 5000 },
+        { key: 'bulk_dozen', amount: 4500 },
+      ],
+    });
+  });
+
+  it('leaves one half dozen at its own price when split dozens have a remainder', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [
+          { quantity: 6, subtotal: 9000 },
+          { quantity: 6, subtotal: 8500 },
+          { quantity: 6, subtotal: 8500 },
+        ],
+      }),
+    ).toMatchObject({
+      subtotal: 26000,
+      totalQuantity: 18,
+      promoSubtotal: 23500,
+      discount: 0,
+      total: 23500,
+      appliedPromotions: [{ key: 'combined_dozen', amount: 2500 }],
+    });
+  });
+
+  it('keeps a single half dozen at half-dozen price', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [{ quantity: 6, subtotal: 8000 }],
+      }),
+    ).toMatchObject({
+      subtotal: 8000,
+      totalQuantity: 6,
+      promoSubtotal: 8000,
+      discount: 0,
+      total: 8000,
+      appliedPromotions: [],
+    });
+  });
+
+  it('keeps whole-variety dozens separate from combined half-dozen pairs', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [
+          { quantity: 12, subtotal: 15000 },
+          { quantity: 6, subtotal: 8500 },
+          { quantity: 6, subtotal: 9000 },
+        ],
+      }),
+    ).toMatchObject({
+      subtotal: 32500,
+      totalQuantity: 24,
+      promoSubtotal: 30000,
+      discount: 0,
+      total: 30000,
+      appliedPromotions: [{ key: 'combined_dozen', amount: 2500 }],
+    });
+  });
+
   it('applies the bulk discount from three dozens onward', () => {
     expect(
       calculateOrderPromotion({

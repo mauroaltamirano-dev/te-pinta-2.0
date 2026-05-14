@@ -21,7 +21,7 @@ export type OrderPromotionConfig = {
 };
 
 export type CalculateOrderPromotionInput = {
-  items: { quantity: number; subtotal: number }[];
+  items: { quantity: number; subtotal: number; priceHalfDozen?: number }[];
   addons?: { quantity: number; subtotal: number }[];
   manualDiscountPercent?: number;
   deliveryFee?: number;
@@ -113,20 +113,41 @@ export const calculateOrderPromotion = ({
 
   let promoItemsSubtotal = itemsSubtotal;
 
-  const isCombinedDozen =
-    items.length > 1 &&
-    totalQuantity === config.combinedDozenQuantity &&
-    config.combinedDozenPrice > 0 &&
-    itemsSubtotal > config.combinedDozenPrice;
+  const halfDozenGroups = items.flatMap((item) => {
+    const halfDozensOutsideFullDozens = Math.floor((item.quantity % 12) / 6);
+    if (halfDozensOutsideFullDozens === 0) {
+      return [];
+    }
 
-  if (isCombinedDozen) {
-    const amount = roundMoney(itemsSubtotal - config.combinedDozenPrice);
-    promoItemsSubtotal = config.combinedDozenPrice;
-    appliedPromotions.push({
-      key: 'combined_dozen',
-      label: 'Docena combinada',
-      amount,
-    });
+    const halfDozenPrice = item.priceHalfDozen ?? (item.quantity === 6 ? item.subtotal : 0);
+    if (halfDozenPrice <= 0) {
+      return [];
+    }
+
+    return Array.from({ length: halfDozensOutsideFullDozens }, () => halfDozenPrice);
+  });
+
+  const combinedDozens =
+    items.length > 1 && config.combinedDozenPrice > 0 ? Math.floor(halfDozenGroups.length / 2) : 0;
+
+  if (combinedDozens > 0) {
+    const combinedHalfPrices = [...halfDozenGroups]
+      .sort((left, right) => right - left)
+      .slice(0, combinedDozens * 2);
+    const combinedBaseSubtotal = roundMoney(
+      combinedHalfPrices.reduce((total, price) => total + price, 0),
+    );
+    const combinedPromoSubtotal = roundMoney(combinedDozens * config.combinedDozenPrice);
+
+    if (combinedBaseSubtotal > combinedPromoSubtotal) {
+      const amount = roundMoney(combinedBaseSubtotal - combinedPromoSubtotal);
+      promoItemsSubtotal = roundMoney(itemsSubtotal - amount);
+      appliedPromotions.push({
+        key: 'combined_dozen',
+        label: combinedDozens === 1 ? 'Docena combinada' : `${combinedDozens} docenas combinadas`,
+        amount,
+      });
+    }
   }
 
   const dozens = Math.floor(totalQuantity / 12);
