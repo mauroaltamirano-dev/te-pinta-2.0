@@ -163,7 +163,7 @@ export const calculateOrderPromotion = ({
   if (dozens >= config.bulkDozenThreshold && discountPercent > 0) {
     appliedPromotions.push({
       key: 'bulk_dozen',
-      label: `${config.bulkDozenThreshold}+ docenas`,
+      label: `${discountPercent}% descuento ${config.bulkDozenThreshold}+ docenas`,
       amount: discount,
     });
   } else if (safeManualDiscount > 0) {
