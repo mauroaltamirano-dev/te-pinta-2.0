@@ -5,8 +5,13 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import { createQueryClient } from '@/lib/query-client';
 
+import { getDailyDashboard } from '../dashboard/dashboard-api';
 import { MenuPage } from './MenuPage';
 import { createMenuItem, listMenuItems, updateMenuItem } from './menu-api';
+
+vi.mock('../dashboard/dashboard-api', () => ({
+  getDailyDashboard: vi.fn(),
+}));
 
 vi.mock('./menu-api', () => ({
   createMenuItem: vi.fn(),
@@ -24,13 +29,40 @@ const renderMenuPage = () => {
   );
 };
 
+const mockDesktopViewport = (isDesktop: boolean) => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('1024px') ? isDesktop : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+};
+
 describe('MenuPage', () => {
   let scrollIntoView: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.resetAllMocks();
+    mockDesktopViewport(true);
     scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
+    vi.mocked(getDailyDashboard).mockResolvedValue({
+      date: '2026-05-13',
+      orderCount: 3,
+      totalRevenue: 48000,
+      deliveryShifts: { mediodia: 1, tarde: 1, noche: 1 },
+      topVarieties: [
+        { menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 },
+        { menuItemId: 'menu-2', name: 'Humita', quantity: 6 },
+      ],
+    });
     vi.mocked(listMenuItems).mockResolvedValue([
       {
         id: 'menu-1',
@@ -58,8 +90,15 @@ describe('MenuPage', () => {
 
     expect(await screen.findByLabelText(/variedad carne suave/i)).toBeInTheDocument();
     expect(screen.getByText('Humita')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: /detalle de variedad seleccionada/i }))
-      .toHaveTextContent('Carne suave');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('Carne suave');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('2 docenas');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('Precios y costos');
 
     await userEvent.type(screen.getByLabelText(/buscar variedad/i), 'carne');
 
@@ -124,15 +163,24 @@ describe('MenuPage', () => {
     ]);
   });
 
-  it('scrolls to the detail panel when selecting a menu card on mobile', async () => {
+  it('opens the selected menu card as a full-screen detail panel on mobile', async () => {
+    mockDesktopViewport(false);
     renderMenuPage();
 
     const humitaCard = await screen.findByLabelText(/variedad humita/i);
     await userEvent.click(humitaCard);
 
-    expect(screen.getByRole('region', { name: /detalle de variedad seleccionada/i }))
-      .toHaveTextContent('Humita');
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('Humita');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('0,5 docenas');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('$ 11.500');
+    expect(screen.getByRole('button', { name: /volver/i })).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('can edit a menu item from the form panel', async () => {
@@ -173,18 +221,36 @@ describe('MenuPage', () => {
     ]);
   });
 
-  it('scrolls to the edit form and focuses the name field when editing on mobile', async () => {
+  it('scrolls to the edit form and focuses the name field when editing on desktop', async () => {
     renderMenuPage();
 
     const carneRow = await screen.findByLabelText(/variedad carne suave/i);
     await userEvent.click(within(carneRow).getByRole('button', { name: /editar/i }));
 
     await waitFor(() =>
-      expect(screen.getByRole('region', { name: /formulario de edición de variedad/i }))
-        .toHaveTextContent('Editando Carne suave'),
+      expect(
+        screen.getByRole('region', { name: /formulario de edición de variedad/i }),
+      ).toHaveTextContent('Editando Carne suave'),
     );
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
     await waitFor(() => expect(screen.getByLabelText(/nombre de variedad/i)).toHaveFocus());
+  });
+
+  it('opens the edit form as a full-screen panel on mobile', async () => {
+    mockDesktopViewport(false);
+    renderMenuPage();
+
+    const carneRow = await screen.findByLabelText(/variedad carne suave/i);
+    await userEvent.click(within(carneRow).getByRole('button', { name: /editar/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('region', { name: /formulario de edición de variedad/i }),
+      ).toHaveTextContent('Editando Carne suave'),
+    );
+    expect(screen.getByRole('button', { name: /volver/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/nombre de variedad/i)).toHaveValue('Carne suave');
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('scrolls back to the edited variety after saving changes', async () => {

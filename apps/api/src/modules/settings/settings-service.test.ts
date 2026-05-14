@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Setting, SettingsRepository } from './settings-service';
-import { getSetting, updateSetting } from './settings-service';
+import { getSetting, listSettings, updateSetting } from './settings-service';
 import { ApiError } from '../../middlewares/error-handler';
 
 const setting = (overrides: Partial<Setting> = {}): Setting => ({
@@ -37,5 +37,19 @@ describe('settings service', () => {
     await expect(getSetting('missing', repository)).rejects.toMatchObject(
       new ApiError(404, 'Setting not found', 'SETTING_NOT_FOUND'),
     );
+  });
+
+  it('includes default operational settings when listing sparse persisted settings', async () => {
+    const repository: SettingsRepository = {
+      list: async () => [setting({ value: '1500' })],
+      get: async () => null,
+      update: async (input) => setting(input),
+    };
+
+    const result = await listSettings(repository);
+
+    expect(result).toContainEqual({ key: 'delivery_fee', value: '1500' });
+    expect(result).toContainEqual({ key: 'promo_bulk_discount_percent', value: '10' });
+    expect(result).toContainEqual({ key: 'addon_yasgua_cremosa_price', value: '1000' });
   });
 });

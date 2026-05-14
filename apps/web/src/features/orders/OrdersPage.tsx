@@ -7,6 +7,7 @@ import {
   ArrowDown,
   Bell,
   CheckCircle2,
+  ChevronRight,
   CircleDollarSign,
   Download,
   Clock,
@@ -35,7 +36,9 @@ import {
 
 import {
   calculateItemPrice,
+  calculateOrderPromotion,
   type CreateOrderInput,
+  type DeliveryTime,
   type OrderStatus,
   type UpdateOrderInput,
 } from '@te-pinta/shared';
@@ -52,7 +55,7 @@ import {
   useUpdateOrderStatus,
 } from './orders-hooks';
 import { getOrder, type OrderDetail } from './orders-api';
-import { useDeliveryFee } from './settings-hooks';
+import { useDeliveryFee, useOrderPromotionSettings } from './settings-hooks';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -85,6 +88,7 @@ type OrderFormState = {
   notes: string;
   discountPercent: string;
   quantities: Record<string, number>;
+  addonQuantities: Record<string, number>;
 };
 
 const initialFormState: OrderFormState = {
@@ -100,6 +104,7 @@ const initialFormState: OrderFormState = {
   notes: '',
   discountPercent: '0',
   quantities: {},
+  addonQuantities: {},
 };
 
 // ─── Constantes de UI ─────────────────────────────────────────────────────────
@@ -111,10 +116,10 @@ const statusConfig: Record<
   confirmado: {
     label: 'Confirmado',
     shortLabel: 'C',
-    btn: 'border-red-300 text-red-700 hover:bg-red-50',
-    btnActive: 'bg-red-600 border-red-600 text-white shadow-sm',
-    line: 'bg-red-500',
-    badge: 'bg-red-600 text-white ring-1 ring-red-700/20',
+    btn: 'border-violet-300 text-violet-700 hover:bg-violet-50',
+    btnActive: 'bg-violet-600 border-violet-600 text-white shadow-sm',
+    line: 'bg-violet-500',
+    badge: 'bg-violet-600 text-white ring-1 ring-violet-700/20',
   },
   preparado: {
     label: 'Preparado',
@@ -194,6 +199,11 @@ const paymentBadgeClassNames = {
   unpaid: 'bg-red-500 text-white ring-1 ring-red-600/20',
 } as const;
 
+const compactBadgeClassName =
+  'inline-flex h-[1.45rem] w-fit items-center justify-center rounded-full px-2.5 text-[0.7rem] font-black leading-none';
+
+const compactBadgeStackClassName = 'flex flex-col items-start gap-1.5';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatMoney = (value: number): string => `$ ${Math.round(value).toLocaleString('es-AR')}`;
@@ -213,6 +223,8 @@ const MONTH_ABBR = [
   'dic',
 ];
 
+const WEEKDAY_LABELS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
 /** Formatea '2026-04-29' → '29 abr 2026' */
 const formatDateReadable = (date: string): string => {
   const [year, month, day] = date.split('-');
@@ -227,6 +239,100 @@ const formatDateAr = (date: string): string => {
   return year && month && day ? `${day}-${month}-${year}` : date;
 };
 
+const toIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseIsoLocalDate = (date: string): Date | null => {
+  const [year, month, day] = date.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const getDeliveryDateMeta = (date: string) => {
+  const today = new Date();
+  const todayIso = toIsoDate(today);
+  const tomorrowIso = toIsoDate(addDays(today, 1));
+  const parsed = parseIsoLocalDate(date);
+  const weekday = parsed ? WEEKDAY_LABELS[parsed.getDay()] : '';
+  const weekdayLabel = weekday ? weekday.charAt(0).toUpperCase() + weekday.slice(1) : 'Fecha';
+  const dateLabel = formatDateReadable(date);
+
+  if (date === todayIso) {
+    return {
+      label: 'HOY',
+      dateLabel,
+      fullLabel: `HOY (${dateLabel})`,
+      tone: 'bg-primary text-primary-foreground ring-primary/20 mx-auto',
+      accent: 'bg-primary',
+    };
+  }
+
+  if (date === tomorrowIso) {
+    return {
+      label: 'MAÑANA',
+      dateLabel,
+      fullLabel: `MAÑANA (${dateLabel})`,
+      tone: 'bg-amber-500 text-white ring-amber-600/20',
+      accent: 'bg-amber-500',
+    };
+  }
+
+  const isWeekend = weekday === 'sábado' || weekday === 'domingo';
+
+  return {
+    label: weekdayLabel,
+    dateLabel,
+    fullLabel: `${weekdayLabel} · ${dateLabel}`,
+    tone: isWeekend
+      ? 'bg-indigo-100 text-indigo-800 ring-indigo-200'
+      : 'bg-sky-100 text-sky-800 ring-sky-200',
+    accent: isWeekend ? 'bg-indigo-500' : 'bg-sky-500',
+  };
+};
+
+const DeliveryDatePill = ({
+  date,
+  deliveryTime,
+}: {
+  date: string;
+  deliveryTime?: DeliveryTime;
+}) => {
+  const meta = getDeliveryDateMeta(date);
+
+  return (
+    <div
+      aria-label={`Entrega ${meta.fullLabel}`}
+      className="inline-flex flex-col items-start gap-1"
+    >
+      <span
+        className={`inline-flex h-[1.45rem] items-center rounded-full px-2.5 text-[0.7rem] font-black leading-none tracking-wide ring-1 ${meta.tone}`}
+      >
+        {meta.label}
+      </span>
+      <span className="text-sm font-black leading-tight text-foreground tabular-nums">
+        {meta.dateLabel}
+      </span>
+      {deliveryTime ? (
+        <span
+          className={`mx-auto mt-0.5 ${compactBadgeClassName} gap-1 ${deliveryTimeBadgeClassNames[deliveryTime]}`}
+        >
+          <Clock className="h-3 w-3" /> {deliveryTimeLabels[deliveryTime]}
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
 const formatDozenLabel = (quantity?: number): string => {
   if (!quantity) return '0 docenas';
   const dozens = quantity / 12;
@@ -237,17 +343,19 @@ const formatDozenLabel = (quantity?: number): string => {
 };
 
 const toNumber = (value: string): number => Number(value || 0);
-const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 
 const isFinalizedOrder = (order: { status: OrderStatus; isPaid: boolean }): boolean =>
   order.status === 'entregado' && order.isPaid;
 
-const compareByDate = (a: { deliveryDate: string }, b: { deliveryDate: string }): number =>
-  a.deliveryDate.localeCompare(b.deliveryDate);
-
 const toQuantitiesByMenuItemId = (items: { menuItemId: string; quantity: number }[]) =>
   items.reduce<Record<string, number>>((quantities, item) => {
     quantities[item.menuItemId] = item.quantity;
+    return quantities;
+  }, {});
+
+const toQuantitiesByAddonId = (addons: { addonId: string; quantity: number }[]) =>
+  addons.reduce<Record<string, number>>((quantities, addon) => {
+    quantities[addon.addonId] = addon.quantity;
     return quantities;
   }, {});
 
@@ -258,7 +366,7 @@ const getOrderCode = (id: string): string => {
     : `#${lastSegment.slice(-6).toUpperCase()}`;
 };
 
-const getTodayIsoDate = (): string => new Date().toISOString().slice(0, 10);
+const getTodayIsoDate = (): string => toIsoDate(new Date());
 
 const normalizeText = (value: string): string => value.toLocaleLowerCase('es-AR');
 
@@ -387,14 +495,14 @@ const OrderDetailPanel = ({
     <div
       aria-label="Acciones principales del pedido"
       className={[
-        'grid grid-cols-2 gap-2 border-t border-border bg-card/95 p-3 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur',
+        'grid grid-cols-2 gap-2 border-t border-border bg-card/95 p-4 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur',
         isMobile
           ? 'fixed inset-x-0 bottom-0 z-[60] pb-[calc(env(safe-area-inset-bottom)+0.75rem)]'
-          : '',
+          : 'sticky bottom-0',
       ].join(' ')}
     >
       <button
-        className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:opacity-10"
+        className="rounded-full bg-primary/10 px-4 py-3 text-sm font-black text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:bg-primary/10 disabled:text-primary/60"
         disabled={detail.status === 'preparado'}
         onClick={() => onMarkStatus(detail.id, 'preparado')}
         type="button"
@@ -402,7 +510,7 @@ const OrderDetailPanel = ({
         Marcar como listo
       </button>
       <button
-        className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-50"
+        className="rounded-full bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-55"
         disabled={detail.status === 'entregado'}
         onClick={() => onMarkStatus(detail.id, 'entregado')}
         type="button"
@@ -410,7 +518,7 @@ const OrderDetailPanel = ({
         Entregado
       </button>
       <button
-        className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100 sm:col-span-1 col-span-2"
+        className="col-span-2 rounded-full border border-red-300 bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
         onClick={() => onCancel(detail.id, detail.customer.name)}
         type="button"
       >
@@ -421,26 +529,24 @@ const OrderDetailPanel = ({
 
   return (
     <div className={['flex min-h-full flex-col', isMobile ? 'pb-40' : ''].join(' ')}>
-      <header className="sticky top-0 z-10 border-b border-border bg-card/95 px-5 py-4 backdrop-blur">
+      <header className="sticky top-0 z-10 bg-card/95 px-5 py-4 backdrop-blur">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
               Detalle del pedido
             </p>
             <h3 className="mt-1 font-display text-2xl font-bold text-foreground">
-              Pedido {getOrderCode(detail.id)}
+              {getOrderCode(detail.id)}
             </h3>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-2.5 py-1 text-xs font-black ${status.badge}`}>
-                {status.label}
-              </span>
-              <span
-                className={`rounded-full px-2.5 py-1 text-xs font-black ${deliveryMethodClass}`}
-              >
+              <span className={`${compactBadgeClassName} ${status.badge}`}>{status.label}</span>
+              <span className={`${compactBadgeClassName} ${deliveryMethodClass}`}>
                 {detail.deliveryType === 'envio' ? 'Envío' : 'Retiro'}
               </span>
               {detail.cooked && (
-                <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white ring-1 ring-red-700/20">
+                <span
+                  className={`${compactBadgeClassName} bg-red-600 text-white ring-1 ring-red-700/20`}
+                >
                   Cocinado
                 </span>
               )}
@@ -448,7 +554,7 @@ const OrderDetailPanel = ({
           </div>
           <button
             aria-label={isMobile ? 'Volver a pedidos' : 'Cerrar detalle'}
-            className="rounded-xl border border-border bg-white p-2.5 text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-muted-foreground shadow-sm transition hover:border-primary/30 hover:text-foreground"
             onClick={onClose}
             type="button"
           >
@@ -460,7 +566,7 @@ const OrderDetailPanel = ({
       <nav
         aria-label="Secciones del detalle"
         className={[
-          'grid grid-cols-3 gap-2 border-b border-border bg-card/95 px-5 py-3 backdrop-blur',
+          'grid grid-cols-3 border-b border-border bg-card/95 px-5 backdrop-blur',
           isMobile ? 'sticky top-[105px] z-10' : 'sticky top-[105px] z-10',
         ].join(' ')}
       >
@@ -470,10 +576,10 @@ const OrderDetailPanel = ({
             <button
               aria-selected={isSelected}
               className={[
-                'flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-black transition',
+                '-mb-px flex items-center justify-center gap-1.5 border-b-2 px-3 py-3 text-sm font-black transition',
                 isSelected
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted',
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
               ].join(' ')}
               key={id}
               onClick={() => setActiveTab(id)}
@@ -490,7 +596,7 @@ const OrderDetailPanel = ({
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
         {activeTab === 'summary' && (
           <>
-            <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+            <section className="rounded-3xl border border-border/70 bg-white p-4 shadow-card">
               <div className="mb-3 flex items-center gap-2">
                 <UserRound className="h-4 w-4 text-primary" />
                 <h4 className="font-black text-foreground">Cliente</h4>
@@ -504,15 +610,15 @@ const OrderDetailPanel = ({
                   <MapPin className="h-4 w-4" /> {detail.customer.address}
                 </p>
               )}
-              <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="mt-4 grid grid-cols-3 gap-2 text-white">
                 <a
-                  className="rounded-xl bg-stone-800 px-3 py-2 text-center text-sm font-black text-white"
+                  className="rounded-full bg-sidebar px-3 py-2 text-center text-sm font-black text-white"
                   href={buildPhoneHref(detail.customer.phone)}
                 >
                   Llamar
                 </a>
                 <a
-                  className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-sm font-black text-white"
+                  className="rounded-full bg-emerald-600 px-3 py-2 text-center text-sm font-black text-white"
                   href={buildWhatsAppHref(detail.customer.phone)}
                   rel="noreferrer"
                   target="_blank"
@@ -520,7 +626,7 @@ const OrderDetailPanel = ({
                   WhatsApp
                 </a>
                 <a
-                  className="rounded-xl bg-sky-600 px-3 py-2 text-center text-sm font-black text-white"
+                  className="rounded-full bg-sky-600 px-3 py-2 text-center text-sm font-black text-white"
                   href={buildMapsHref(detail.customer.address)}
                   rel="noreferrer"
                   target="_blank"
@@ -530,17 +636,19 @@ const OrderDetailPanel = ({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-white p-4 shadow-sm text-foreground">
+            <section className="rounded-3xl border border-border/70 bg-white p-4 text-foreground shadow-card">
               <div className="mb-3 flex items-center gap-2">
                 <Truck className="h-4 w-4 text-primary" />
                 <h4 className="font-black text-foreground">Entrega</h4>
               </div>
               <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <p>
+                <div>
                   <span className="font-bold text-muted-foreground">Fecha</span>
                   <br />
-                  <b>{formatDateAr(detail.deliveryDate)}</b>
-                </p>
+                  <span className="mt-1 inline-flex">
+                    <DeliveryDatePill date={detail.deliveryDate} />
+                  </span>
+                </div>
                 <p>
                   <span className="font-bold text-muted-foreground">Horario</span>
                   <br />
@@ -557,13 +665,13 @@ const OrderDetailPanel = ({
                   <b>{formatMoney(detail.deliveryFee)}</b>
                 </p>
               </div>
-              <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-sm font-semibold text-muted-foreground">
+              <p className="mt-3 rounded-full bg-muted/60 px-3 py-2 text-sm font-semibold text-muted-foreground">
                 Referencia:{' '}
                 {detail.notes?.trim() || detail.customer.address || 'Sin referencia cargada'}
               </p>
             </section>
 
-            <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+            <section className="rounded-3xl border border-border/70 bg-white p-4 shadow-card">
               <div className="mb-3 flex items-center gap-2">
                 <Package className="h-4 w-4 text-primary" />
                 <h4 className="font-black text-foreground">Productos</h4>
@@ -586,9 +694,34 @@ const OrderDetailPanel = ({
                   </div>
                 ))}
               </div>
+              {detail.addons.length > 0 && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="mb-2 text-xs font-black uppercase tracking-wide text-muted-foreground">
+                    Toppings / salsas
+                  </p>
+                  <div className="divide-y divide-border">
+                    {detail.addons.map((addon) => (
+                      <div
+                        className="grid grid-cols-[1fr_auto] gap-3 py-3 first:pt-0 last:pb-0"
+                        key={addon.id}
+                      >
+                        <div>
+                          <p className="font-black text-foreground">{addon.name}</p>
+                          <p className="text-sm font-semibold text-muted-foreground">
+                            {addon.quantity} u. · {formatMoney(addon.unitPrice)}
+                          </p>
+                        </div>
+                        <p className="font-black tabular-nums text-foreground">
+                          {formatMoney(addon.subtotal)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
 
-            <section className="rounded-2xl bg-primary/8 p-4">
+            <section className="rounded-3xl bg-primary/8 p-4">
               <div className="space-y-2 text-sm font-semibold text-muted-foreground">
                 <p className="flex justify-between">
                   <span>Subtotal</span>
@@ -614,7 +747,7 @@ const OrderDetailPanel = ({
         )}
 
         {activeTab === 'history' && (
-          <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+          <section className="rounded-3xl border border-border/70 bg-white p-4 shadow-card">
             <h4 className="mb-4 font-black text-foreground">Historial de cambios</h4>
             <div className="space-y-4">
               {timeline.map((event, index) => (
@@ -635,7 +768,7 @@ const OrderDetailPanel = ({
                     <p className="text-xs font-semibold text-muted-foreground">
                       {event.active
                         ? index === 0
-                          ? formatDateAr(detail.deliveryDate)
+                          ? getDeliveryDateMeta(detail.deliveryDate).fullLabel
                           : 'Actualizado recientemente'
                         : 'Pendiente'}
                     </p>
@@ -647,7 +780,7 @@ const OrderDetailPanel = ({
         )}
 
         {activeTab === 'notes' && (
-          <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+          <section className="rounded-3xl border border-border/70 bg-white p-4 shadow-card">
             <div className="mb-3 flex items-center gap-2">
               <NotebookText className="h-4 w-4 text-primary" />
               <h4 className="font-black text-foreground">Notas del pedido</h4>
@@ -692,6 +825,7 @@ export const OrdersPage = () => {
   const customersQuery = useCustomers();
   const menuItemsQuery = useMenuItems();
   const deliveryFeeQuery = useDeliveryFee();
+  const orderPromotionSettingsQuery = useOrderPromotionSettings();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const deleteOrder = useDeleteOrder();
@@ -804,6 +938,15 @@ export const OrdersPage = () => {
     [activeMenuItems, form.quantities],
   );
 
+  const availableAddons = orderPromotionSettingsQuery.data?.addons ?? [];
+  const selectedAddons = useMemo(
+    () =>
+      availableAddons
+        .map((addon) => ({ addon, quantity: form.addonQuantities[addon.addonId] ?? 0 }))
+        .filter(({ quantity }) => quantity > 0),
+    [availableAddons, form.addonQuantities],
+  );
+
   const filteredCustomers = useMemo(() => {
     const query = customerSearch.trim().toLocaleLowerCase('es-AR');
     const customers = customersQuery.data ?? [];
@@ -816,23 +959,36 @@ export const OrdersPage = () => {
   }, [customerSearch, customersQuery.data]);
 
   const preview = useMemo(() => {
-    const subtotal = selectedItems.reduce((total, { menuItem, quantity }) => {
-      return (
-        total +
-        calculateItemPrice({
-          quantity,
-          priceUnit: menuItem.priceUnit,
-          priceHalfDozen: menuItem.priceHalfDozen,
-          priceDozen: menuItem.priceDozen,
-        }).total
-      );
-    }, 0);
-    const discountPercent = toNumber(form.discountPercent);
+    const pricedItems = selectedItems.map(({ menuItem, quantity }) => ({
+      quantity,
+      subtotal: calculateItemPrice({
+        quantity,
+        priceUnit: menuItem.priceUnit,
+        priceHalfDozen: menuItem.priceHalfDozen,
+        priceDozen: menuItem.priceDozen,
+      }).total,
+    }));
     const deliveryFee = form.deliveryType === 'envio' ? (deliveryFeeQuery.data ?? 0) : 0;
-    const discount = subtotal * (discountPercent / 100);
-    const total = roundMoney(subtotal - discount + deliveryFee);
-    return { subtotal, discount, deliveryFee, total };
-  }, [deliveryFeeQuery.data, form.deliveryType, form.discountPercent, selectedItems]);
+    const pricing = calculateOrderPromotion({
+      items: pricedItems,
+      addons: selectedAddons.map(({ addon, quantity }) => ({
+        quantity,
+        subtotal: addon.price * quantity,
+      })),
+      manualDiscountPercent: toNumber(form.discountPercent),
+      deliveryFee,
+      promotions: orderPromotionSettingsQuery.data,
+    });
+
+    return pricing;
+  }, [
+    deliveryFeeQuery.data,
+    form.deliveryType,
+    form.discountPercent,
+    orderPromotionSettingsQuery.data,
+    selectedAddons,
+    selectedItems,
+  ]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -847,6 +1003,20 @@ export const OrdersPage = () => {
         nextQuantities[menuItemId] = nextQuantity;
       }
       return { ...current, quantities: nextQuantities };
+    });
+  };
+
+  const setAddonQuantity = (addonId: string, delta: number) => {
+    setForm((current) => {
+      const currentQuantity = current.addonQuantities[addonId] ?? 0;
+      const nextQuantity = Math.max(0, currentQuantity + delta);
+      const nextAddonQuantities = { ...current.addonQuantities };
+      if (nextQuantity === 0) {
+        delete nextAddonQuantities[addonId];
+      } else {
+        nextAddonQuantities[addonId] = nextQuantity;
+      }
+      return { ...current, addonQuantities: nextAddonQuantities };
     });
   };
 
@@ -880,10 +1050,14 @@ export const OrdersPage = () => {
     deliveryType: form.deliveryType as 'retiro' | 'envio',
     cooked: form.cooked,
     notes: form.notes.trim() || undefined,
-    discountPercent: toNumber(form.discountPercent),
+    discountPercent: preview.discountPercent,
     deliveryFee: preview.deliveryFee,
     items: selectedItems.map(({ menuItem, quantity }) => ({
       menuItemId: menuItem.id,
+      quantity,
+    })),
+    addons: selectedAddons.map(({ addon, quantity }) => ({
+      addonId: addon.addonId,
       quantity,
     })),
   });
@@ -944,6 +1118,7 @@ export const OrdersPage = () => {
       notes: order.notes ?? '',
       discountPercent: String(order.discountPercent),
       quantities: toQuantitiesByMenuItemId(order.items),
+      addonQuantities: toQuantitiesByAddonId(order.addons),
     });
     setIsCreateDialogOpen(true);
   };
@@ -1008,6 +1183,20 @@ export const OrdersPage = () => {
       setTableSortCol(col);
       setTableSortDir('asc');
     }
+  };
+
+  const handleSortOptionChange = (option: OrderSortOption) => {
+    setSortOption(option);
+    const sortMap: Record<OrderSortOption, { col: TableSortColumn; dir: TableSortDir }> = {
+      date_asc: { col: 'date', dir: 'asc' },
+      date_desc: { col: 'date', dir: 'desc' },
+      name_asc: { col: 'name', dir: 'asc' },
+      name_desc: { col: 'name', dir: 'desc' },
+      total_desc: { col: 'total', dir: 'desc' },
+      total_asc: { col: 'total', dir: 'asc' },
+    };
+    setTableSortCol(sortMap[option].col);
+    setTableSortDir(sortMap[option].dir);
   };
 
   const toggleOrderDetail = (id: string) => {
@@ -1078,6 +1267,7 @@ export const OrdersPage = () => {
           `Tel: ${order.customer.phone}${order.customer.address ? ` · ${order.customer.address}` : ''}`,
           `Entrega: ${formatDateAr(order.deliveryDate)} · ${deliveryTimeLabels[order.deliveryTime]} · ${order.deliveryType === 'envio' ? 'ENVÍO' : 'RETIRO'} · ${order.cooked ? 'COCINADO' : 'CRUDO'}`,
           ...order.items.map((item) => `- ${item.menuItemName}: ${item.quantity} u.`),
+          ...order.addons.map((addon) => `- ${addon.name}: ${addon.quantity} u.`),
           `Total pedido: ${formatMoney(order.total)}`,
           order.notes?.trim() ? `Notas: ${order.notes.trim()}` : '',
           '',
@@ -1107,6 +1297,7 @@ export const OrdersPage = () => {
         onClick={() => toggleOrderDetail(order.id)}
         className={[
           'relative cursor-pointer overflow-visible rounded-2xl border bg-white/95 shadow-card transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-soft',
+          isMenuOpen ? 'z-30' : 'z-0',
           isExpanded ? 'border-primary/40 ring-2 ring-primary/15' : 'border-border/70',
         ].join(' ')}
       >
@@ -1115,7 +1306,14 @@ export const OrdersPage = () => {
           className={`absolute bottom-4 left-0 top-4 w-1 rounded-r-full ${statusConfig[order.status].line}`}
         />
 
-        <div className="grid gap-4 p-4 pl-5 lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto] lg:items-center lg:gap-5">
+        <div
+          className={[
+            'grid gap-4 p-4 pl-5 lg:items-center lg:gap-5',
+            isDesktopDetailOpen
+              ? 'lg:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_auto]'
+              : 'lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto]',
+          ].join(' ')}
+        >
           <label
             className="flex items-center gap-2 text-xs font-black text-muted-foreground"
             onClick={(event) => event.stopPropagation()}
@@ -1162,14 +1360,7 @@ export const OrdersPage = () => {
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Entrega
             </p>
-            <p className="text-sm font-bold text-foreground">
-              {formatDateReadable(order.deliveryDate)}
-            </p>
-            <span
-              className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${deliveryTimeBadgeClassNames[order.deliveryTime]}`}
-            >
-              <Clock className="h-3 w-3" /> {deliveryTimeLabels[order.deliveryTime]}
-            </span>
+            <DeliveryDatePill date={order.deliveryDate} deliveryTime={order.deliveryTime} />
           </div>
 
           {/* Método — badges en columna */}
@@ -1177,10 +1368,10 @@ export const OrdersPage = () => {
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Método
             </p>
-            <div className="flex flex-col gap-1">
+            <div className={compactBadgeStackClassName}>
               <span
                 className={[
-                  'inline-flex h-6 w-fit items-center rounded-full px-2.5 text-xs font-black leading-none',
+                  compactBadgeClassName,
                   order.deliveryType === 'envio'
                     ? 'bg-sky-600 text-white ring-1 ring-sky-700/20'
                     : 'bg-emerald-600 text-white ring-1 ring-emerald-700/20',
@@ -1189,7 +1380,9 @@ export const OrdersPage = () => {
                 {order.deliveryType === 'envio' ? 'Envío' : 'Retiro'}
               </span>
               {order.cooked && (
-                <span className="inline-flex h-6 w-fit items-center rounded-full bg-red-600 px-2.5 text-xs font-black leading-none text-white ring-1 ring-red-700/20">
+                <span
+                  className={`${compactBadgeClassName} bg-red-600 text-white ring-1 ring-red-700/20`}
+                >
                   Cocinado
                 </span>
               )}
@@ -1201,17 +1394,15 @@ export const OrdersPage = () => {
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Estado
             </p>
-            <div className="flex flex-col items-start gap-1">
-              <span
-                className={`inline-flex h-6 items-center rounded-full px-2.5 text-xs font-black leading-none ${statusConfig[order.status].badge}`}
-              >
+            <div className={compactBadgeStackClassName}>
+              <span className={`${compactBadgeClassName} ${statusConfig[order.status].badge}`}>
                 {statusConfig[order.status].label}
               </span>
               <button
                 aria-label={order.isPaid ? 'Marcar como no pagado' : 'Marcar como pagado'}
                 aria-pressed={order.isPaid}
                 className={[
-                  'inline-flex h-6 items-center rounded-full px-2.5 text-xs font-black leading-none transition-all duration-150 disabled:opacity-60',
+                  `${compactBadgeClassName} transition-all duration-150 disabled:opacity-60`,
                   order.isPaid ? paymentBadgeClassNames.paid : paymentBadgeClassNames.unpaid,
                 ].join(' ')}
                 disabled={updateOrderPayment.isPending}
@@ -1227,7 +1418,7 @@ export const OrdersPage = () => {
           </div>
 
           {/* Total */}
-          <div>
+          <div className={isDesktopDetailOpen ? 'lg:hidden 2xl:block' : ''}>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground lg:hidden">
               Total
             </p>
@@ -1256,11 +1447,15 @@ export const OrdersPage = () => {
               onClick={() => toggleOrderDetail(order.id)}
               type="button"
             >
-              <Eye className="h-4 w-4" />
+              {isDesktopDetailOpen ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
             </button>
 
             {/* Menú 3 puntos */}
-            <div className="relative">
+            <div className={isDesktopDetailOpen ? 'relative hidden 2xl:block' : 'relative'}>
               <button
                 aria-label="Más opciones"
                 aria-haspopup="true"
@@ -1275,12 +1470,13 @@ export const OrdersPage = () => {
               {isMenuOpen && (
                 <>
                   {/* Overlay para cerrar */}
-                  <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
+                  <div className="fixed inset-0 z-[80]" onClick={() => setOpenMenuId(null)} />
                   <div
-                    className="absolute right-0 top-9 z-50 min-w-[140px] overflow-hidden rounded-xl border border-border bg-white shadow-xl"
+                    className="absolute right-0 top-9 z-[90] min-w-[140px] overflow-hidden rounded-xl border border-border bg-white shadow-2xl"
                     role="menu"
                   >
                     <button
+                      aria-label={`Editar pedido de ${order.customer.name}`}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-60"
                       disabled={updateOrder.isPending}
                       onClick={() => {
@@ -1294,6 +1490,7 @@ export const OrdersPage = () => {
                       Editar
                     </button>
                     <button
+                      aria-label={`Eliminar pedido de ${order.customer.name}`}
                       className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/8 disabled:opacity-60"
                       disabled={deleteOrder.isPending}
                       onClick={() => {
@@ -1644,6 +1841,73 @@ export const OrdersPage = () => {
         </div>
       </section>
 
+      {/* ── Sección: Toppings / salsas ── */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            Toppings / salsas
+          </p>
+          {selectedAddons.length > 0 && (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+              {selectedAddons.reduce((acc, { quantity }) => acc + quantity, 0)} adicionales
+            </span>
+          )}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {availableAddons.map((addon) => {
+            const quantity = form.addonQuantities[addon.addonId] ?? 0;
+            return (
+              <article
+                aria-label={`Topping ${addon.name}`}
+                className={[
+                  'rounded-2xl border p-3 transition-all duration-150',
+                  quantity > 0
+                    ? 'border-emerald-300 bg-emerald-50/70 shadow-sm'
+                    : 'border-border bg-card',
+                ].join(' ')}
+                key={addon.addonId}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-foreground text-sm">{addon.name}</p>
+                    <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
+                      {formatMoney(addon.price)} c/u
+                    </p>
+                  </div>
+                  {quantity > 0 && (
+                    <span className="shrink-0 rounded-xl bg-emerald-100 px-2.5 py-1 text-sm font-black text-emerald-700 tabular-nums">
+                      {quantity}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <button
+                    aria-label={`Restar ${addon.name}`}
+                    className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-30 active:scale-95"
+                    disabled={quantity === 0}
+                    onClick={() => setAddonQuantity(addon.addonId, -1)}
+                    type="button"
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="text-xs text-muted-foreground tabular-nums">{quantity} u.</span>
+                  <button
+                    aria-label={`Sumar ${addon.name}`}
+                    className="rounded-lg bg-emerald-600 p-1.5 text-white transition hover:bg-emerald-700 active:scale-95"
+                    onClick={() => setAddonQuantity(addon.addonId, 1)}
+                    type="button"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
       {/* ── Sección: Notas + Resumen ── */}
       <section className="grid gap-4 sm:grid-cols-[1fr_auto]">
         <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -1671,6 +1935,26 @@ export const OrdersPage = () => {
                 </span>
               </span>
             </div>
+            {preview.promoSubtotal !== preview.subtotal && (
+              <div className="flex justify-between gap-4 text-sm text-muted-foreground">
+                <span>
+                  Promo docena{' '}
+                  <span className="tabular-nums font-semibold text-emerald-700">
+                    {formatMoney(preview.promoSubtotal)}
+                  </span>
+                </span>
+              </div>
+            )}
+            {preview.addonsSubtotal > 0 && (
+              <div className="flex justify-between gap-4 text-sm text-muted-foreground">
+                <span>
+                  Toppings{' '}
+                  <span className="tabular-nums font-semibold text-foreground">
+                    {formatMoney(preview.addonsSubtotal)}
+                  </span>
+                </span>
+              </div>
+            )}
             {preview.deliveryFee > 0 && (
               <div className="flex justify-between gap-4 text-sm text-muted-foreground">
                 <span>
@@ -1689,6 +1973,11 @@ export const OrdersPage = () => {
                     −{formatMoney(preview.discount)}
                   </span>
                 </span>
+              </div>
+            )}
+            {preview.appliedPromotions.length > 0 && (
+              <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+                {preview.appliedPromotions.map((promotion) => promotion.label).join(' + ')}
               </div>
             )}
           </div>
@@ -1760,6 +2049,7 @@ export const OrdersPage = () => {
       hint: 'En preparación',
       icon: ClipboardList,
       tone: 'bg-red-100 text-primary',
+      dot: 'bg-red-500',
     },
     {
       label: 'Pedidos finalizados',
@@ -1767,6 +2057,7 @@ export const OrdersPage = () => {
       hint: 'Entregados y pagos',
       icon: CheckCircle2,
       tone: 'bg-emerald-100 text-emerald-700',
+      dot: 'bg-emerald-600',
     },
     {
       label: 'Pendientes',
@@ -1774,6 +2065,7 @@ export const OrdersPage = () => {
       hint: 'Por preparar',
       icon: Clock,
       tone: 'bg-yellow-100 text-yellow-900',
+      dot: 'bg-amber-500',
     },
     {
       label: 'Ventas del día',
@@ -1781,300 +2073,329 @@ export const OrdersPage = () => {
       hint: deliveryDateFilter ? formatDateAr(deliveryDateFilter) : 'Hoy',
       icon: CircleDollarSign,
       tone: 'bg-indigo-100 text-indigo-800',
+      dot: 'bg-sky-600',
     },
   ];
 
+  const isDesktopDetailOpen = Boolean(expandedOrderId && isDesktopDetail);
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-            Pedidos
-          </h1>
-          <p className="mt-2 text-sm font-medium text-muted-foreground">
-            Administrá y seguí todos los pedidos de tu emprendimiento.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <button
-            aria-label="Notificaciones de pedidos"
-            className="relative rounded-full border border-border bg-card p-2.5 text-muted-foreground shadow-card transition hover:border-primary/30 hover:text-primary"
-            type="button"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-black text-primary-foreground">
-              {summary.pending}
-            </span>
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm font-black text-foreground shadow-card transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={visibleOrders.length === 0}
-            onClick={exportVisibleOrders}
-            type="button"
-          >
-            <Download className="h-4 w-4" />
-            Exportar
-          </button>
-          <button
-            aria-label="+ Nuevo pedido"
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
-            onClick={openCreateDialog}
-            type="button"
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo pedido
-          </button>
-        </div>
-      </section>
-
-      <section aria-label="Resumen de pedidos" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map(({ label, value, hint, icon: Icon, tone }) => (
-          <article
-            key={label}
-            className="rounded-2xl border border-border/70 bg-white/85 p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft"
-          >
-            <div className="flex items-start gap-4">
-              <span className={`rounded-2xl p-3 ${tone}`}>
-                <Icon className="h-5 w-5" />
+    <div
+      className={[
+        'animate-fade-in',
+        isDesktopDetailOpen
+          ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]'
+          : 'space-y-6',
+      ].join(' ')}
+    >
+      <div className="min-w-0 space-y-6">
+        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
+              Pedidos
+            </h1>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">
+              Administrá y seguí todos los pedidos de tu emprendimiento.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <button
+              aria-label="Notificaciones de pedidos"
+              className="relative rounded-full border border-border bg-card p-2.5 text-muted-foreground shadow-card transition hover:border-primary/30 hover:text-primary"
+              type="button"
+            >
+              <Bell className="h-4 w-4" />
+              <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-black text-primary-foreground">
+                {summary.pending}
               </span>
-              <div>
-                <p className="text-sm font-semibold text-muted-foreground">{label}</p>
-                <p className="mt-1 text-2xl font-black text-foreground tabular-nums">{value}</p>
-                <p className="mt-2 text-xs font-bold text-muted-foreground">• {hint}</p>
-              </div>
-            </div>
-          </article>
-        ))}
-      </section>
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm font-black text-foreground shadow-card transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={visibleOrders.length === 0}
+              onClick={exportVisibleOrders}
+              type="button"
+            >
+              <Download className="h-4 w-4" />
+              Exportar
+            </button>
+            <button
+              aria-label="+ Nuevo pedido"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+              onClick={openCreateDialog}
+              type="button"
+            >
+              <Plus className="h-4 w-4" />
+              Nuevo pedido
+            </button>
+          </div>
+        </section>
 
-      <section className="space-y-4">
-        <div className="flex gap-8 border-b border-border/80">
-          {(['active', 'finalized'] as OrderVisibilityFilter[]).map((filter) => {
-            const count = filter === 'active' ? summary.active : summary.finalized;
-            const isActive = visibilityFilter === filter;
-            return (
-              <button
-                key={filter}
-                aria-pressed={isActive}
-                className={[
-                  'relative pb-3 text-sm font-black transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
-                ].join(' ')}
-                onClick={() => setVisibilityFilter(filter)}
-                type="button"
-              >
-                {filter === 'active' ? 'Activos' : 'Finalizados'}
-                <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                  {count}
+        <section
+          aria-label="Resumen de pedidos"
+          className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4"
+        >
+          {summaryCards.map(({ label, value, hint, icon: Icon, tone, dot }) => (
+            <article
+              key={label}
+              className="rounded-2xl border border-border/70 bg-white/85 p-3 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft sm:p-5"
+            >
+              <div className="flex items-start gap-2.5 sm:gap-4">
+                <span className={`rounded-full p-2 sm:rounded-2xl sm:p-3 ${tone}`}>
+                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                 </span>
-                {isActive && (
-                  <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />
-                )}
-              </button>
-            );
-          })}
-        </div>
+                <div className="min-w-0">
+                  <p className="text-[0.72rem] font-black leading-tight text-muted-foreground sm:text-sm sm:font-semibold">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-xl font-black text-foreground tabular-nums sm:text-2xl">
+                    {value}
+                  </p>
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[0.68rem] font-bold leading-tight text-muted-foreground sm:mt-2 sm:text-xs">
+                    <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden="true" />
+                    <span className="truncate">{hint}</span>
+                  </p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
 
-        <div className="grid gap-3 rounded-2xl border border-border/70 bg-white/75 p-3 shadow-card xl:grid-cols-[minmax(260px,1fr)_170px_170px_170px_180px] xl:items-center">
-          <label className="block">
-            <span className="sr-only">Buscar pedido</span>
-            <div className="flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2.5 text-sm shadow-sm transition focus-within:ring-2 focus-within:ring-ring/30">
-              <Search className="h-4 w-4 text-muted-foreground" />
+        <section className="min-w-0 space-y-4">
+          <div className="flex gap-8 border-b border-border/80">
+            {(['active', 'finalized'] as OrderVisibilityFilter[]).map((filter) => {
+              const count = filter === 'active' ? summary.active : summary.finalized;
+              const isActive = visibilityFilter === filter;
+              return (
+                <button
+                  key={filter}
+                  aria-pressed={isActive}
+                  className={[
+                    'relative pb-3 text-sm font-black transition-colors',
+                    isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                  ].join(' ')}
+                  onClick={() => setVisibilityFilter(filter)}
+                  type="button"
+                >
+                  {filter === 'active' ? 'Activos' : 'Finalizados'}
+                  <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                    {count}
+                  </span>
+                  {isActive && (
+                    <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            className={[
+              'grid gap-3 rounded-2xl border border-border/70 bg-white/75 p-3 shadow-card',
+              isDesktopDetailOpen
+                ? 'md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_150px_155px_155px_165px] 2xl:items-center'
+                : 'xl:grid-cols-[minmax(260px,1fr)_170px_170px_170px_180px] xl:items-center',
+            ].join(' ')}
+          >
+            <label className="block">
+              <span className="sr-only">Buscar pedido</span>
+              <div className="flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2.5 text-sm shadow-sm transition focus-within:ring-2 focus-within:ring-ring/30">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <input
+                  aria-label="Buscar pedido"
+                  className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/60"
+                  onChange={(event) => setOrderSearch(event.target.value)}
+                  placeholder="Buscar pedido, cliente o teléfono..."
+                  role="searchbox"
+                  type="search"
+                  value={orderSearch}
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="sr-only">Fecha entrega</span>
               <input
-                aria-label="Buscar pedido"
-                className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/60"
-                onChange={(event) => setOrderSearch(event.target.value)}
-                placeholder="Buscar pedido, cliente o teléfono..."
-                role="searchbox"
-                type="search"
-                value={orderSearch}
+                aria-label="Filtrar por fecha de entrega"
+                className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+                onChange={(event) => setDeliveryDateFilter(event.target.value)}
+                type="date"
+                value={deliveryDateFilter}
               />
-            </div>
-          </label>
+            </label>
 
-          <label className="block">
-            <span className="sr-only">Fecha entrega</span>
-            <input
-              aria-label="Filtrar por fecha de entrega"
-              className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-              onChange={(event) => setDeliveryDateFilter(event.target.value)}
-              type="date"
-              value={deliveryDateFilter}
-            />
-          </label>
-
-          <label className="block">
-            <span className="sr-only">Estado</span>
-            <select
-              className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-              onChange={(event) => setStatusFilter(event.target.value as OrderStatusFilter)}
-              value={statusFilter}
-            >
-              <option value="todos">Estado: Todos</option>
-              {orderStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {statusConfig[status].label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="sr-only">Método</span>
-            <select
-              className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-              onChange={(event) => setMethodFilter(event.target.value as OrderMethodFilter)}
-              value={methodFilter}
-            >
-              {(Object.keys(orderMethodFilterLabels) as OrderMethodFilter[]).map((method) => (
-                <option key={method} value={method}>
-                  {orderMethodFilterLabels[method]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="sr-only">Más filtros</span>
-            <div className="relative">
-              <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <label className="block">
+              <span className="sr-only">Estado</span>
               <select
-                aria-label="Ordenar por"
-                className="w-full rounded-full border border-border bg-white py-2.5 pl-9 pr-3 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-                onChange={(event) => setSortOption(event.target.value as OrderSortOption)}
-                value={sortOption}
+                className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+                onChange={(event) => setStatusFilter(event.target.value as OrderStatusFilter)}
+                value={statusFilter}
               >
-                {(Object.keys(orderSortLabels) as OrderSortOption[]).map((option) => (
-                  <option key={option} value={option}>
-                    {orderSortLabels[option]}
+                <option value="todos">Estado: Todos</option>
+                {orderStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {statusConfig[status].label}
                   </option>
                 ))}
               </select>
-            </div>
-          </label>
-        </div>
+            </label>
 
-        {selectedOrderIds.size > 0 && (
-          <div
-            aria-live="polite"
-            className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/8 p-4 shadow-card sm:flex-row sm:items-center sm:justify-between"
-          >
-            <div>
-              <p className="text-sm font-black text-foreground">
-                {selectedOrderIds.size} pedido{selectedOrderIds.size === 1 ? '' : 's'} seleccionado
-                {selectedOrderIds.size === 1 ? '' : 's'}
-              </p>
-              <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                Generá una lista para cocina y se copia automáticamente.
-              </p>
-              {kitchenListFeedback && (
-                <p className="mt-2 text-xs font-black text-primary">{kitchenListFeedback}</p>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="rounded-full border border-border bg-white px-4 py-2 text-sm font-black text-foreground transition hover:border-primary/30"
-                onClick={clearOrderSelection}
-                type="button"
+            <label className="block">
+              <span className="sr-only">Método</span>
+              <select
+                className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+                onChange={(event) => setMethodFilter(event.target.value as OrderMethodFilter)}
+                value={methodFilter}
               >
-                Limpiar
-              </button>
-              <button
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 disabled:opacity-60"
-                disabled={isGeneratingKitchenList}
-                onClick={generateKitchenList}
-                type="button"
-              >
-                <ClipboardList className="h-4 w-4" />
-                {isGeneratingKitchenList ? 'Generando...' : 'Generar lista'}
-              </button>
-            </div>
-          </div>
-        )}
+                {(Object.keys(orderMethodFilterLabels) as OrderMethodFilter[]).map((method) => (
+                  <option key={method} value={method}>
+                    {orderMethodFilterLabels[method]}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        {/* Header de tabla con sort clickeable */}
-        <div
-          aria-label="Encabezado de tabla de pedidos"
-          className="hidden rounded-xl border border-border/70 bg-foreground/5 px-5 py-3 text-xs font-black uppercase tracking-wide text-foreground/70 lg:grid lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto] lg:gap-5"
-        >
-          <span aria-hidden="true" />
-          <span>Pedido</span>
-          {(['name', 'date', 'method', 'status', 'total'] as TableSortColumn[]).map((col) => {
-            const labels: Record<TableSortColumn, string> = {
-              name: 'Cliente',
-              date: 'Entrega',
-              method: 'Método',
-              status: 'Estado',
-              total: 'Total',
-            };
-            const isActive = tableSortCol === col;
-            const Icon = isActive ? (tableSortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
-            return (
-              <button
-                key={col}
-                className={[
-                  'flex items-center gap-1 transition-colors hover:text-foreground',
-                  isActive ? 'text-primary' : '',
-                ].join(' ')}
-                onClick={() => toggleTableSort(col)}
-                type="button"
-              >
-                {labels[col]}
-                <Icon className="h-3 w-3" />
-              </button>
-            );
-          })}
-          <span className="text-right">Acciones</span>
-        </div>
-
-        {ordersQuery.isLoading ? (
-          <div className="space-y-2">
-            <SkeletonRow />
-            <SkeletonRow />
-            <SkeletonRow />
+            <label className="block">
+              <span className="sr-only">Más filtros</span>
+              <div className="relative">
+                <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <select
+                  aria-label="Ordenar por"
+                  className="w-full rounded-full border border-border bg-white py-2.5 pl-9 pr-3 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+                  onChange={(event) =>
+                    handleSortOptionChange(event.target.value as OrderSortOption)
+                  }
+                  value={sortOption}
+                >
+                  {(Object.keys(orderSortLabels) as OrderSortOption[]).map((option) => (
+                    <option key={option} value={option}>
+                      {orderSortLabels[option]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </label>
           </div>
-        ) : visibleOrders.length === 0 ? (
-          <div className="py-12 text-center">
-            <Package className="mx-auto h-10 w-10 text-muted-foreground/30" />
-            <p className="mt-3 text-sm font-semibold text-muted-foreground">
-              {visibilityFilter === 'active'
-                ? 'No hay pedidos activos'
-                : 'No hay pedidos finalizados'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">{visibleOrders.map(renderOrderCard)}</div>
-        )}
-      </section>
 
-      {expandedOrderId &&
-        isDesktopDetail &&
-        createPortal(
-          <div
-            aria-label="Cerrar detalle del pedido"
-            className="fixed inset-0 z-40 bg-foreground/5 animate-fade-in"
-            onClick={(event) => {
-              if (event.target === event.currentTarget) closeOrderDetail();
-            }}
-          >
-            <aside
-              aria-label="Detalle del pedido seleccionado"
-              aria-modal="true"
-              className="ml-auto flex h-full w-[35vw] min-w-[420px] max-w-[560px] animate-slide-in-right flex-col overflow-hidden border-l border-border bg-card shadow-2xl"
-              role="dialog"
-              onClick={(event) => event.stopPropagation()}
+          {selectedOrderIds.size > 0 && (
+            <div
+              aria-live="polite"
+              className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/8 p-4 shadow-card sm:flex-row sm:items-center sm:justify-between"
             >
-              <OrderDetailPanel
-                detail={orderDetailQuery.data}
-                isLoading={orderDetailQuery.isLoading}
-                onCancel={cancelOrderFromDetail}
-                onClose={closeOrderDetail}
-                onMarkStatus={markStatusFromDetail}
-              />
-            </aside>
-          </div>,
-          document.body,
-        )}
+              <div>
+                <p className="text-sm font-black text-foreground">
+                  {selectedOrderIds.size} pedido{selectedOrderIds.size === 1 ? '' : 's'}{' '}
+                  seleccionado
+                  {selectedOrderIds.size === 1 ? '' : 's'}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                  Generá una lista para cocina y se copia automáticamente.
+                </p>
+                {kitchenListFeedback && (
+                  <p className="mt-2 text-xs font-black text-primary">{kitchenListFeedback}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="rounded-full border border-border bg-white px-4 py-2 text-sm font-black text-foreground transition hover:border-primary/30"
+                  onClick={clearOrderSelection}
+                  type="button"
+                >
+                  Limpiar
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 disabled:opacity-60"
+                  disabled={isGeneratingKitchenList}
+                  onClick={generateKitchenList}
+                  type="button"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  {isGeneratingKitchenList ? 'Generando...' : 'Generar lista'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Header de tabla con sort clickeable */}
+          <div
+            aria-label="Encabezado de tabla de pedidos"
+            className={[
+              'hidden rounded-xl border border-border/70 bg-foreground/5 px-5 py-3 text-xs font-black uppercase tracking-wide text-foreground/70 lg:grid lg:gap-5',
+              isDesktopDetailOpen
+                ? 'lg:grid-cols-[auto_1fr_1.35fr_1fr_0.9fr_1fr_auto]'
+                : 'lg:grid-cols-[auto_1.05fr_1.55fr_1.1fr_1fr_1.2fr_0.95fr_auto]',
+            ].join(' ')}
+          >
+            <span aria-hidden="true" />
+            <span>Pedido</span>
+            {(
+              (isDesktopDetailOpen
+                ? ['name', 'date', 'method', 'status']
+                : ['name', 'date', 'method', 'status', 'total']) as TableSortColumn[]
+            ).map((col) => {
+              const labels: Record<TableSortColumn, string> = {
+                name: 'Cliente',
+                date: 'Entrega',
+                method: 'Método',
+                status: 'Estado',
+                total: 'Total',
+              };
+              const isActive = tableSortCol === col;
+              const Icon = isActive ? (tableSortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+              return (
+                <button
+                  key={col}
+                  className={[
+                    'flex items-center gap-1 transition-colors hover:text-foreground',
+                    isActive ? 'text-primary' : '',
+                  ].join(' ')}
+                  onClick={() => toggleTableSort(col)}
+                  type="button"
+                >
+                  {labels[col]}
+                  <Icon className="h-3 w-3" />
+                </button>
+              );
+            })}
+            <span className="text-right">Acciones</span>
+          </div>
+
+          {ordersQuery.isLoading ? (
+            <div className="space-y-2">
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </div>
+          ) : visibleOrders.length === 0 ? (
+            <div className="py-12 text-center">
+              <Package className="mx-auto h-10 w-10 text-muted-foreground/30" />
+              <p className="mt-3 text-sm font-semibold text-muted-foreground">
+                {visibilityFilter === 'active'
+                  ? 'No hay pedidos activos'
+                  : 'No hay pedidos finalizados'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">{visibleOrders.map(renderOrderCard)}</div>
+          )}
+        </section>
+      </div>
+
+      {isDesktopDetailOpen && (
+        <aside
+          aria-label="Detalle del pedido seleccionado"
+          aria-modal="false"
+          className="hidden h-dvh max-h-dvh overflow-hidden border-l border-border bg-card shadow-2xl lg:sticky lg:top-0 lg:-my-6 lg:flex lg:flex-col"
+          role="dialog"
+        >
+          <OrderDetailPanel
+            detail={orderDetailQuery.data}
+            isLoading={orderDetailQuery.isLoading}
+            onCancel={cancelOrderFromDetail}
+            onClose={closeOrderDetail}
+            onMarkStatus={markStatusFromDetail}
+          />
+        </aside>
+      )}
 
       {expandedOrderId &&
         !isDesktopDetail &&

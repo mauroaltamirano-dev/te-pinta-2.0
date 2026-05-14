@@ -59,6 +59,7 @@ describe('shared domain schemas', () => {
         discountPercent: 10,
         deliveryFee: 500,
         items: [{ menuItemId: 'item-1', quantity: 13 }],
+        addons: [{ addonId: 'yasgua_salsa', quantity: 2 }],
       }).items[0]?.quantity,
     ).toBe(13);
   });

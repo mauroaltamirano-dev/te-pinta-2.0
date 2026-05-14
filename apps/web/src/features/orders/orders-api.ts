@@ -26,6 +26,15 @@ export type OrderItemDetail = {
   subtotal: number;
 };
 
+export type OrderAddonDetail = {
+  id: string;
+  addonId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+};
+
 export type OrderDetail = {
   id: string;
   customer: CustomerSnapshot;
@@ -41,9 +50,10 @@ export type OrderDetail = {
   status: OrderStatus;
   isPaid: boolean;
   items: OrderItemDetail[];
+  addons: OrderAddonDetail[];
 };
 
-export type OrderListItem = Omit<OrderDetail, 'items'> & {
+export type OrderListItem = Omit<OrderDetail, 'items' | 'addons'> & {
   itemCount: number;
   totalQuantity: number;
 };

@@ -23,10 +23,9 @@ const renderLayout = (initialPath = '/dashboard') => {
 };
 
 describe('AppLayout', () => {
-  it('renders desktop sidebar, mobile bottom nav, header, and nested route content', () => {
+  it('renders desktop sidebar, mobile bottom nav, and nested route content', () => {
     renderLayout();
 
-    expect(screen.getByRole('banner')).toHaveTextContent('Dashboard');
     const sidebar = screen.getByRole('complementary', { name: /navegación principal/i });
     const mobileNav = screen.getByRole('navigation', { name: /navegación móvil/i });
 
@@ -50,6 +49,16 @@ describe('AppLayout', () => {
     expect(mobileNav.className).toContain('fixed');
     expect(mobileNav.className).toContain('bottom-0');
     expect(mobileNav.className).toContain('md:hidden');
+    expect(mobileNav.className).toContain('bg-sidebar');
+
+    const activeOrdersLink = within(mobileNav).getByRole('link', { name: /pedidos/i });
+    const inactiveDashboardLink = within(mobileNav).getByRole('link', { name: /dashboard/i });
+
+    expect(activeOrdersLink).toHaveAttribute('aria-current', 'page');
+    expect(activeOrdersLink.className).toContain('bg-card');
+    expect(activeOrdersLink.className).toContain('text-sidebar');
+    expect(inactiveDashboardLink.className).toContain('text-card/78');
+
     expect(within(mobileNav).getByRole('link', { name: /dashboard/i })).toHaveAttribute(
       'href',
       '/dashboard',
@@ -58,10 +67,7 @@ describe('AppLayout', () => {
       'href',
       '/orders',
     );
-    expect(within(mobileNav).getByRole('link', { name: /menú/i })).toHaveAttribute(
-      'href',
-      '/menu',
-    );
+    expect(within(mobileNav).getByRole('link', { name: /menú/i })).toHaveAttribute('href', '/menu');
     expect(within(mobileNav).queryByRole('link', { name: /settings/i })).not.toBeInTheDocument();
   });
 });

@@ -17,7 +17,10 @@ describe('seed helpers', () => {
     await expect(compare('super-secret', admin.passwordHash)).resolves.toBe(true);
   });
 
-  it('defines the delivery fee setting required by orders', () => {
+  it('defines the operational settings required by orders', () => {
     expect(initialSettings).toContainEqual({ key: 'delivery_fee', value: '0' });
+    expect(initialSettings).toContainEqual({ key: 'promo_bulk_discount_percent', value: '10' });
+    expect(initialSettings).toContainEqual({ key: 'promo_combined_dozen_price', value: '15000' });
+    expect(initialSettings).toContainEqual({ key: 'addon_yasgua_salsa_price', value: '500' });
   });
 });

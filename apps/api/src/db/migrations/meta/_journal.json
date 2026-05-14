@@ -15,6 +15,13 @@
       "when": 1778096700000,
       "tag": "0001_orders_is_paid",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778699830881,
+      "tag": "0002_order_addons",
+      "breakpoints": true
     }
   ]
 }
