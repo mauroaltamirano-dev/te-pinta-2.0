@@ -43,6 +43,8 @@ import {
   type UpdateOrderInput,
 } from '@te-pinta/shared';
 
+import { PageHero } from '@/components/layout/PageHero';
+
 import { useCustomers } from '../customers/customers-hooks';
 import { useMenuItems } from '../menu/menu-hooks';
 import {
@@ -2090,46 +2092,39 @@ export const OrdersPage = () => {
       ].join(' ')}
     >
       <div className="min-w-0 space-y-6">
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-              Pedidos
-            </h1>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              Administrá y seguí todos los pedidos de tu emprendimiento.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <button
-              aria-label="Notificaciones de pedidos"
-              className="relative rounded-full border border-border bg-card p-2.5 text-muted-foreground shadow-card transition hover:border-primary/30 hover:text-primary"
-              type="button"
-            >
-              <Bell className="h-4 w-4" />
-              <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-black text-primary-foreground">
-                {summary.pending}
-              </span>
-            </button>
-            <button
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm font-black text-foreground shadow-card transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={visibleOrders.length === 0}
-              onClick={exportVisibleOrders}
-              type="button"
-            >
-              <Download className="h-4 w-4" />
-              Exportar
-            </button>
-            <button
-              aria-label="+ Nuevo pedido"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
-              onClick={openCreateDialog}
-              type="button"
-            >
-              <Plus className="h-4 w-4" />
-              Nuevo pedido
-            </button>
-          </div>
-        </section>
+        <PageHero
+          title="Pedidos"
+          description="Administrá y seguí todos los pedidos de tu emprendimiento."
+        >
+          <button
+            aria-label="Notificaciones de pedidos"
+            className="relative rounded-full border border-white/10 bg-white px-3 py-2.5 text-muted-foreground shadow-card transition hover:border-primary/30 hover:text-primary"
+            type="button"
+          >
+            <Bell className="h-4 w-4" />
+            <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-black text-primary-foreground">
+              {summary.pending}
+            </span>
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white px-4 py-2.5 text-sm font-black text-foreground shadow-card transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={visibleOrders.length === 0}
+            onClick={exportVisibleOrders}
+            type="button"
+          >
+            <Download className="h-4 w-4" />
+            Exportar
+          </button>
+          <button
+            aria-label="+ Nuevo pedido"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+            onClick={openCreateDialog}
+            type="button"
+          >
+            <Plus className="h-4 w-4" />
+            Nuevo pedido
+          </button>
+        </PageHero>
 
         <section
           aria-label="Resumen de pedidos"

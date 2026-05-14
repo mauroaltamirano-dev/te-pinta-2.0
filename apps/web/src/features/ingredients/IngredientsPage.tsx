@@ -15,6 +15,8 @@ import {
 
 import type { CreateIngredientInput, IngredientUnit } from '@te-pinta/shared';
 
+import { PageHero } from '@/components/layout/PageHero';
+
 import type { Ingredient } from './ingredients-api';
 import {
   useCreateIngredient,
@@ -324,27 +326,20 @@ export const IngredientsPage = () => {
   return (
     <div className="grid animate-fade-in gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]">
       <div className="min-w-0 space-y-6">
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-              Ingredientes
-            </h1>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              Gestioná insumos, unidades y precios de compra para controlar costos.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <button
-              aria-label="+ Nuevo ingrediente"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
-              onClick={handleStartCreate}
-              type="button"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Nuevo ingrediente
-            </button>
-          </div>
-        </section>
+        <PageHero
+          title="Ingredientes"
+          description="Gestioná insumos, unidades y precios de compra para controlar costos."
+        >
+          <button
+            aria-label="+ Nuevo ingrediente"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+            onClick={handleStartCreate}
+            type="button"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Nuevo ingrediente
+          </button>
+        </PageHero>
 
         <section
           aria-label="Resumen de ingredientes"

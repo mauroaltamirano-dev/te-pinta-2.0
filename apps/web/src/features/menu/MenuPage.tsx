@@ -20,6 +20,8 @@ import {
 
 import type { CreateMenuItemInput } from '@te-pinta/shared';
 
+import { PageHero } from '@/components/layout/PageHero';
+
 import { useDailyDashboard } from '../dashboard/dashboard-hooks';
 import type { MenuItem } from './menu-api';
 import { useCreateMenuItem, useMenuItems, useUpdateMenuItem } from './menu-hooks';
@@ -373,27 +375,20 @@ export const MenuPage = () => {
       ].join(' ')}
     >
       <div className="min-w-0 space-y-6">
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-              Menú
-            </h1>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              Gestioná variedades, precios de venta, costos y estado activo.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <button
-              aria-label="+ Nueva variedad"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
-              onClick={handleStartCreate}
-              type="button"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Nueva variedad
-            </button>
-          </div>
-        </section>
+        <PageHero
+          title="Menú"
+          description="Gestioná variedades, precios de venta, costos y estado activo."
+        >
+          <button
+            aria-label="+ Nueva variedad"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+            onClick={handleStartCreate}
+            type="button"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Nueva variedad
+          </button>
+        </PageHero>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <article className="rounded-2xl border border-border/70 bg-white/85 p-4 shadow-card transition hover:-translate-y-0.5">
