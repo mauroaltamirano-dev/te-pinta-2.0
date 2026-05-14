@@ -1,7 +1,7 @@
 {
   "framework": "vite",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @te-pinta/web build",
+  "buildCommand": "pnpm --filter @te-pinta/shared build && pnpm --filter @te-pinta/web build",
   "outputDirectory": "apps/web/dist",
   "rewrites": [
     {
