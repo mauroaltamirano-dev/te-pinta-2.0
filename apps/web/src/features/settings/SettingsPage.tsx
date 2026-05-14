@@ -5,18 +5,21 @@ import {
   Gift,
   Save,
   Settings2,
-  Sparkles,
   Truck,
   Utensils,
 } from 'lucide-react';
 
 import type { Setting } from './settings-api';
+import { PageHero } from '@/components/layout/PageHero';
+
 import { useSettings, useUpdateSetting } from './settings-hooks';
 
 const formatMoney = (value: string | number): string => {
   const parsed = Number(value);
 
-  return Number.isFinite(parsed) ? `$ ${Math.round(parsed).toLocaleString('es-AR')}` : String(value);
+  return Number.isFinite(parsed)
+    ? `$ ${Math.round(parsed).toLocaleString('es-AR')}`
+    : String(value);
 };
 
 const settingLabels: Record<string, { title: string; description: string; suffix?: string }> = {
@@ -106,7 +109,10 @@ const SettingCard = ({ setting }: SettingCardProps) => {
           </p>
         </div>
 
-        <form className="mt-auto flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={handleSubmit}>
+        <form
+          className="mt-auto flex flex-col gap-2 sm:flex-row sm:items-end"
+          onSubmit={handleSubmit}
+        >
           <label className="flex-1 text-xs font-black uppercase tracking-wide text-muted-foreground">
             Valor
             <input
@@ -130,7 +136,15 @@ const SettingCard = ({ setting }: SettingCardProps) => {
   );
 };
 
-const StatCard = ({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Truck }) => (
+const StatCard = ({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: typeof Truck;
+}) => (
   <article className="rounded-3xl border border-border/70 bg-white/90 p-4 shadow-card">
     <div className="flex items-center gap-3">
       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -189,34 +203,27 @@ export const SettingsPage = () => {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <section className="relative overflow-hidden rounded-[2rem] border border-border/70 bg-sidebar p-5 text-card shadow-premium sm:p-6">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(circle at 12% -20%, rgba(210, 138, 45, 0.34), transparent 16rem), radial-gradient(circle at 92% 10%, rgba(181, 74, 50, 0.24), transparent 14rem), linear-gradient(135deg, rgba(255,248,239,0.08), rgba(0,0,0,0.12))',
-          }}
-        />
-        <div className="relative">
-          <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-sidebar-muted ring-1 ring-white/10">
-            <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-            Panel operativo
-          </p>
-          <h1 className="mt-3 font-display text-3xl font-black tracking-tight text-white sm:text-4xl">
-            Settings
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm font-semibold text-sidebar-muted sm:text-base">
-            Ajustá delivery, promociones y adicionales sin tocar código. Los pedidos nuevos toman
-            estas reglas automáticamente.
-          </p>
-        </div>
-      </section>
+      <PageHero
+        title="Settings"
+        description="Ajustá delivery, promociones y adicionales sin tocar código. Los pedidos nuevos toman estas reglas automáticamente."
+      />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Truck} label="Delivery" value={deliveryFee ? formatMoney(deliveryFee.value) : '—'} />
-        <StatCard icon={BadgePercent} label="3+ docenas" value={`${bulkDiscount?.value ?? '10'}%`} />
-        <StatCard icon={Gift} label="Docena surtida" value={combinedDozen ? formatMoney(combinedDozen.value) : '$ 15.000'} />
+        <StatCard
+          icon={Truck}
+          label="Delivery"
+          value={deliveryFee ? formatMoney(deliveryFee.value) : '—'}
+        />
+        <StatCard
+          icon={BadgePercent}
+          label="3+ docenas"
+          value={`${bulkDiscount?.value ?? '10'}%`}
+        />
+        <StatCard
+          icon={Gift}
+          label="Docena surtida"
+          value={combinedDozen ? formatMoney(combinedDozen.value) : '$ 15.000'}
+        />
         <StatCard icon={Utensils} label="Adicionales" value={String(addonCount)} />
       </section>
 
@@ -237,7 +244,10 @@ export const SettingsPage = () => {
             if (groupSettings.length === 0) return null;
 
             return (
-              <section className="rounded-3xl border border-border/70 bg-card/80 p-4 shadow-card sm:p-5" key={group.title}>
+              <section
+                className="rounded-3xl border border-border/70 bg-card/80 p-4 shadow-card sm:p-5"
+                key={group.title}
+              >
                 <div className="flex items-start gap-3">
                   <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Icon className="h-5 w-5" aria-hidden="true" />
@@ -279,8 +289,13 @@ export const SettingsPage = () => {
             <h3 className="mt-3 text-lg font-black text-foreground">Reglas activas</h3>
             <ul className="mt-3 space-y-2 text-sm font-semibold text-muted-foreground">
               <li>• 3 docenas o más aplican {bulkDiscount?.value ?? '10'}% de descuento.</li>
-              <li>• 1 docena combinada cuesta {combinedDozen ? formatMoney(combinedDozen.value) : '$ 15.000'}.</li>
-              <li>• Las salsas quedan configuradas para el próximo paso de adicionales en pedido.</li>
+              <li>
+                • 1 docena combinada cuesta{' '}
+                {combinedDozen ? formatMoney(combinedDozen.value) : '$ 15.000'}.
+              </li>
+              <li>
+                • Las salsas quedan configuradas para el próximo paso de adicionales en pedido.
+              </li>
             </ul>
           </section>
         </aside>

@@ -9,7 +9,6 @@ import {
   PackagePlus,
   Search,
   ShoppingBasket,
-  Sparkles,
   TrendingUp,
   Truck,
   Users,
@@ -22,6 +21,8 @@ import { useCustomers } from '../customers/customers-hooks';
 import { useIngredients } from '../ingredients/ingredients-hooks';
 import { useMenuItems } from '../menu/menu-hooks';
 import { useOrders } from '../orders/orders-hooks';
+import { PageHero } from '@/components/layout/PageHero';
+
 import { useDailyDashboard } from './dashboard-hooks';
 
 const deliveryLabels: Record<DeliveryTime, string> = {
@@ -181,50 +182,30 @@ export const DashboardPage = () => {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <section className="relative overflow-hidden rounded-[2rem] border border-border/70 bg-sidebar p-5 text-card shadow-premium sm:p-6">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(circle at 12% -20%, rgba(210, 138, 45, 0.34), transparent 16rem), radial-gradient(circle at 92% 10%, rgba(181, 74, 50, 0.24), transparent 14rem), linear-gradient(135deg, rgba(255,248,239,0.08), rgba(0,0,0,0.12))',
-          }}
-        />
-        <div className="relative grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div>
-            <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-sidebar-muted ring-1 ring-white/10">
-              <Sparkles className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
-              Centro operativo
-            </p>
-            <h1 className="mt-3 font-display text-3xl font-black tracking-tight text-white sm:text-4xl">
-              Dashboard
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm font-semibold text-sidebar-muted sm:text-base">
-              Ventas, pedidos críticos, calendario cercano y accesos rápidos para operar sin perder
-              contexto.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-[auto_auto] sm:items-end">
-            <label className="text-sm font-black text-white">
-              Fecha del dashboard
-              <input
-                className="mt-2 w-full rounded-full border border-white/10 bg-white px-4 py-3 text-sm font-black text-sidebar outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20 sm:w-52"
-                onChange={(event) => setDate(event.target.value)}
-                type="date"
-                value={date}
-              />
-            </label>
-            <Link
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-black text-white shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
-              to="/orders"
-            >
-              <Search className="h-4 w-4" aria-hidden="true" />
-              Buscar pedido
-            </Link>
-          </div>
+      <PageHero
+        eyebrow="Centro operativo"
+        title="Dashboard"
+        description="Ventas, pedidos críticos, calendario cercano y accesos rápidos para operar sin perder contexto."
+      >
+        <div className="grid gap-3 sm:grid-cols-[auto_auto] sm:items-end">
+          <label className="text-sm font-black text-white">
+            Fecha del dashboard
+            <input
+              className="mt-2 w-full rounded-full border border-white/10 bg-white px-4 py-3 text-sm font-black text-sidebar outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20 sm:w-52"
+              onChange={(event) => setDate(event.target.value)}
+              type="date"
+              value={date}
+            />
+          </label>
+          <Link
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-black text-white shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+            to="/orders"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+            Buscar pedido
+          </Link>
         </div>
-      </section>
+      </PageHero>
 
       {dashboardQuery.isLoading ? (
         <p className="rounded-2xl border border-border/70 bg-white/85 px-4 py-3 text-sm font-semibold text-muted-foreground shadow-card">
@@ -518,25 +499,25 @@ export const DashboardPage = () => {
               }}
             />
             <div className="relative">
-            <h2 className="text-lg font-black text-white">Accesos rápidos</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {quickActions.map(({ label, href, icon: Icon, hint }) => (
-                <Link
-                  className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/10 px-3 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
-                  key={label}
-                  to={href}
-                >
-                  <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-primary shadow-card transition group-hover:scale-105">
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <span className="mt-3 block text-sm font-black text-white">{label}</span>
-                  <span className="mt-1 block text-[0.68rem] font-bold uppercase tracking-wide text-sidebar-muted">
-                    {hint}
-                  </span>
-                </Link>
-              ))}
-            </div>
+              <h2 className="text-lg font-black text-white">Accesos rápidos</h2>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {quickActions.map(({ label, href, icon: Icon, hint }) => (
+                  <Link
+                    className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/10 px-3 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
+                    key={label}
+                    to={href}
+                  >
+                    <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-primary shadow-card transition group-hover:scale-105">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <span className="mt-3 block text-sm font-black text-white">{label}</span>
+                    <span className="mt-1 block text-[0.68rem] font-bold uppercase tracking-wide text-sidebar-muted">
+                      {hint}
+                    </span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </section>
 

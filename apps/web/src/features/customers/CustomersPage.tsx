@@ -20,6 +20,8 @@ import {
 
 import type { CreateCustomerInput } from '@te-pinta/shared';
 
+import { PageHero } from '@/components/layout/PageHero';
+
 import type { Customer } from './customers-api';
 import {
   useCreateCustomer,
@@ -361,27 +363,20 @@ export const CustomersPage = () => {
   return (
     <div className="grid animate-fade-in gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]">
       <div className="min-w-0 space-y-6">
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="font-display text-3xl font-black tracking-tight text-foreground">
-              Clientes
-            </h1>
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              Guardá teléfonos, direcciones y datos útiles para cargar pedidos más rápido.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <button
-              aria-label="+ Nuevo cliente"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
-              onClick={handleStartCreate}
-              type="button"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Nuevo cliente
-            </button>
-          </div>
-        </section>
+        <PageHero
+          title="Clientes"
+          description="Guardá teléfonos, direcciones y datos útiles para cargar pedidos más rápido."
+        >
+          <button
+            aria-label="+ Nuevo cliente"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+            onClick={handleStartCreate}
+            type="button"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Nuevo cliente
+          </button>
+        </PageHero>
 
         <section
           aria-label="Resumen de clientes"
