@@ -6,8 +6,8 @@ services:
     region: oregon
     branch: main
     healthCheckPath: /health
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @te-pinta/shared build && pnpm --filter @te-pinta/api build
-    startCommand: pnpm --filter @te-pinta/api start
+    buildCommand: npx pnpm@10.10.0 install --frozen-lockfile && npx pnpm@10.10.0 --filter @te-pinta/shared build && npx pnpm@10.10.0 --filter @te-pinta/api build
+    startCommand: npx pnpm@10.10.0 --filter @te-pinta/api start
     autoDeployTrigger: commit
     envVars:
       - key: NODE_VERSION
