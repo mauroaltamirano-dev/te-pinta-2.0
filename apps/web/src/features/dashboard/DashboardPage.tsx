@@ -187,23 +187,25 @@ export const DashboardPage = () => {
         title="Dashboard"
         description="Ventas, pedidos críticos, calendario cercano y accesos rápidos para operar sin perder contexto."
       >
-        <div className="grid gap-3 sm:grid-cols-[auto_auto] sm:items-end">
-          <label className="text-sm font-black text-white">
-            Fecha del dashboard
-            <input
-              className="mt-2 w-full rounded-full border border-white/10 bg-white px-4 py-3 text-sm font-black text-sidebar outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20 sm:w-52"
-              onChange={(event) => setDate(event.target.value)}
-              type="date"
-              value={date}
-            />
-          </label>
-          <Link
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-black text-white shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
-            to="/orders"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-            Buscar pedido
-          </Link>
+        <div className="w-full rounded-3xl border border-white/10 bg-white/10 p-2 shadow-inner backdrop-blur sm:w-auto">
+          <div className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_auto] sm:items-center">
+            <label className="grid gap-1.5 rounded-2xl bg-sidebar/20 px-3 py-2 text-xs font-black uppercase tracking-wide text-sidebar-muted sm:grid-cols-[auto_minmax(11rem,1fr)] sm:items-center sm:gap-3">
+              <span className="whitespace-nowrap">Fecha del dashboard</span>
+              <input
+                className="w-full min-w-0 rounded-full border border-white/15 bg-white px-4 py-2.5 text-sm font-black text-sidebar outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/20"
+                onChange={(event) => setDate(event.target.value)}
+                type="date"
+                value={date}
+              />
+            </label>
+            <Link
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-black text-white shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+              to="/orders"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              Buscar pedido
+            </Link>
+          </div>
         </div>
       </PageHero>
 

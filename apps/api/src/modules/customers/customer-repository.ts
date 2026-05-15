@@ -27,7 +27,7 @@ const mapCustomer = (row: CustomerRow): Customer => ({
 
 const toCustomerUpdate = (updates: UpdateCustomerInput): Partial<CustomerInsert> => ({
   ...(updates.name !== undefined ? { name: updates.name } : {}),
-  ...(updates.phone !== undefined ? { phone: updates.phone } : {}),
+  ...(updates.phone !== undefined ? { phone: updates.phone.trim() || null } : {}),
   ...(updates.address !== undefined ? { address: updates.address || null } : {}),
   updatedAt: new Date(),
 });

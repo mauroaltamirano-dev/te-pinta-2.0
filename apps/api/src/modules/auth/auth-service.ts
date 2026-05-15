@@ -30,7 +30,7 @@ export type AuthSession = {
   refreshToken: string;
 };
 
-export type RefreshedAuthSession = Omit<AuthSession, 'refreshToken'>;
+export type RefreshedAuthSession = AuthSession;
 
 const buildPayload = (user: AdminUserRecord | AuthenticatedUser): TokenPayload => ({
   userId: user.id,
@@ -73,6 +73,7 @@ export const refreshAdminSession = (
     return {
       user: toAuthenticatedUser(payload),
       accessToken: signAccessToken(payload, secrets),
+      refreshToken: signRefreshToken(payload, secrets),
     };
   } catch {
     throw new ApiError(401, 'Invalid refresh token', 'INVALID_REFRESH_TOKEN');

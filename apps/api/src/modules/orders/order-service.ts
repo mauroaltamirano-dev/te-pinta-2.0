@@ -16,7 +16,7 @@ import { ApiError } from '../../middlewares/error-handler';
 export type CustomerSnapshot = {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   address: string | null;
 };
 
@@ -108,7 +108,7 @@ export type OrderRepository = {
 };
 
 const roundMoney = (value: number): number => Math.round(value * 100) / 100;
-const normalizeAddress = (address: string | undefined): string | null => address || null;
+const normalizeOptionalText = (value: string | undefined): string | null => value?.trim() || null;
 
 const parseMoneySetting = (value: string | null): number => {
   const parsed = Number(value ?? 0);
@@ -140,7 +140,8 @@ const resolveCustomer = async (
     return customer;
   }
 
-  const existing = await repository.findCustomerByPhone(input.newCustomer.phone);
+  const normalizedPhone = normalizeOptionalText(input.newCustomer.phone);
+  const existing = normalizedPhone ? await repository.findCustomerByPhone(normalizedPhone) : null;
   if (existing) {
     return existing;
   }
@@ -148,8 +149,8 @@ const resolveCustomer = async (
   return repository.createCustomer({
     id: randomUUID(),
     name: input.newCustomer.name,
-    phone: input.newCustomer.phone,
-    address: normalizeAddress(input.newCustomer.address),
+    phone: normalizedPhone,
+    address: normalizeOptionalText(input.newCustomer.address),
   });
 };
 

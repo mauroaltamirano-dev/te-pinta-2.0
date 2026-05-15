@@ -24,7 +24,7 @@ export const authLoginSchema = z.object({
 
 export const createCustomerSchema = z.object({
   name: trimmedString,
-  phone: trimmedString,
+  phone: z.string().trim().optional(),
   address: z.string().trim().optional(),
 });
 

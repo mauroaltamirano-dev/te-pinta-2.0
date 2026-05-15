@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api-client';
 export type Customer = {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   address: string | null;
 };
 

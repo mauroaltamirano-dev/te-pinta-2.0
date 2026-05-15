@@ -437,6 +437,32 @@ describe('OrdersPage', () => {
     expect(container).not.toContain(dialog);
   });
 
+  it('generates a visible kitchen list even when automatic clipboard copy is unavailable', async () => {
+    renderOrdersPage();
+
+    expect(await screen.findByText('Ana Pérez')).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /seleccionar pedido #p-00001 para lista de cocina/i }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /generar lista/i }));
+
+    const generatedList = await screen.findByLabelText(/lista de cocina generada/i);
+    const generatedListText = (generatedList as HTMLTextAreaElement).value;
+    expect(generatedListText).toContain('*LISTA DE COCINA*');
+    expect(generatedListText).toContain('*1. Ana Pérez*  ·  _#P-00001_');
+    expect(generatedListText).toContain('*Franja:* Noche · ENVÍO · CRUDO');
+    expect(generatedListText).toContain('*Variedades:*');
+    expect(generatedListText).toContain('• Carne suave: *12 u.*');
+    expect(generatedListText).toContain('*Total pedido:* $ 23.100');
+    expect(generatedListText).toContain('*TOTALES POR VARIEDAD*');
+    expect(generatedListText).toContain('• Carne suave: *12 u.*');
+    expect(generatedListText).toContain('• Humita: *12 u.*');
+    expect(generatedListText).not.toContain('_Dirección:_');
+    expect(generatedListText).not.toContain('*Entrega:*');
+    expect(generatedListText).not.toContain('_Tel:_');
+    expect(screen.getByText(/la podés copiar desde abajo/i)).toBeInTheDocument();
+  });
+
   it('creates an order for an existing customer with delivery, discount, fee preview and varieties', async () => {
     vi.mocked(createOrder).mockResolvedValue(orderDetail);
 
@@ -451,7 +477,7 @@ describe('OrdersPage', () => {
     await userEvent.click(dialog.getByRole('button', { name: /seleccionar cliente ana pérez/i }));
     await userEvent.type(dialog.getByLabelText(/fecha de entrega/i), '2026-05-07');
     await userEvent.selectOptions(dialog.getByLabelText(/franja/i), 'noche');
-    await userEvent.click(dialog.getByRole('button', { name: /envío/i }));
+    expect(dialog.getByRole('button', { name: /envío/i })).toBeInTheDocument();
     expect(dialog.queryByText(/incluye fee de delivery/i)).not.toBeInTheDocument();
     expect(dialog.queryByText(/el cliente pasa a buscar/i)).not.toBeInTheDocument();
     expect(dialog.getByRole('button', { name: /crudo/i })).toBeInTheDocument();
@@ -500,8 +526,31 @@ describe('OrdersPage', () => {
     expect(dialog.getByLabelText(/fecha de entrega/i)).toBeInvalid();
     const errors = dialog.getByRole('status', { name: /errores del pedido/i });
     expect(errors).toHaveTextContent(/seleccioná un cliente/i);
-    expect(errors).toHaveTextContent(/elegí envío o retiro/i);
     expect(errors).toHaveTextContent(/agregá al menos una variedad/i);
+  });
+
+  it('creates an order with only the new customer name because phone and address can be added later', async () => {
+    vi.mocked(createOrder).mockResolvedValue(orderDetail);
+
+    renderOrdersPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /\+ nuevo pedido/i }));
+    const dialog = within(await screen.findByRole('dialog', { name: /nuevo pedido/i }));
+
+    await userEvent.click(dialog.getByRole('radio', { name: /nuevo cliente/i }));
+    await userEvent.type(dialog.getByLabelText(/nombre nuevo cliente/i), 'Carla Ruiz');
+    await userEvent.type(dialog.getByLabelText(/fecha de entrega/i), '2026-05-07');
+    const humitaCard = within(dialog.getByLabelText(/variedad humita/i));
+    await userEvent.click(humitaCard.getByRole('button', { name: /\+ media/i }));
+
+    await userEvent.click(dialog.getByRole('button', { name: /^crear pedido$/i }));
+
+    expect(vi.mocked(createOrder).mock.calls[0]?.[0]).toMatchObject({
+      customer: { newCustomer: { name: 'Carla Ruiz' } },
+      deliveryType: 'envio',
+      cooked: false,
+      items: [{ menuItemId: 'menu-2', quantity: 6 }],
+    });
   });
 
   it('creates an order with a new customer mode', async () => {
