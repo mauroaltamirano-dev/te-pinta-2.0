@@ -13,7 +13,7 @@ import { apiClient } from '@/lib/api-client';
 export type CustomerSnapshot = {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   address: string | null;
 };
 

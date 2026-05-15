@@ -22,6 +22,13 @@
       "when": 1778699830881,
       "tag": "0002_order_addons",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778841600000,
+      "tag": "0003_customers_phone_nullable",
+      "breakpoints": true
     }
   ]
 }

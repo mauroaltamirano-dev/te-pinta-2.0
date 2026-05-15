@@ -1,4 +1,4 @@
-import { Router, type Router as ExpressRouter } from 'express';
+import { Router, type CookieOptions, type Router as ExpressRouter } from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { authLoginSchema } from '@te-pinta/shared';
@@ -10,6 +10,18 @@ import { authenticate } from '../../middlewares/authenticate';
 import type { JwtSecrets } from './jwt';
 
 const refreshCookieName = 'te_pinta_refresh';
+
+const getRefreshCookieBaseOptions = (secureCookies: boolean): CookieOptions => ({
+  httpOnly: true,
+  secure: secureCookies,
+  sameSite: secureCookies ? 'none' : 'lax',
+  path: '/api/v1/auth',
+});
+
+const getRefreshCookieOptions = (secureCookies: boolean): CookieOptions => ({
+  ...getRefreshCookieBaseOptions(secureCookies),
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+});
 
 export type AuthRouterOptions = {
   repository: AdminUserRepository;
@@ -39,13 +51,7 @@ export const createAuthRouter = ({
       try {
         const session = await authenticateAdmin(req.body, repository, secrets);
 
-        res.cookie(refreshCookieName, session.refreshToken, {
-          httpOnly: true,
-          secure: secureCookies,
-          sameSite: 'lax',
-          path: '/api/v1/auth',
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie(refreshCookieName, session.refreshToken, getRefreshCookieOptions(secureCookies));
         res.json({ user: session.user, accessToken: session.accessToken });
       } catch (error) {
         next(error);
@@ -56,14 +62,15 @@ export const createAuthRouter = ({
   router.post('/refresh', (req, res, next) => {
     try {
       const session = refreshAdminSession(req.cookies?.[refreshCookieName], secrets);
-      res.json(session);
+      res.cookie(refreshCookieName, session.refreshToken, getRefreshCookieOptions(secureCookies));
+      res.json({ user: session.user, accessToken: session.accessToken });
     } catch (error) {
       next(error);
     }
   });
 
   router.post('/logout', (_req, res) => {
-    res.clearCookie(refreshCookieName, { path: '/api/v1/auth' });
+    res.clearCookie(refreshCookieName, getRefreshCookieBaseOptions(secureCookies));
     res.status(204).send();
   });
 

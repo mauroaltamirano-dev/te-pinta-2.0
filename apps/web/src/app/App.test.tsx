@@ -7,9 +7,10 @@ describe('App scaffold', () => {
   it('renders the Te Pinta web shell with React Router content', () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: /te pinta/i })).toBeInTheDocument();
-    expect(screen.getByText(/gestión diaria de empanadas/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /ir al dashboard/i })).toHaveAttribute(
+    expect(screen.getByRole('img', { name: /te pinta/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /pedidos claros/i })).toBeInTheDocument();
+    expect(screen.getByText(/app interna pensada para el ritmo diario/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /ir al dashboard/i })[0]).toHaveAttribute(
       'href',
       '/dashboard',
     );

@@ -102,7 +102,7 @@ const initialFormState: OrderFormState = {
   newCustomerAddress: '',
   deliveryDate: '',
   deliveryTime: 'mediodia',
-  deliveryType: '',
+  deliveryType: 'envio',
   cooked: false,
   notes: '',
   discountPercent: '0',
@@ -432,6 +432,37 @@ const buildWhatsAppHref = (phone: string): string => `https://wa.me/54${phone.re
 const buildMapsHref = (address?: string | null): string =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address ?? '')}`;
 
+const copyTextToClipboard = async (text: string): Promise<boolean> => {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through to the textarea fallback below.
+    }
+  }
+
+  if (typeof document === 'undefined') return false;
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
+};
+
 const useIsDesktopDetail = () => {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
@@ -662,7 +693,7 @@ const OrderDetailPanel = ({
               </div>
               <p className="text-lg font-black text-foreground">{detail.customer.name}</p>
               <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                <Phone className="h-4 w-4" /> {detail.customer.phone}
+                <Phone className="h-4 w-4" /> {detail.customer.phone ?? 'Sin teléfono'}
               </p>
               {detail.customer.address && (
                 <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
@@ -670,20 +701,32 @@ const OrderDetailPanel = ({
                 </p>
               )}
               <div className="mt-4 grid grid-cols-3 gap-2 text-white">
-                <a
-                  className="rounded-full bg-sidebar px-3 py-2 text-center text-sm font-black text-white"
-                  href={buildPhoneHref(detail.customer.phone)}
-                >
-                  Llamar
-                </a>
-                <a
-                  className="rounded-full bg-emerald-600 px-3 py-2 text-center text-sm font-black text-white"
-                  href={buildWhatsAppHref(detail.customer.phone)}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  WhatsApp
-                </a>
+                {detail.customer.phone ? (
+                  <a
+                    className="rounded-full bg-sidebar px-3 py-2 text-center text-sm font-black text-white"
+                    href={buildPhoneHref(detail.customer.phone)}
+                  >
+                    Llamar
+                  </a>
+                ) : (
+                  <span className="rounded-full bg-muted px-3 py-2 text-center text-sm font-black text-muted-foreground">
+                    Llamar
+                  </span>
+                )}
+                {detail.customer.phone ? (
+                  <a
+                    className="rounded-full bg-emerald-600 px-3 py-2 text-center text-sm font-black text-white"
+                    href={buildWhatsAppHref(detail.customer.phone)}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    WhatsApp
+                  </a>
+                ) : (
+                  <span className="rounded-full bg-muted px-3 py-2 text-center text-sm font-black text-muted-foreground">
+                    WhatsApp
+                  </span>
+                )}
                 <a
                   className="rounded-full bg-sky-600 px-3 py-2 text-center text-sm font-black text-white"
                   href={buildMapsHref(detail.customer.address)}
@@ -902,6 +945,7 @@ export const OrdersPage = () => {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(() => new Set());
   const [isGeneratingKitchenList, setIsGeneratingKitchenList] = useState(false);
   const [kitchenListFeedback, setKitchenListFeedback] = useState<string | null>(null);
+  const [generatedKitchenList, setGeneratedKitchenList] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -949,7 +993,7 @@ export const OrdersPage = () => {
       const matchesDate = deliveryDateFilter ? order.deliveryDate === deliveryDateFilter : true;
       const matchesSearch = query
         ? normalizeText(
-            `${order.id} ${getOrderCode(order.id)} ${order.customer.name} ${order.customer.phone} ${order.customer.address ?? ''}`,
+            `${order.id} ${getOrderCode(order.id)} ${order.customer.name} ${order.customer.phone ?? ''} ${order.customer.address ?? ''}`,
           ).includes(query)
         : true;
       const matchesStatus = statusFilter === 'todos' ? true : order.status === statusFilter;
@@ -1040,7 +1084,7 @@ export const OrdersPage = () => {
     const customers = customersQuery.data ?? [];
     if (!query) return customers;
     return customers.filter((customer) =>
-      `${customer.name} ${customer.phone} ${customer.address ?? ''}`
+      `${customer.name} ${customer.phone ?? ''} ${customer.address ?? ''}`
         .toLocaleLowerCase('es-AR')
         .includes(query),
     );
@@ -1115,7 +1159,6 @@ export const OrdersPage = () => {
       errors.push('Seleccioná un cliente.');
     if (form.customerMode === 'new') {
       if (!form.newCustomerName.trim()) errors.push('Nombre del cliente requerido.');
-      if (!form.newCustomerPhone.trim()) errors.push('Teléfono del cliente requerido.');
     }
     if (!form.deliveryDate) errors.push('Fecha de entrega requerida.');
     if (!form.deliveryType) errors.push('Elegí envío o retiro.');
@@ -1130,7 +1173,7 @@ export const OrdersPage = () => {
         : {
             newCustomer: {
               name: form.newCustomerName,
-              phone: form.newCustomerPhone,
+              ...(form.newCustomerPhone.trim() ? { phone: form.newCustomerPhone } : {}),
               ...(form.newCustomerAddress.trim() ? { address: form.newCustomerAddress } : {}),
             },
           },
@@ -1225,7 +1268,7 @@ export const OrdersPage = () => {
     const rows = visibleOrders.map((order) => [
       getOrderCode(order.id),
       order.customer.name,
-      order.customer.phone,
+      order.customer.phone ?? '',
       order.customer.address ?? '',
       formatDateAr(order.deliveryDate),
       deliveryTimeLabels[order.deliveryTime],
@@ -1316,6 +1359,7 @@ export const OrdersPage = () => {
 
   const toggleOrderSelection = (id: string) => {
     setKitchenListFeedback(null);
+    setGeneratedKitchenList('');
     setSelectedOrderIds((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -1327,12 +1371,14 @@ export const OrdersPage = () => {
   const clearOrderSelection = () => {
     setSelectedOrderIds(new Set());
     setKitchenListFeedback(null);
+    setGeneratedKitchenList('');
   };
 
   const generateKitchenList = async () => {
     if (selectedOrderIds.size === 0) return;
     setIsGeneratingKitchenList(true);
     setKitchenListFeedback(null);
+    setGeneratedKitchenList('');
 
     try {
       const selectedDetails = await Promise.all([...selectedOrderIds].map((id) => getOrder(id)));
@@ -1347,26 +1393,65 @@ export const OrdersPage = () => {
         0,
       );
       const totalMoney = sortedDetails.reduce((total, order) => total + order.total, 0);
+      const itemTotals = sortedDetails
+        .flatMap((order) =>
+          order.items.map((item) => ({ name: item.menuItemName, quantity: item.quantity })),
+        )
+        .reduce<Map<string, number>>((totals, item) => {
+          totals.set(item.name, (totals.get(item.name) ?? 0) + item.quantity);
+          return totals;
+        }, new Map());
+      const addonTotals = sortedDetails
+        .flatMap((order) =>
+          order.addons.map((addon) => ({ name: addon.name, quantity: addon.quantity })),
+        )
+        .reduce<Map<string, number>>((totals, addon) => {
+          totals.set(addon.name, (totals.get(addon.name) ?? 0) + addon.quantity);
+          return totals;
+        }, new Map());
+      const sortedItemTotals = [...itemTotals.entries()].sort(([a], [b]) =>
+        a.localeCompare(b, 'es-AR'),
+      );
+      const sortedAddonTotals = [...addonTotals.entries()].sort(([a], [b]) =>
+        a.localeCompare(b, 'es-AR'),
+      );
       const lines = [
-        `*Lista de cocina · ${sortedDetails.length} pedido${sortedDetails.length === 1 ? '' : 's'}*`,
-        `Total: ${totalUnits} unidades · ${formatMoney(totalMoney)}`,
+        `*LISTA DE COCINA*`,
+        `_${sortedDetails.length} pedido${sortedDetails.length === 1 ? '' : 's'} · ${totalUnits} unidades_`,
+        `*Total general:* ${formatMoney(totalMoney)}`,
         '',
         ...sortedDetails.flatMap((order, index) => [
-          `${index + 1}. ${getOrderCode(order.id)} · ${order.customer.name}`,
-          `Tel: ${order.customer.phone}${order.customer.address ? ` · ${order.customer.address}` : ''}`,
-          `Entrega: ${formatDateAr(order.deliveryDate)} · ${deliveryTimeLabels[order.deliveryTime]} · ${order.deliveryType === 'envio' ? 'ENVÍO' : 'RETIRO'} · ${order.cooked ? 'COCINADO' : 'CRUDO'}`,
-          ...order.items.map((item) => `- ${item.menuItemName}: ${item.quantity} u.`),
-          ...order.addons.map((addon) => `- ${addon.name}: ${addon.quantity} u.`),
-          `Total pedido: ${formatMoney(order.total)}`,
-          order.notes?.trim() ? `Notas: ${order.notes.trim()}` : '',
+          `*${index + 1}. ${order.customer.name}*  ·  _${getOrderCode(order.id)}_`,
+          `*Franja:* ${deliveryTimeLabels[order.deliveryTime]} · ${order.deliveryType === 'envio' ? 'ENVÍO' : 'RETIRO'} · ${order.cooked ? 'COCINADO' : 'CRUDO'}`,
+          '',
+          '*Variedades:*',
+          ...order.items.map((item) => `• ${item.menuItemName}: *${item.quantity} u.*`),
+          ...order.addons.map((addon) => `• ${addon.name}: *${addon.quantity} u.*`),
+          '',
+          `*Total pedido:* ${formatMoney(order.total)}`,
+          order.notes?.trim() ? `_Notas:_ ${order.notes.trim()}` : null,
+          '',
+          '— — —',
           '',
         ]),
-      ].filter(Boolean);
+        '*TOTALES POR VARIEDAD*',
+        ...sortedItemTotals.map(([name, quantity]) => `• ${name}: *${quantity} u.*`),
+        sortedAddonTotals.length > 0 ? '' : null,
+        sortedAddonTotals.length > 0 ? '*Adicionales:*' : null,
+        ...sortedAddonTotals.map(([name, quantity]) => `• ${name}: *${quantity} u.*`),
+      ].filter((line): line is string => line !== null);
 
-      await navigator.clipboard.writeText(lines.join('\n'));
-      setKitchenListFeedback('Lista copiada. Ya podés pegarla en WhatsApp o imprimirla.');
+      const kitchenList = lines.join('\n');
+      setGeneratedKitchenList(kitchenList);
+      const copied = await copyTextToClipboard(kitchenList);
+      setKitchenListFeedback(
+        copied
+          ? 'Lista copiada. Ya podés pegarla en WhatsApp o imprimirla.'
+          : 'Lista generada. No se pudo copiar automático, pero la podés copiar desde abajo.',
+      );
     } catch {
       setKitchenListFeedback('No se pudo generar la lista. Intentá de nuevo.');
+      setGeneratedKitchenList('');
     } finally {
       setIsGeneratingKitchenList(false);
     }
@@ -1435,7 +1520,7 @@ export const OrdersPage = () => {
             </p>
             <p className="font-bold text-foreground">{order.customer.name}</p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-              <Phone className="h-3 w-3" /> {order.customer.phone}
+              <Phone className="h-3 w-3" /> {order.customer.phone ?? 'Sin teléfono'}
             </p>
             {order.customer.address && (
               <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-muted-foreground">
@@ -1689,7 +1774,7 @@ export const OrdersPage = () => {
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
-                          <Phone className="h-3 w-3" /> {customer.phone}
+                          <Phone className="h-3 w-3" /> {customer.phone ?? 'Sin teléfono'}
                         </span>
                         {customer.address && (
                           <span className="flex items-center gap-1">
@@ -1714,7 +1799,7 @@ export const OrdersPage = () => {
               { key: 'newCustomerName', label: 'Nombre *', type: 'text', inputMode: undefined },
               {
                 key: 'newCustomerPhone',
-                label: 'Teléfono *',
+                label: 'Teléfono',
                 type: 'tel',
                 inputMode: 'tel' as const,
               },
@@ -2377,6 +2462,15 @@ export const OrdersPage = () => {
                 {kitchenListFeedback && (
                   <p className="mt-2 text-xs font-black text-primary">{kitchenListFeedback}</p>
                 )}
+                {generatedKitchenList ? (
+                  <textarea
+                    aria-label="Lista de cocina generada"
+                    className="mt-3 h-36 w-full rounded-2xl border border-border bg-white p-3 text-xs font-semibold text-foreground shadow-inner outline-none focus:ring-2 focus:ring-ring/30"
+                    readOnly
+                    value={generatedKitchenList}
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button

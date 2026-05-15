@@ -1,4 +1,4 @@
-import { ArrowRight, ClipboardList, Gauge, Gift, PackageCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, ClipboardList, Gauge, PackageCheck, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import logo from '@/assets/logo-te-pinta.png';
@@ -19,19 +19,12 @@ const quickLinks = [
     className:
       'bg-white text-foreground ring-1 ring-border hover:border-primary/30 hover:text-primary',
   },
-  {
-    to: '/sorteo',
-    label: 'Filmar sorteo',
-    description: 'Pantalla lista para grabar el sorteo con estilo de marca.',
-    icon: Gift,
-    className: 'bg-oro-horno text-foreground shadow-glow hover:bg-crema-maiz',
-  },
 ] as const;
 
 const highlights = [
   { label: 'Pedidos', value: 'Carga rápida', icon: PackageCheck },
   { label: 'Operación', value: 'Todo en un panel', icon: Gauge },
-  { label: 'Marca', value: 'Lista para mostrar', icon: Sparkles },
+  { label: 'Gestión', value: 'Sin rodeos', icon: Sparkles },
 ] as const;
 
 export const HomePage = () => {
@@ -114,7 +107,7 @@ export const HomePage = () => {
                   Arrancá por lo importante
                 </h2>
                 <p className="mt-2 text-sm font-semibold leading-6 text-sidebar-muted">
-                  Tres entradas para operar sin rodeos: dashboard, pedidos y sorteo.
+                  Dos entradas para operar sin rodeos: dashboard y pedidos.
                 </p>
               </div>
 

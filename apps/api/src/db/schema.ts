@@ -32,7 +32,7 @@ export const users = pgTable('users', {
 export const customers = pgTable('customers', {
   id: id(),
   name: varchar('name', { length: 160 }).notNull(),
-  phone: varchar('phone', { length: 64 }).notNull().unique(),
+  phone: varchar('phone', { length: 64 }).unique(),
   address: text('address'),
   ...timestamps,
 });

@@ -46,13 +46,13 @@ const initialFormState: CustomerFormState = {
 
 const toCreateInput = (form: CustomerFormState): CreateCustomerInput => ({
   name: form.name,
-  phone: form.phone,
+  ...(form.phone.trim() ? { phone: form.phone } : {}),
   ...(form.address.trim() ? { address: form.address } : {}),
 });
 
 const toFormState = (customer: Customer): CustomerFormState => ({
   name: customer.name,
-  phone: customer.phone,
+  phone: customer.phone ?? '',
   address: customer.address ?? '',
 });
 
@@ -160,7 +160,7 @@ const CustomerDetailAnalytics = ({
         <div className="mt-3 grid gap-2 text-sm">
           <p className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 font-black text-foreground ring-1 ring-border/60">
             <Phone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            {customer.phone}
+            {customer.phone ?? 'Sin teléfono'}
           </p>
           <p className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 font-semibold text-muted-foreground ring-1 ring-border/60">
             <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -298,7 +298,7 @@ export const CustomersPage = () => {
 
     return allCustomers.filter((customer) => {
       const searchable =
-        `${customer.name} ${customer.phone} ${customer.address ?? ''}`.toLowerCase();
+        `${customer.name} ${customer.phone ?? ''} ${customer.address ?? ''}`.toLowerCase();
       return searchable.includes(normalizedSearch);
     });
   }, [allCustomers, search]);
@@ -559,7 +559,7 @@ export const CustomersPage = () => {
                         <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                           <p className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 font-black text-foreground ring-1 ring-border/60">
                             <Phone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                            <span className="tabular-nums">{customer.phone}</span>
+                            <span className="tabular-nums">{customer.phone ?? 'Sin teléfono'}</span>
                           </p>
                           <p className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 font-semibold text-muted-foreground ring-1 ring-border/60">
                             <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -640,7 +640,6 @@ export const CustomersPage = () => {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, phone: event.target.value }))
                 }
-                required
                 type="tel"
                 value={form.phone}
               />
@@ -743,7 +742,6 @@ export const CustomersPage = () => {
                     onChange={(event) =>
                       setForm((current) => ({ ...current, phone: event.target.value }))
                     }
-                    required
                     type="tel"
                     value={form.phone}
                   />

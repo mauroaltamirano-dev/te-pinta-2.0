@@ -7,7 +7,7 @@ import { ApiError } from '../../middlewares/error-handler';
 export type Customer = {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   address: string | null;
 };
 
@@ -18,7 +18,7 @@ export type CustomerRepository = {
   delete(id: string): Promise<boolean>;
 };
 
-const normalizeAddress = (address: string | undefined): string | null => address || null;
+const normalizeOptionalText = (value: string | undefined): string | null => value?.trim() || null;
 
 export const listCustomers = (repository: CustomerRepository): Promise<Customer[]> =>
   repository.list();
@@ -30,8 +30,8 @@ export const createCustomer = (
   return repository.create({
     id: randomUUID(),
     name: input.name,
-    phone: input.phone,
-    address: normalizeAddress(input.address),
+    phone: normalizeOptionalText(input.phone),
+    address: normalizeOptionalText(input.address),
   });
 };
 
