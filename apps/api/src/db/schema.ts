@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  index,
   integer,
   numeric,
   pgEnum,
@@ -56,49 +57,65 @@ export const ingredients = pgTable('ingredients', {
   ...timestamps,
 });
 
-export const orders = pgTable('orders', {
-  id: id(),
-  customerId: text('customer_id')
-    .notNull()
-    .references(() => customers.id),
-  deliveryDate: date('delivery_date').notNull(),
-  deliveryTime: deliveryTimeEnum('delivery_time').notNull(),
-  deliveryType: deliveryTypeEnum('delivery_type').notNull(),
-  cooked: boolean('cooked').notNull().default(false),
-  notes: text('notes'),
-  discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
-  deliveryFee: numeric('delivery_fee', { precision: 12, scale: 2 }).notNull().default('0'),
-  subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
-  total: numeric('total', { precision: 12, scale: 2 }).notNull(),
-  status: orderStatusEnum('status').notNull().default('confirmado'),
-  isPaid: boolean('is_paid').notNull().default(false),
-  ...timestamps,
-});
+export const orders = pgTable(
+  'orders',
+  {
+    id: id(),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id),
+    deliveryDate: date('delivery_date').notNull(),
+    deliveryTime: deliveryTimeEnum('delivery_time').notNull(),
+    deliveryType: deliveryTypeEnum('delivery_type').notNull(),
+    cooked: boolean('cooked').notNull().default(false),
+    notes: text('notes'),
+    discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
+    deliveryFee: numeric('delivery_fee', { precision: 12, scale: 2 }).notNull().default('0'),
+    subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
+    total: numeric('total', { precision: 12, scale: 2 }).notNull(),
+    status: orderStatusEnum('status').notNull().default('confirmado'),
+    isPaid: boolean('is_paid').notNull().default(false),
+    ...timestamps,
+  },
+  (table) => [
+    index('orders_delivery_date_idx').on(table.deliveryDate),
+    index('orders_status_is_paid_idx').on(table.status, table.isPaid),
+    index('orders_created_at_idx').on(table.createdAt),
+  ],
+);
 
-export const orderItems = pgTable('order_items', {
-  id: id(),
-  orderId: text('order_id')
-    .notNull()
-    .references(() => orders.id),
-  menuItemId: text('menu_item_id')
-    .notNull()
-    .references(() => menuItems.id),
-  quantity: integer('quantity').notNull(),
-  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
-  subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
-});
+export const orderItems = pgTable(
+  'order_items',
+  {
+    id: id(),
+    orderId: text('order_id')
+      .notNull()
+      .references(() => orders.id),
+    menuItemId: text('menu_item_id')
+      .notNull()
+      .references(() => menuItems.id),
+    quantity: integer('quantity').notNull(),
+    unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+    subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
+  },
+  (table) => [index('order_items_order_id_idx').on(table.orderId)],
+);
 
-export const orderAddons = pgTable('order_addons', {
-  id: id(),
-  orderId: text('order_id')
-    .notNull()
-    .references(() => orders.id),
-  addonId: varchar('addon_id', { length: 120 }).notNull(),
-  name: varchar('name', { length: 160 }).notNull(),
-  quantity: integer('quantity').notNull(),
-  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
-  subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
-});
+export const orderAddons = pgTable(
+  'order_addons',
+  {
+    id: id(),
+    orderId: text('order_id')
+      .notNull()
+      .references(() => orders.id),
+    addonId: varchar('addon_id', { length: 120 }).notNull(),
+    name: varchar('name', { length: 160 }).notNull(),
+    quantity: integer('quantity').notNull(),
+    unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+    subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
+  },
+  (table) => [index('order_addons_order_id_idx').on(table.orderId)],
+);
 
 export const settings = pgTable('settings', {
   key: varchar('key', { length: 120 }).primaryKey(),

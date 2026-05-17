@@ -71,6 +71,26 @@ export type OrderListItem = Omit<OrderDetail, 'items' | 'addons'> & {
   totalQuantity: number;
 };
 
+export type OrderListPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};
+
+export type OrderListStats = {
+  active: number;
+  finalized: number;
+};
+
+export type OrderListResult = {
+  orders: OrderListItem[];
+  pagination: OrderListPagination;
+  stats: OrderListStats;
+};
+
 export type PersistOrderItem = Omit<OrderItemDetail, 'id'> & { id: string };
 export type PersistOrderAddon = Omit<OrderAddonDetail, 'id'> & { id: string };
 
@@ -93,7 +113,7 @@ export type PersistOrderInput = {
 };
 
 export type OrderRepository = {
-  list(filters?: OrderFilters): Promise<OrderListItem[]>;
+  list(filters?: OrderFilters): Promise<OrderListResult>;
   getById(id: string): Promise<OrderDetail | null>;
   findCustomerById(id: string): Promise<CustomerSnapshot | null>;
   findCustomerByPhone(phone: string): Promise<CustomerSnapshot | null>;
@@ -309,7 +329,7 @@ const toCreateOrderInput = (input: CreateOrderInput | UpdateOrderInput): CreateO
 export const listOrders = (
   repository: OrderRepository,
   filters?: OrderFilters,
-): Promise<OrderListItem[]> => repository.list(filters);
+): Promise<OrderListResult> => repository.list(filters);
 
 export const getOrder = async (id: string, repository: OrderRepository): Promise<OrderDetail> => {
   const order = await repository.getById(id);

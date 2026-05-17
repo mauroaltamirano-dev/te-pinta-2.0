@@ -73,13 +73,13 @@ const kpiCardClassName =
 export const DashboardPage = () => {
   const [date, setDate] = useState(today);
   const dashboardQuery = useDailyDashboard({ date });
-  const ordersQuery = useOrders();
+  const ordersQuery = useOrders({ pageSize: 100, sortBy: 'deliveryDate', sortDir: 'asc' });
   const customersQuery = useCustomers();
   const menuQuery = useMenuItems();
   const ingredientsQuery = useIngredients();
 
   const dashboard = dashboardQuery.data;
-  const orders = ordersQuery.data ?? [];
+  const orders = ordersQuery.data?.orders ?? [];
   const customers = customersQuery.data ?? [];
   const menuItems = menuQuery.data ?? [];
   const ingredients = ingredientsQuery.data ?? [];

@@ -39,8 +39,8 @@ export const createOrderRouter = ({ repository, secrets }: OrderRouterOptions): 
   router.get('/', validate({ query: orderFiltersSchema }), async (req, res, next) => {
     try {
       const filters = orderFiltersSchema.parse(req.query);
-      const orders = await listOrders(repository, filters);
-      res.json({ orders });
+      const result = await listOrders(repository, filters);
+      res.json(result);
     } catch (error) {
       next(error);
     }

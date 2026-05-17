@@ -58,12 +58,32 @@ export type OrderListItem = Omit<OrderDetail, 'items' | 'addons'> & {
   totalQuantity: number;
 };
 
-export const listOrders = async (filters: OrderFilters = {}): Promise<OrderListItem[]> => {
-  const response = await apiClient.get<{ orders: OrderListItem[] }>('/orders', {
+export type OrderListPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};
+
+export type OrderListStats = {
+  active: number;
+  finalized: number;
+};
+
+export type OrderListResponse = {
+  orders: OrderListItem[];
+  pagination: OrderListPagination;
+  stats: OrderListStats;
+};
+
+export const listOrders = async (filters: OrderFilters = {}): Promise<OrderListResponse> => {
+  const response = await apiClient.get<OrderListResponse>('/orders', {
     params: filters,
   });
 
-  return response.data.orders;
+  return response.data;
 };
 
 export const getOrder = async (id: string): Promise<OrderDetail> => {

@@ -29,6 +29,13 @@
       "when": 1778841600000,
       "tag": "0003_customers_phone_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779062400000,
+      "tag": "0004_order_list_performance_indexes",
+      "breakpoints": true
     }
   ]
 }
