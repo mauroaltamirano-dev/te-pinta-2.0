@@ -273,7 +273,7 @@ export const CustomersPage = () => {
   const formPanelRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const customersQuery = useCustomers();
-  const ordersQuery = useOrders();
+  const ordersQuery = useOrders({ pageSize: 100, sortBy: 'deliveryDate', sortDir: 'desc' });
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
@@ -284,10 +284,10 @@ export const CustomersPage = () => {
   const selectedCustomerOrders = useMemo(() => {
     if (!selectedCustomer) return [];
 
-    return (ordersQuery.data ?? [])
+    return (ordersQuery.data?.orders ?? [])
       .filter((order) => order.customer.id === selectedCustomer.id)
       .sort((a, b) => b.deliveryDate.localeCompare(a.deliveryDate));
-  }, [ordersQuery.data, selectedCustomer]);
+  }, [ordersQuery.data?.orders, selectedCustomer]);
 
   const filteredCustomers = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();

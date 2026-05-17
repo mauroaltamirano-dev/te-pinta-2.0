@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
@@ -40,6 +40,7 @@ import {
   type AppliedPromotion,
   type CreateOrderInput,
   type DeliveryTime,
+  type OrderFilters,
   type OrderStatus,
   type UpdateOrderInput,
 } from '@te-pinta/shared';
@@ -93,6 +94,8 @@ type OrderFormState = {
   quantities: Record<string, number>;
   addonQuantities: Record<string, number>;
 };
+
+const ORDERS_PAGE_SIZE = 25;
 
 const initialFormState: OrderFormState = {
   customerMode: 'existing',
@@ -941,6 +944,7 @@ export const OrdersPage = () => {
   const [sortOption, setSortOption] = useState<OrderSortOption>('date_asc');
   const [tableSortCol, setTableSortCol] = useState<TableSortColumn>('date');
   const [tableSortDir, setTableSortDir] = useState<TableSortDir>('asc');
+  const [orderPage, setOrderPage] = useState(1);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(() => new Set());
   const [isGeneratingKitchenList, setIsGeneratingKitchenList] = useState(false);
@@ -950,9 +954,59 @@ export const OrdersPage = () => {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
   const [formErrors, setFormErrors] = useState<string[]>([]);
+  const [mobileOrderStep, setMobileOrderStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState<OrderFormState>(initialFormState);
+  const deferredOrderSearch = useDeferredValue(orderSearch);
 
-  const ordersQuery = useOrders();
+  useEffect(() => {
+    setOrderPage(1);
+  }, [
+    deliveryDateFilter,
+    methodFilter,
+    orderSearch,
+    statusFilter,
+    tableSortCol,
+    tableSortDir,
+    visibilityFilter,
+  ]);
+
+  const orderQueryFilters = useMemo<OrderFilters>(() => {
+    const sortByMap: Record<TableSortColumn, NonNullable<OrderFilters['sortBy']>> = {
+      date: 'deliveryDate',
+      name: 'customerName',
+      total: 'total',
+      status: 'status',
+      method: 'deliveryType',
+    };
+    const trimmedSearch = deferredOrderSearch.trim();
+
+    return {
+      page: orderPage,
+      pageSize: ORDERS_PAGE_SIZE,
+      visibility: visibilityFilter,
+      sortBy: sortByMap[tableSortCol],
+      sortDir: tableSortDir,
+      ...(deliveryDateFilter ? { fecha: deliveryDateFilter } : {}),
+      ...(trimmedSearch ? { cliente: trimmedSearch } : {}),
+      ...(statusFilter === 'todos' ? {} : { estado: statusFilter }),
+      ...(methodFilter === 'envio' || methodFilter === 'retiro'
+        ? { deliveryType: methodFilter }
+        : {}),
+      ...(methodFilter === 'cocinado' ? { cooked: true } : {}),
+      ...(methodFilter === 'pagado' ? { isPaid: true } : {}),
+    };
+  }, [
+    deferredOrderSearch,
+    deliveryDateFilter,
+    methodFilter,
+    orderPage,
+    statusFilter,
+    tableSortCol,
+    tableSortDir,
+    visibilityFilter,
+  ]);
+
+  const ordersQuery = useOrders(orderQueryFilters);
   const orderDetailQuery = useOrderDetail(expandedOrderId);
   const customersQuery = useCustomers();
   const menuItemsQuery = useMenuItems();
@@ -983,7 +1037,9 @@ export const OrdersPage = () => {
 
   // ─── Datos derivados ────────────────────────────────────────────────────────
 
-  const allOrders = ordersQuery.data ?? [];
+  const allOrders = ordersQuery.data?.orders ?? [];
+  const orderPagination = ordersQuery.data?.pagination;
+  const orderStats = ordersQuery.data?.stats;
 
   const visibleOrders = useMemo(() => {
     const query = normalizeText(orderSearch.trim());
@@ -1050,12 +1106,12 @@ export const OrdersPage = () => {
       .reduce((total, order) => total + order.total, 0);
 
     return {
-      active: activeOrders.length,
-      finalized: finalizedOrders.length,
+      active: orderStats?.active ?? activeOrders.length,
+      finalized: orderStats?.finalized ?? finalizedOrders.length,
       pending: pendingOrders.length,
       dailySales,
     };
-  }, [allOrders, deliveryDateFilter]);
+  }, [allOrders, deliveryDateFilter, orderStats]);
 
   const activeMenuItems = useMemo(
     () => (menuItemsQuery.data ?? []).filter((item) => item.isActive),
@@ -1089,6 +1145,25 @@ export const OrdersPage = () => {
         .includes(query),
     );
   }, [customerSearch, customersQuery.data]);
+
+  const selectedCustomer = useMemo(
+    () => (customersQuery.data ?? []).find((customer) => customer.id === form.existingCustomerId),
+    [customersQuery.data, form.existingCustomerId],
+  );
+
+  const selectedUnitCount = selectedItems.reduce((acc, { quantity }) => acc + quantity, 0);
+  const selectedAddonCount = selectedAddons.reduce((acc, { quantity }) => acc + quantity, 0);
+  const summaryCustomerName =
+    form.customerMode === 'existing'
+      ? (selectedCustomer?.name ?? 'Seleccioná un cliente')
+      : form.newCustomerName.trim() || 'Nuevo cliente sin nombre';
+  const summaryCustomerPhone =
+    form.customerMode === 'existing' ? selectedCustomer?.phone : form.newCustomerPhone.trim();
+  const summaryCustomerAddress =
+    form.customerMode === 'existing' ? selectedCustomer?.address : form.newCustomerAddress.trim();
+  const deliverySummaryLabel = form.deliveryType === 'retiro' ? 'Retiro' : 'Envío';
+  const cookingSummaryLabel = form.cooked ? 'Cocinado' : 'Crudo';
+  const deliveryTimeSummaryLabel = deliveryTimeLabels[form.deliveryTime];
 
   const preview = useMemo(() => {
     const pricedItems = selectedItems.map(({ menuItem, quantity }) => ({
@@ -1199,6 +1274,7 @@ export const OrdersPage = () => {
     setEditingOrderId(null);
     setCustomerSearch('');
     setFormErrors([]);
+    setMobileOrderStep(1);
     setForm(initialFormState);
   };
 
@@ -1206,6 +1282,7 @@ export const OrdersPage = () => {
     setEditingOrderId(null);
     setCustomerSearch('');
     setFormErrors([]);
+    setMobileOrderStep(1);
     setForm(initialFormState);
     setIsCreateDialogOpen(true);
   };
@@ -1237,6 +1314,7 @@ export const OrdersPage = () => {
     setEditingOrderId(id);
     setCustomerSearch(order.customer.name);
     setFormErrors([]);
+    setMobileOrderStep(1);
     setForm({
       customerMode: 'existing',
       existingCustomerId: order.customer.id,
@@ -1687,532 +1765,1203 @@ export const OrdersPage = () => {
     );
   };
 
+  const mobileStepLabels = ['Cliente y entrega', 'Variedades', 'Extras y resumen'] as const;
+  const mobileDialogTitle = isDesktopDetail
+    ? editingOrderId
+      ? 'Editar pedido'
+      : 'Nuevo pedido'
+    : mobileOrderStep === 2
+      ? 'Variedades'
+      : mobileOrderStep === 3
+        ? 'Extras y resumen'
+        : 'Nuevo pedido';
+
   const orderForm = (
-    <form className="space-y-6" noValidate onSubmit={handleSubmit}>
-      {/* ── Sección: Cliente ── */}
-      <section className="space-y-3">
-        <h4 className="flex items-center gap-2 text-sm font-bold text-foreground">
-          <UserRound className="h-4 w-4 text-primary" />
-          Cliente
-        </h4>
+    <form
+      className="grid gap-5 rounded-[2rem] bg-[#FCF8F2] p-2 text-[#2D2622] lg:grid-cols-[minmax(0,1fr)_23rem]"
+      noValidate
+      onSubmit={handleSubmit}
+    >
+      <div className="space-y-4">
+        {/* ── Sección: Cliente ── */}
+        <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm shadow-[#B54431]/5 sm:p-5">
+          <h4 className="mb-3 flex items-center gap-2 text-base font-black text-[#2D2622]">
+            <UserRound className="h-4 w-4 text-[#B54431]" />
+            1. Cliente
+          </h4>
 
-        {/* Selector de modo */}
-        <div className="flex gap-2">
-          {(['existing', 'new'] as CustomerMode[]).map((mode) => (
-            <label
-              key={mode}
-              className={[
-                'flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-all duration-150',
-                form.customerMode === mode
-                  ? 'border-primary/40 bg-primary/10 text-primary'
-                  : 'border-border bg-background text-muted-foreground hover:border-border/80',
-              ].join(' ')}
-            >
-              <input
-                className="sr-only"
-                checked={form.customerMode === mode}
-                onChange={() =>
-                  setForm((c) => ({ ...c, customerMode: mode, existingCustomerId: '' }))
-                }
-                type="radio"
-              />
-              {mode === 'existing' ? 'Cliente existente' : 'Nuevo cliente'}
-            </label>
-          ))}
-        </div>
-
-        {form.customerMode === 'existing' ? (
-          <div className="space-y-2">
-            {/* Búsqueda */}
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-sm transition-shadow focus-within:ring-2 focus-within:ring-ring/30">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <input
-                aria-label="Buscar cliente"
-                className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/60"
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                placeholder="Nombre, teléfono o dirección..."
-                role="searchbox"
-                type="text"
-                value={customerSearch}
-              />
-              {customerSearch && (
-                <button
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() => setCustomerSearch('')}
-                  type="button"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Lista de clientes */}
-            <div className="max-h-52 overflow-y-auto space-y-1.5 pr-0.5">
-              {filteredCustomers.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                  Sin resultados para "{customerSearch}"
-                </p>
-              ) : (
-                filteredCustomers.map((customer) => {
-                  const isSelected = form.existingCustomerId === customer.id;
-                  return (
-                    <button
-                      key={customer.id}
-                      aria-label={`Seleccionar cliente ${customer.name}`}
-                      className={[
-                        'w-full rounded-xl border p-3 text-left transition-all duration-150',
-                        isSelected
-                          ? 'border-primary/50 bg-primary/8 ring-2 ring-primary/20'
-                          : 'border-border bg-background hover:border-primary/30 hover:bg-orange-50/50',
-                      ].join(' ')}
-                      onClick={() => setForm((c) => ({ ...c, existingCustomerId: customer.id }))}
-                      type="button"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-foreground text-sm">{customer.name}</span>
-                        {isSelected && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-3 w-3" /> {customer.phone ?? 'Sin teléfono'}
-                        </span>
-                        {customer.address && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {customer.address}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
+          {/* Selector de modo */}
+          <div className="flex gap-2">
+            {(['existing', 'new'] as CustomerMode[]).map((mode) => (
+              <label
+                key={mode}
+                className={[
+                  'flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-all duration-150',
+                  form.customerMode === mode
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:border-border/80',
+                ].join(' ')}
+              >
+                <input
+                  className="sr-only"
+                  checked={form.customerMode === mode}
+                  onChange={() =>
+                    setForm((c) => ({ ...c, customerMode: mode, existingCustomerId: '' }))
+                  }
+                  type="radio"
+                />
+                {mode === 'existing' ? 'Cliente existente' : 'Nuevo cliente'}
+              </label>
+            ))}
           </div>
-        ) : (
-          /*
+
+          {form.customerMode === 'existing' ? (
+            <div className="space-y-2">
+              {/* Búsqueda */}
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-sm transition-shadow focus-within:ring-2 focus-within:ring-ring/30">
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <input
+                  aria-label="Buscar cliente"
+                  className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/60"
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  placeholder="Buscar por nombre, teléfono o dirección…"
+                  role="searchbox"
+                  type="text"
+                  value={customerSearch}
+                />
+                {customerSearch && (
+                  <button
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setCustomerSearch('')}
+                    type="button"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Lista de clientes */}
+              <div className="max-h-52 overflow-y-auto space-y-1.5 pr-0.5">
+                {filteredCustomers.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                    Sin resultados para "{customerSearch}"
+                  </p>
+                ) : (
+                  filteredCustomers.map((customer) => {
+                    const isSelected = form.existingCustomerId === customer.id;
+                    return (
+                      <button
+                        key={customer.id}
+                        aria-label={`Seleccionar cliente ${customer.name}`}
+                        className={[
+                          'w-full rounded-xl border p-3 text-left transition-all duration-150',
+                          isSelected
+                            ? 'border-primary/50 bg-primary/8 ring-2 ring-primary/20'
+                            : 'border-border bg-background hover:border-primary/30 hover:bg-orange-50/50',
+                        ].join(' ')}
+                        onClick={() => setForm((c) => ({ ...c, existingCustomerId: customer.id }))}
+                        type="button"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-foreground text-sm">{customer.name}</span>
+                          {isSelected && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" /> {customer.phone ?? 'Sin teléfono'}
+                          </span>
+                          {customer.address && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" /> {customer.address}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <button
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#E8D3BF] bg-[#FFFDF9] px-4 py-3 text-sm font-bold text-[#933427] transition hover:border-[#B54431]/50 hover:bg-[#B54431]/5"
+                onClick={() =>
+                  setForm((c) => ({ ...c, customerMode: 'new', existingCustomerId: '' }))
+                }
+                type="button"
+              >
+                <Plus className="h-4 w-4" /> Nuevo cliente
+              </button>
+            </div>
+          ) : (
+            /*
             Formulario de cliente nuevo.
             Grid de 1 columna en mobile, 3 en desktop.
             Los labels son concissos — no necesitan repetir "nuevo cliente".
           */
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { key: 'newCustomerName', label: 'Nombre *', type: 'text', inputMode: undefined },
+                {
+                  key: 'newCustomerPhone',
+                  label: 'Teléfono',
+                  type: 'tel',
+                  inputMode: 'tel' as const,
+                },
+                {
+                  key: 'newCustomerAddress',
+                  label: 'Dirección',
+                  type: 'text',
+                  inputMode: undefined,
+                },
+              ].map(({ key, label, type, inputMode }) => (
+                <label
+                  key={key}
+                  className="block text-xs font-bold uppercase tracking-wide text-muted-foreground"
+                >
+                  {label}
+                  <input
+                    aria-label={
+                      key === 'newCustomerName'
+                        ? 'Nombre nuevo cliente'
+                        : key === 'newCustomerPhone'
+                          ? 'Teléfono nuevo cliente'
+                          : 'Dirección nuevo cliente'
+                    }
+                    className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
+                    inputMode={inputMode}
+                    onChange={(e) => setForm((c) => ({ ...c, [key]: e.target.value }))}
+                    type={type}
+                    value={form[key as keyof OrderFormState] as string}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ── Sección: Fecha, franja, descuento ── */}
+        <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm shadow-[#B54431]/5 sm:p-5">
+          <h4 className="mb-3 flex items-center gap-2 text-base font-black text-[#2D2622]">
+            <ClipboardList className="h-4 w-4 text-[#B54431]" />
+            2. Detalles del pedido
+          </h4>
           <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { key: 'newCustomerName', label: 'Nombre *', type: 'text', inputMode: undefined },
-              {
-                key: 'newCustomerPhone',
-                label: 'Teléfono',
-                type: 'tel',
-                inputMode: 'tel' as const,
-              },
-              { key: 'newCustomerAddress', label: 'Dirección', type: 'text', inputMode: undefined },
-            ].map(({ key, label, type, inputMode }) => (
-              <label
-                key={key}
-                className="block text-xs font-bold uppercase tracking-wide text-muted-foreground"
+            <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              Fecha de entrega *
+              <input
+                className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
+                onChange={(e) => setForm((c) => ({ ...c, deliveryDate: e.target.value }))}
+                required
+                type="date"
+                value={form.deliveryDate}
+              />
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              Franja
+              <select
+                className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
+                onChange={(e) =>
+                  setForm((c) => ({
+                    ...c,
+                    deliveryTime: e.target.value as OrderFormState['deliveryTime'],
+                  }))
+                }
+                value={form.deliveryTime}
               >
-                {label}
-                <input
-                  aria-label={
-                    key === 'newCustomerName'
-                      ? 'Nombre nuevo cliente'
-                      : key === 'newCustomerPhone'
-                        ? 'Teléfono nuevo cliente'
-                        : 'Dirección nuevo cliente'
-                  }
-                  className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
-                  inputMode={inputMode}
-                  onChange={(e) => setForm((c) => ({ ...c, [key]: e.target.value }))}
-                  type={type}
-                  value={form[key as keyof OrderFormState] as string}
+                <option value="mediodia">Mediodía</option>
+                <option value="tarde">Tarde</option>
+                <option value="noche">Noche</option>
+              </select>
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+              Descuento %
+              <input
+                className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
+                inputMode="numeric"
+                min="0"
+                max="100"
+                onChange={(e) => setForm((c) => ({ ...c, discountPercent: e.target.value }))}
+                type="number"
+                value={form.discountPercent}
+              />
+            </label>
+          </div>
+
+          {/* ── Sección: Tipo de entrega + Cocción (en la misma fila) ── */}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Entrega
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <ToggleOption
+                  icon={ShoppingBag}
+                  isSelected={form.deliveryType === 'retiro'}
+                  label="Retiro"
+                  onClick={() => setForm((c) => ({ ...c, deliveryType: 'retiro' }))}
                 />
-              </label>
-            ))}
+                <ToggleOption
+                  icon={Truck}
+                  isSelected={form.deliveryType === 'envio'}
+                  label="Envío"
+                  onClick={() => setForm((c) => ({ ...c, deliveryType: 'envio' }))}
+                />
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Cocción
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <ToggleOption
+                  icon={Package}
+                  isSelected={!form.cooked}
+                  label="Crudo"
+                  onClick={() => setForm((c) => ({ ...c, cooked: false }))}
+                />
+                <ToggleOption
+                  icon={Flame}
+                  isSelected={form.cooked}
+                  label="Cocinado"
+                  onClick={() => setForm((c) => ({ ...c, cooked: true }))}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Sección: Variedades ── */}
+        <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm shadow-[#B54431]/5 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="flex items-center gap-2 text-base font-black text-[#2D2622]">
+              <ShoppingBag className="h-4 w-4 text-[#B54431]" />
+              3. Productos
+            </h4>
+            {selectedItems.length > 0 && (
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                {selectedItems.reduce((acc, { quantity }) => acc + quantity, 0)} unidades
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {activeMenuItems.map((menuItem) => {
+              const quantity = form.quantities[menuItem.id] ?? 0;
+              return (
+                <article
+                  aria-label={`Variedad ${menuItem.name}`}
+                  key={menuItem.id}
+                  className={[
+                    'rounded-2xl border p-3 transition-all duration-150',
+                    quantity > 0
+                      ? 'border-primary/40 bg-white shadow-sm shadow-primary/8'
+                      : 'border-border bg-card',
+                  ].join(' ')}
+                >
+                  {/* Header del item */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-foreground text-sm">{menuItem.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                        Doc.&nbsp;{formatMoney(menuItem.priceDozen)}
+                        &ensp;·&ensp; Med.&nbsp;{formatMoney(menuItem.priceHalfDozen)}
+                        &ensp;·&ensp; Un.&nbsp;{formatMoney(menuItem.priceUnit)}
+                      </p>
+                    </div>
+                    {/* Cantidad actual — visible rápido */}
+                    {quantity > 0 && (
+                      <span className="shrink-0 rounded-xl bg-primary/10 px-2.5 py-1 text-sm font-black text-primary tabular-nums">
+                        {quantity}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Botones de acceso rápido (+12, +6, +1) */}
+                  <div className="mt-2.5 flex gap-1.5">
+                    <button
+                      aria-label="+ Docena"
+                      className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 active:scale-95"
+                      onClick={() => setQuantity(menuItem.id, 12)}
+                      type="button"
+                    >
+                      +12
+                    </button>
+                    <button
+                      aria-label="+ Media"
+                      className="flex-1 rounded-lg bg-amber-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
+                      onClick={() => setQuantity(menuItem.id, 6)}
+                      type="button"
+                    >
+                      +6
+                    </button>
+                    <button
+                      aria-label="+ Unidad"
+                      className="flex-1 rounded-lg bg-primary py-2 text-sm font-black text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-95"
+                      onClick={() => setQuantity(menuItem.id, 1)}
+                      type="button"
+                    >
+                      +1
+                    </button>
+                  </div>
+
+                  {/* Control fino de cantidad */}
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <button
+                      aria-label={`Restar ${menuItem.name}`}
+                      className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-30 active:scale-95"
+                      disabled={quantity === 0}
+                      onClick={() => setQuantity(menuItem.id, -1)}
+                      type="button"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {quantity} u.
+                    </span>
+                    <button
+                      aria-label={`Sumar ${menuItem.name}`}
+                      className="rounded-lg bg-primary p-1.5 text-primary-foreground transition hover:bg-primary/80 active:scale-95"
+                      onClick={() => setQuantity(menuItem.id, 1)}
+                      type="button"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+            <button
+              className="min-h-[9rem] rounded-2xl border border-dashed border-[#E8D3BF] bg-[#FFFDF9] p-4 text-center text-sm font-bold text-[#933427] transition hover:border-[#B54431]/50 hover:bg-[#B54431]/5"
+              type="button"
+            >
+              <span className="block text-lg">+ Agregar otra variedad</span>
+              <span className="mt-1 block text-xs font-semibold text-[#74655B]">
+                ¿No ves una variedad?
+              </span>
+            </button>
+          </div>
+        </section>
+
+        {/* ── Sección: Toppings / salsas ── */}
+        <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm shadow-[#B54431]/5 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="flex items-center gap-2 text-base font-black text-[#2D2622]">
+              <Plus className="h-4 w-4 text-[#B54431]" />
+              Toppings / Salsas
+            </h4>
+            {selectedAddons.length > 0 && (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+                {selectedAddons.reduce((acc, { quantity }) => acc + quantity, 0)} adicionales
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {availableAddons.map((addon) => {
+              const quantity = form.addonQuantities[addon.addonId] ?? 0;
+              return (
+                <article
+                  aria-label={`Topping ${addon.name}`}
+                  className={[
+                    'rounded-2xl border p-3 transition-all duration-150',
+                    quantity > 0
+                      ? 'border-emerald-300 bg-emerald-50/70 shadow-sm'
+                      : 'border-border bg-card',
+                  ].join(' ')}
+                  key={addon.addonId}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-foreground text-sm">{addon.name}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
+                        {formatMoney(addon.price)} c/u
+                      </p>
+                    </div>
+                    {quantity > 0 && (
+                      <span className="shrink-0 rounded-xl bg-emerald-100 px-2.5 py-1 text-sm font-black text-emerald-700 tabular-nums">
+                        {quantity}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between gap-2">
+                    <button
+                      aria-label={`Restar ${addon.name}`}
+                      className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-30 active:scale-95"
+                      disabled={quantity === 0}
+                      onClick={() => setAddonQuantity(addon.addonId, -1)}
+                      type="button"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {quantity} u.
+                    </span>
+                    <button
+                      aria-label={`Sumar ${addon.name}`}
+                      className="rounded-lg bg-emerald-600 p-1.5 text-white transition hover:bg-emerald-700 active:scale-95"
+                      onClick={() => setAddonQuantity(addon.addonId, 1)}
+                      type="button"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+            <button
+              className="rounded-2xl border border-dashed border-[#E8D3BF] bg-[#FFFDF9] p-4 text-center text-sm font-bold text-[#933427] transition hover:border-[#B54431]/50 hover:bg-[#B54431]/5"
+              type="button"
+            >
+              + Agregar topping / salsa
+            </button>
+          </div>
+        </section>
+
+        {/* ── Sección: Notas ── */}
+        <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm shadow-[#B54431]/5 sm:p-5">
+          <h4 className="mb-3 flex items-center gap-2 text-base font-black text-[#2D2622]">
+            <StickyNote className="h-4 w-4 text-[#B54431]" />
+            Notas del pedido
+          </h4>
+          <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            <span className="sr-only">Notas</span>
+            <textarea
+              className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
+              onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))}
+              placeholder="Indicaciones especiales, referencias de dirección..."
+              rows={3}
+              value={form.notes}
+            />
+          </label>
+        </section>
+
+        {/* ── Errores de validación ── */}
+        {formErrors.length > 0 && (
+          <div
+            aria-label="Errores del pedido"
+            aria-live="polite"
+            className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3"
+            role="status"
+          >
+            <ul className="space-y-0.5 text-sm font-semibold text-destructive">
+              {formErrors.map((error) => (
+                <li key={error} className="flex items-start gap-1.5">
+                  <span className="mt-0.5 shrink-0 text-xs">•</span>
+                  {error}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
-      </section>
 
-      {/* ── Sección: Fecha, franja, descuento ── */}
-      <section className="grid gap-3 sm:grid-cols-3">
-        <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Fecha de entrega *
-          <input
-            className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
-            onChange={(e) => setForm((c) => ({ ...c, deliveryDate: e.target.value }))}
-            required
-            type="date"
-            value={form.deliveryDate}
-          />
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Franja
-          <select
-            className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
-            onChange={(e) =>
-              setForm((c) => ({
-                ...c,
-                deliveryTime: e.target.value as OrderFormState['deliveryTime'],
-              }))
-            }
-            value={form.deliveryTime}
-          >
-            <option value="mediodia">Mediodía</option>
-            <option value="tarde">Tarde</option>
-            <option value="noche">Noche</option>
-          </select>
-        </label>
-        <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Descuento %
-          <input
-            className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
-            inputMode="numeric"
-            min="0"
-            max="100"
-            onChange={(e) => setForm((c) => ({ ...c, discountPercent: e.target.value }))}
-            type="number"
-            value={form.discountPercent}
-          />
-        </label>
-      </section>
-
-      {/* ── Sección: Tipo de entrega + Cocción (en la misma fila) ── */}
-      <section className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Entrega
+        {/* ── Error de red ── */}
+        {createOrder.isError && (
+          <p className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm font-semibold text-destructive">
+            No se pudo crear el pedido. Intentá de nuevo.
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            <ToggleOption
-              icon={ShoppingBag}
-              isSelected={form.deliveryType === 'retiro'}
-              label="Retiro"
-              onClick={() => setForm((c) => ({ ...c, deliveryType: 'retiro' }))}
-            />
-            <ToggleOption
-              icon={Truck}
-              isSelected={form.deliveryType === 'envio'}
-              label="Envío"
-              onClick={() => setForm((c) => ({ ...c, deliveryType: 'envio' }))}
-            />
+        )}
+      </div>
+
+      <aside
+        aria-label="Preview de total"
+        className="h-fit rounded-[1.75rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-xl shadow-[#B54431]/10 lg:sticky lg:top-4 sm:p-5"
+      >
+        <h4 className="flex items-center gap-2 text-base font-black text-[#2D2622]">
+          <ReceiptText className="h-4 w-4 text-[#B54431]" />
+          4. Resumen del pedido
+        </h4>
+
+        <div className="mt-4 rounded-2xl border border-[#E8D3BF] bg-[#FCF8F2] p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-[#74655B]">Cliente</p>
+          <p className="mt-1 text-sm font-black text-[#2D2622]">{summaryCustomerName}</p>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-[#74655B]">
+            {summaryCustomerPhone && <span>Tel: {summaryCustomerPhone}</span>}
+            <span>{summaryCustomerAddress || 'Completar dirección'}</span>
           </div>
         </div>
-        <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Cocción
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <ToggleOption
-              icon={Package}
-              isSelected={!form.cooked}
-              label="Crudo"
-              onClick={() => setForm((c) => ({ ...c, cooked: false }))}
-            />
-            <ToggleOption
-              icon={Flame}
-              isSelected={form.cooked}
-              label="Cocinado"
-              onClick={() => setForm((c) => ({ ...c, cooked: true }))}
-            />
+
+        <dl className="mt-4 space-y-2 text-sm">
+          <div className="flex justify-between gap-4 border-b border-[#E8D3BF]/70 pb-2">
+            <dt className="font-bold text-[#2D2622]">Entrega</dt>
+            <dd className="text-[#74655B]">{deliverySummaryLabel}</dd>
+          </div>
+          <div className="flex justify-between gap-4 border-b border-[#E8D3BF]/70 pb-2">
+            <dt className="font-bold text-[#2D2622]">Cocción</dt>
+            <dd className="text-[#74655B]">{cookingSummaryLabel}</dd>
+          </div>
+          <div className="flex justify-between gap-4 border-b border-[#E8D3BF]/70 pb-2">
+            <dt className="font-bold text-[#2D2622]">Fecha de entrega</dt>
+            <dd className="text-right text-[#74655B]">
+              {form.deliveryDate || 'Sin fecha'} · {deliveryTimeSummaryLabel}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="font-bold text-[#2D2622]">Descuento</dt>
+            <dd className="text-[#74655B]">{preview.discountPercent}%</dd>
+          </div>
+        </dl>
+
+        <div className="mt-5">
+          <p className="text-xs font-bold uppercase tracking-wide text-[#74655B]">Productos</p>
+          <div className="mt-2 space-y-2">
+            {selectedItems.length === 0 && selectedAddons.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-[#E8D3BF] p-4 text-sm font-semibold text-[#74655B]">
+                Agregá variedades o salsas para ver el resumen.
+              </p>
+            ) : (
+              <>
+                {selectedItems.map(({ menuItem, quantity }) => {
+                  const itemTotal = calculateItemPrice({
+                    quantity,
+                    priceUnit: menuItem.priceUnit,
+                    priceHalfDozen: menuItem.priceHalfDozen,
+                    priceDozen: menuItem.priceDozen,
+                  }).total;
+                  return (
+                    <div
+                      key={menuItem.id}
+                      className="flex items-start justify-between gap-3 border-b border-[#E8D3BF]/70 pb-2 text-sm"
+                    >
+                      <div>
+                        <p className="font-bold text-[#2D2622]">{menuItem.name}</p>
+                        <p className="text-xs font-semibold text-[#74655B]">
+                          {quantity >= 12 && quantity % 12 === 0
+                            ? `${quantity / 12} × ${formatMoney(menuItem.priceDozen)}`
+                            : `${quantity} u. × precio según escala`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold tabular-nums text-[#2D2622]">
+                          {formatMoney(itemTotal)}
+                        </span>
+                        <button
+                          aria-label={`Quitar ${menuItem.name} del resumen`}
+                          className="rounded-full border border-[#E8D3BF] p-1 text-[#B54431] hover:bg-[#B54431]/10"
+                          onClick={() => setQuantity(menuItem.id, -quantity)}
+                          type="button"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {selectedAddons.map(({ addon, quantity }) => (
+                  <div
+                    key={addon.addonId}
+                    className="flex items-start justify-between gap-3 border-b border-[#E8D3BF]/70 pb-2 text-sm"
+                  >
+                    <div>
+                      <p className="font-bold text-[#2D2622]">{addon.name}</p>
+                      <p className="text-xs font-semibold text-[#74655B]">
+                        {quantity} × {formatMoney(addon.price)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold tabular-nums text-[#2D2622]">
+                        {formatMoney(addon.price * quantity)}
+                      </span>
+                      <button
+                        aria-label={`Quitar ${addon.name} del resumen`}
+                        className="rounded-full border border-[#E8D3BF] p-1 text-[#B54431] hover:bg-[#B54431]/10"
+                        onClick={() => setAddonQuantity(addon.addonId, -quantity)}
+                        type="button"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </div>
-      </section>
 
-      {/* ── Sección: Variedades ── */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Variedades
-          </p>
-          {selectedItems.length > 0 && (
-            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
-              {selectedItems.reduce((acc, { quantity }) => acc + quantity, 0)} unidades
-            </span>
-          )}
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          {activeMenuItems.map((menuItem) => {
-            const quantity = form.quantities[menuItem.id] ?? 0;
-            return (
-              <article
-                aria-label={`Variedad ${menuItem.name}`}
-                key={menuItem.id}
-                className={[
-                  'rounded-2xl border p-3 transition-all duration-150',
-                  quantity > 0
-                    ? 'border-primary/40 bg-white shadow-sm shadow-primary/8'
-                    : 'border-border bg-card',
-                ].join(' ')}
-              >
-                {/* Header del item */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate font-bold text-foreground text-sm">{menuItem.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                      Doc.&nbsp;{formatMoney(menuItem.priceDozen)}
-                      &ensp;·&ensp; Med.&nbsp;{formatMoney(menuItem.priceHalfDozen)}
-                      &ensp;·&ensp; Un.&nbsp;{formatMoney(menuItem.priceUnit)}
-                    </p>
-                  </div>
-                  {/* Cantidad actual — visible rápido */}
-                  {quantity > 0 && (
-                    <span className="shrink-0 rounded-xl bg-primary/10 px-2.5 py-1 text-sm font-black text-primary tabular-nums">
-                      {quantity}
-                    </span>
-                  )}
-                </div>
-
-                {/* Botones de acceso rápido (+12, +6, +1) */}
-                <div className="mt-2.5 flex gap-1.5">
-                  <button
-                    aria-label="+ Docena"
-                    className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 active:scale-95"
-                    onClick={() => setQuantity(menuItem.id, 12)}
-                    type="button"
-                  >
-                    +12
-                  </button>
-                  <button
-                    aria-label="+ Media"
-                    className="flex-1 rounded-lg bg-amber-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
-                    onClick={() => setQuantity(menuItem.id, 6)}
-                    type="button"
-                  >
-                    +6
-                  </button>
-                  <button
-                    aria-label="+ Unidad"
-                    className="flex-1 rounded-lg bg-primary py-2 text-sm font-black text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-95"
-                    onClick={() => setQuantity(menuItem.id, 1)}
-                    type="button"
-                  >
-                    +1
-                  </button>
-                </div>
-
-                {/* Control fino de cantidad */}
-                <div className="mt-1.5 flex items-center justify-between gap-2">
-                  <button
-                    aria-label={`Restar ${menuItem.name}`}
-                    className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-30 active:scale-95"
-                    disabled={quantity === 0}
-                    onClick={() => setQuantity(menuItem.id, -1)}
-                    type="button"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                  <span className="text-xs text-muted-foreground tabular-nums">{quantity} u.</span>
-                  <button
-                    aria-label={`Sumar ${menuItem.name}`}
-                    className="rounded-lg bg-primary p-1.5 text-primary-foreground transition hover:bg-primary/80 active:scale-95"
-                    onClick={() => setQuantity(menuItem.id, 1)}
-                    type="button"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ── Sección: Toppings / salsas ── */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Toppings / salsas
-          </p>
-          {selectedAddons.length > 0 && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-              {selectedAddons.reduce((acc, { quantity }) => acc + quantity, 0)} adicionales
-            </span>
-          )}
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          {availableAddons.map((addon) => {
-            const quantity = form.addonQuantities[addon.addonId] ?? 0;
-            return (
-              <article
-                aria-label={`Topping ${addon.name}`}
-                className={[
-                  'rounded-2xl border p-3 transition-all duration-150',
-                  quantity > 0
-                    ? 'border-emerald-300 bg-emerald-50/70 shadow-sm'
-                    : 'border-border bg-card',
-                ].join(' ')}
-                key={addon.addonId}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-bold text-foreground text-sm">{addon.name}</p>
-                    <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
-                      {formatMoney(addon.price)} c/u
-                    </p>
-                  </div>
-                  {quantity > 0 && (
-                    <span className="shrink-0 rounded-xl bg-emerald-100 px-2.5 py-1 text-sm font-black text-emerald-700 tabular-nums">
-                      {quantity}
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-2.5 flex items-center justify-between gap-2">
-                  <button
-                    aria-label={`Restar ${addon.name}`}
-                    className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-30 active:scale-95"
-                    disabled={quantity === 0}
-                    onClick={() => setAddonQuantity(addon.addonId, -1)}
-                    type="button"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                  <span className="text-xs text-muted-foreground tabular-nums">{quantity} u.</span>
-                  <button
-                    aria-label={`Sumar ${addon.name}`}
-                    className="rounded-lg bg-emerald-600 p-1.5 text-white transition hover:bg-emerald-700 active:scale-95"
-                    onClick={() => setAddonQuantity(addon.addonId, 1)}
-                    type="button"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ── Sección: Notas + Resumen ── */}
-      <section className="grid gap-4 sm:grid-cols-[1fr_auto]">
-        <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          Notas
-          <textarea
-            className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
-            onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))}
-            placeholder="Indicaciones especiales, referencias de dirección..."
-            rows={3}
-            value={form.notes}
-          />
-        </label>
-
-        {/* Preview del total — compacto y claro */}
-        <div
-          aria-label="Preview de total"
-          className="flex flex-col justify-between rounded-2xl bg-primary/8 p-4 sm:min-w-[180px]"
-        >
-          <div className="space-y-1.5">
-            <div className="flex justify-between gap-4 text-sm text-muted-foreground">
-              <span>
-                Subtotal{' '}
-                <span className="tabular-nums font-semibold text-foreground">
-                  {formatMoney(preview.subtotal)}
-                </span>
+        <div className="mt-5 rounded-2xl border border-[#E8D3BF] bg-[#FCF8F2] p-4">
+          <div className="space-y-2 text-sm text-[#74655B]">
+            <div className="flex justify-between gap-4">
+              <span>Subtotal {formatMoney(preview.subtotal)}</span>
+              <span aria-hidden="true" className="font-bold tabular-nums text-[#2D2622]">
+                {formatMoney(preview.subtotal)}
               </span>
             </div>
             {preview.promoSubtotal !== preview.subtotal && (
-              <div className="flex justify-between gap-4 text-sm text-muted-foreground">
-                <span>
-                  Promo docena{' '}
-                  <span className="tabular-nums font-semibold text-emerald-700">
-                    {formatMoney(preview.promoSubtotal)}
-                  </span>
+              <div className="flex justify-between gap-4">
+                <span>Promo docena {formatMoney(preview.promoSubtotal)}</span>
+                <span aria-hidden="true" className="font-bold tabular-nums text-[#088954]">
+                  {formatMoney(preview.promoSubtotal)}
                 </span>
               </div>
             )}
             {preview.addonsSubtotal > 0 && (
-              <div className="flex justify-between gap-4 text-sm text-muted-foreground">
-                <span>
-                  Toppings{' '}
-                  <span className="tabular-nums font-semibold text-foreground">
-                    {formatMoney(preview.addonsSubtotal)}
-                  </span>
+              <div className="flex justify-between gap-4">
+                <span>Toppings {formatMoney(preview.addonsSubtotal)}</span>
+                <span aria-hidden="true" className="font-bold tabular-nums text-[#2D2622]">
+                  {formatMoney(preview.addonsSubtotal)}
                 </span>
               </div>
             )}
             {preview.deliveryFee > 0 && (
-              <div className="flex justify-between gap-4 text-sm text-muted-foreground">
-                <span>
-                  Delivery{' '}
-                  <span className="tabular-nums font-semibold text-foreground">
-                    {formatMoney(preview.deliveryFee)}
-                  </span>
+              <div className="flex justify-between gap-4">
+                <span>Delivery {formatMoney(preview.deliveryFee)}</span>
+                <span aria-hidden="true" className="font-bold tabular-nums text-[#2D2622]">
+                  {formatMoney(preview.deliveryFee)}
                 </span>
               </div>
             )}
-            {preview.discount > 0 && (
-              <div className="flex justify-between gap-4 text-sm text-muted-foreground">
-                <span>
-                  Descuento{' '}
-                  <span className="tabular-nums font-semibold text-emerald-700">
-                    −{formatMoney(preview.discount)}
-                  </span>
-                </span>
-              </div>
-            )}
-            {preview.appliedPromotions.length > 0 && (
-              <div className="rounded-xl bg-emerald-50 px-2.5 py-2 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
-                {preview.appliedPromotions
-                  .map((promotion) => getPromotionDisplayLabel(promotion, preview.discountPercent))
-                  .join(' + ')}
-              </div>
-            )}
-          </div>
-          <div className="mt-3 border-t border-primary/20 pt-3">
-            <div className="flex justify-between gap-2">
-              <span className="text-sm font-bold text-foreground">
-                Total{' '}
-                <span className="tabular-nums text-xl font-black text-primary">
-                  {formatMoney(preview.total)}
-                </span>
+            <div className="flex justify-between gap-4">
+              <span>
+                Descuento ({preview.discountPercent}%) −{formatMoney(preview.discount)}
+              </span>
+              <span aria-hidden="true" className="font-bold tabular-nums text-[#088954]">
+                −{formatMoney(preview.discount)}
               </span>
             </div>
           </div>
+          <div className="mt-4 flex items-end justify-between gap-4 border-t border-[#E8D3BF] pt-4">
+            <span className="text-sm font-black text-[#2D2622]">
+              Total del pedido {formatMoney(preview.total)}
+            </span>
+            <span aria-hidden="true" className="text-2xl font-black tabular-nums text-[#B54431]">
+              {formatMoney(preview.total)}
+            </span>
+          </div>
+          {selectedUnitCount + selectedAddonCount > 0 && (
+            <p className="mt-2 text-xs font-semibold text-[#74655B]">
+              {selectedUnitCount} unidades · {selectedAddonCount} adicionales
+            </p>
+          )}
         </div>
-      </section>
 
-      {/* ── Errores de validación ── */}
-      {formErrors.length > 0 && (
-        <div
-          aria-label="Errores del pedido"
-          aria-live="polite"
-          className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3"
-          role="status"
+        <button
+          className="mt-4 w-full rounded-2xl bg-[#B54431] px-5 py-4 text-sm font-black text-white shadow-lg shadow-[#B54431]/20 transition hover:bg-[#933427] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={createOrder.isPending || updateOrder.isPending}
+          type="submit"
         >
-          <ul className="space-y-0.5 text-sm font-semibold text-destructive">
-            {formErrors.map((error) => (
-              <li key={error} className="flex items-start gap-1.5">
-                <span className="mt-0.5 shrink-0 text-xs">•</span>
-                {error}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* ── Error de red ── */}
-      {createOrder.isError && (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3 text-sm font-semibold text-destructive">
-          No se pudo crear el pedido. Intentá de nuevo.
+          {createOrder.isPending || updateOrder.isPending ? (
+            <span className="flex items-center justify-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              {editingOrderId ? 'Guardando cambios...' : 'Creando pedido...'}
+            </span>
+          ) : editingOrderId ? (
+            'Guardar cambios'
+          ) : (
+            'Crear pedido'
+          )}
+        </button>
+        <p className="mt-3 text-center text-xs font-semibold text-[#74655B]">
+          Podrás revisar el pedido antes de confirmarlo
         </p>
-      )}
+      </aside>
+    </form>
+  );
 
-      {/* ── Submit ── */}
-      <button
-        className="w-full rounded-xl bg-primary px-5 py-3.5 text-sm font-black text-primary-foreground shadow-md shadow-primary/20 transition hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={createOrder.isPending || updateOrder.isPending}
-        type="submit"
-      >
-        {createOrder.isPending || updateOrder.isPending ? (
-          <span className="flex items-center justify-center gap-2">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            {editingOrderId ? 'Guardando cambios...' : 'Creando pedido...'}
-          </span>
-        ) : editingOrderId ? (
-          'Guardar cambios'
-        ) : (
-          'Crear pedido'
+  const mobileOrderForm = (
+    <form
+      className="flex min-h-[70dvh] flex-col bg-[#FCF8F2] text-[#2D2622]"
+      noValidate
+      onSubmit={handleSubmit}
+    >
+      <div className="sticky top-0 z-10 border-b border-[#E8D3BF] bg-[#FCF8F2] px-4 pb-3 pt-1">
+        <div className="grid grid-cols-3 gap-2" aria-label="Progreso nuevo pedido">
+          {mobileStepLabels.map((label, index) => {
+            const step = (index + 1) as 1 | 2 | 3;
+            const isDone = mobileOrderStep > step;
+            const isActive = mobileOrderStep === step;
+            return (
+              <div key={label} className="text-center">
+                <div className="flex items-center justify-center gap-1">
+                  <span
+                    className={[
+                      'flex h-8 w-8 items-center justify-center rounded-full text-sm font-black',
+                      isDone || isActive
+                        ? 'bg-[#B54431] text-white'
+                        : 'bg-[#E8D3BF] text-[#74655B]',
+                    ].join(' ')}
+                  >
+                    {isDone ? '✓' : step}
+                  </span>
+                </div>
+                <p
+                  className={[
+                    'mt-1 text-[0.68rem] font-bold',
+                    isActive ? 'text-[#2D2622]' : 'text-[#74655B]',
+                  ].join(' ')}
+                >
+                  {label}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5 pb-28">
+        {mobileOrderStep === 1 && (
+          <>
+            <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm">
+              <h4 className="mb-3 flex items-center gap-2 text-lg font-black">
+                <UserRound className="h-5 w-5 text-[#B54431]" /> Cliente
+              </h4>
+              <div className="mb-3 grid grid-cols-2 rounded-2xl border border-[#E8D3BF] bg-[#FCF8F2] p-1">
+                {(['existing', 'new'] as CustomerMode[]).map((mode) => (
+                  <label
+                    key={mode}
+                    className={[
+                      'cursor-pointer rounded-xl px-3 py-2.5 text-center text-sm font-black transition',
+                      form.customerMode === mode
+                        ? 'bg-[#B54431] text-white shadow-sm'
+                        : 'text-[#74655B]',
+                    ].join(' ')}
+                  >
+                    <input
+                      checked={form.customerMode === mode}
+                      className="sr-only"
+                      onChange={() =>
+                        setForm((c) => ({ ...c, customerMode: mode, existingCustomerId: '' }))
+                      }
+                      type="radio"
+                    />
+                    {mode === 'existing' ? 'Cliente existente' : 'Nuevo cliente'}
+                  </label>
+                ))}
+              </div>
+
+              {form.customerMode === 'existing' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3">
+                    <Search className="h-4 w-4 text-[#74655B]" />
+                    <input
+                      aria-label="Buscar cliente"
+                      className="w-full bg-transparent text-sm font-semibold outline-none placeholder:text-[#74655B]/70"
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      placeholder="Buscar por nombre, teléfono o dirección"
+                      role="searchbox"
+                      type="text"
+                      value={customerSearch}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    {filteredCustomers.map((customer) => {
+                      const isSelected = form.existingCustomerId === customer.id;
+                      return (
+                        <button
+                          key={customer.id}
+                          aria-label={`Seleccionar cliente ${customer.name}`}
+                          className={[
+                            'w-full rounded-2xl border p-3 text-left transition',
+                            isSelected
+                              ? 'border-[#B54431] bg-[#B54431]/8 ring-2 ring-[#B54431]/15'
+                              : 'border-[#E8D3BF] bg-white',
+                          ].join(' ')}
+                          onClick={() =>
+                            setForm((c) => ({ ...c, existingCustomerId: customer.id }))
+                          }
+                          type="button"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-black">{customer.name}</p>
+                            {isSelected && <CheckCircle2 className="h-5 w-5 text-[#088954]" />}
+                          </div>
+                          <p className="mt-1 text-sm font-semibold text-[#74655B]">
+                            {customer.phone ?? 'Sin teléfono'} · {customer.address ?? 'Completar'}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold uppercase tracking-wide text-[#74655B]">
+                    Nombre *
+                    <input
+                      aria-label="Nombre nuevo cliente"
+                      className="mt-1.5 w-full rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#B54431]/25"
+                      onChange={(e) => setForm((c) => ({ ...c, newCustomerName: e.target.value }))}
+                      value={form.newCustomerName}
+                    />
+                  </label>
+                  <label className="block text-xs font-bold uppercase tracking-wide text-[#74655B]">
+                    Teléfono
+                    <input
+                      aria-label="Teléfono nuevo cliente"
+                      className="mt-1.5 w-full rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#B54431]/25"
+                      onChange={(e) => setForm((c) => ({ ...c, newCustomerPhone: e.target.value }))}
+                      type="tel"
+                      value={form.newCustomerPhone}
+                    />
+                  </label>
+                  <label className="block text-xs font-bold uppercase tracking-wide text-[#74655B]">
+                    Dirección
+                    <input
+                      aria-label="Dirección nuevo cliente"
+                      className="mt-1.5 w-full rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#B54431]/25"
+                      onChange={(e) =>
+                        setForm((c) => ({ ...c, newCustomerAddress: e.target.value }))
+                      }
+                      value={form.newCustomerAddress}
+                    />
+                  </label>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm">
+              <h4 className="mb-3 flex items-center gap-2 text-lg font-black">
+                <ClipboardList className="h-5 w-5 text-[#B54431]" /> Fecha y franja
+              </h4>
+              <div className="space-y-3">
+                <label className="block text-xs font-bold uppercase tracking-wide text-[#74655B]">
+                  Fecha de entrega
+                  <input
+                    aria-label="Fecha de entrega"
+                    className="mt-1.5 w-full rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#B54431]/25"
+                    onChange={(e) => setForm((c) => ({ ...c, deliveryDate: e.target.value }))}
+                    required
+                    type="date"
+                    value={form.deliveryDate}
+                  />
+                </label>
+                <label className="block text-xs font-bold uppercase tracking-wide text-[#74655B]">
+                  Franja
+                  <select
+                    aria-label="Franja"
+                    className="mt-1.5 w-full rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#B54431]/25"
+                    onChange={(e) =>
+                      setForm((c) => ({
+                        ...c,
+                        deliveryTime: e.target.value as OrderFormState['deliveryTime'],
+                      }))
+                    }
+                    value={form.deliveryTime}
+                  >
+                    <option value="mediodia">Mediodía</option>
+                    <option value="tarde">Tarde</option>
+                    <option value="noche">Noche</option>
+                  </select>
+                </label>
+                <label className="block text-xs font-bold uppercase tracking-wide text-[#74655B]">
+                  Descuento
+                  <input
+                    aria-label="Descuento %"
+                    className="mt-1.5 w-full rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#B54431]/25"
+                    inputMode="numeric"
+                    max="100"
+                    min="0"
+                    onChange={(e) => setForm((c) => ({ ...c, discountPercent: e.target.value }))}
+                    type="number"
+                    value={form.discountPercent}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="grid gap-4">
+              <div>
+                <h4 className="mb-2 flex items-center gap-2 text-lg font-black">
+                  <Truck className="h-5 w-5 text-[#B54431]" /> Entrega
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <ToggleOption
+                    icon={ShoppingBag}
+                    isSelected={form.deliveryType === 'retiro'}
+                    label="Retiro"
+                    onClick={() => setForm((c) => ({ ...c, deliveryType: 'retiro' }))}
+                  />
+                  <ToggleOption
+                    icon={Truck}
+                    isSelected={form.deliveryType === 'envio'}
+                    label="Envío"
+                    onClick={() => setForm((c) => ({ ...c, deliveryType: 'envio' }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <h4 className="mb-2 flex items-center gap-2 text-lg font-black">
+                  <Flame className="h-5 w-5 text-[#B54431]" /> Cocción
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <ToggleOption
+                    icon={Package}
+                    isSelected={!form.cooked}
+                    label="Crudo"
+                    onClick={() => setForm((c) => ({ ...c, cooked: false }))}
+                  />
+                  <ToggleOption
+                    icon={Flame}
+                    isSelected={form.cooked}
+                    label="Cocinado"
+                    onClick={() => setForm((c) => ({ ...c, cooked: true }))}
+                  />
+                </div>
+              </div>
+            </section>
+          </>
         )}
-      </button>
+
+        {mobileOrderStep === 2 && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-2 rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3">
+              <Search className="h-4 w-4 text-[#74655B]" />
+              <input
+                className="w-full bg-transparent text-sm font-semibold outline-none"
+                placeholder="Buscar variedad..."
+                type="text"
+              />
+              <button
+                className="rounded-xl border border-[#E8D3BF] px-3 py-2 text-xs font-black"
+                type="button"
+              >
+                Filtrar
+              </button>
+            </div>
+            <div className="flex gap-2">
+              {['Todas', 'Saladas', 'Dulces'].map((filter, index) => (
+                <button
+                  key={filter}
+                  className={[
+                    'rounded-full px-4 py-2 text-sm font-black',
+                    index === 0
+                      ? 'bg-[#B54431] text-white'
+                      : 'border border-[#E8D3BF] bg-white text-[#2D2622]',
+                  ].join(' ')}
+                  type="button"
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+            {activeMenuItems.map((menuItem) => {
+              const quantity = form.quantities[menuItem.id] ?? 0;
+              return (
+                <article
+                  aria-label={`Variedad ${menuItem.name}`}
+                  key={menuItem.id}
+                  className={[
+                    'rounded-[1.35rem] border bg-[#FFFDF9] p-3 shadow-sm',
+                    quantity > 0 ? 'border-[#B54431] bg-[#B54431]/5' : 'border-[#E8D3BF]',
+                  ].join(' ')}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#E8D3BF] text-2xl">
+                      🥟
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black">{menuItem.name}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-[#74655B]">
+                        Doc. {formatMoney(menuItem.priceDozen)} · Med.{' '}
+                        {formatMoney(menuItem.priceHalfDozen)} · Un.{' '}
+                        {formatMoney(menuItem.priceUnit)}
+                      </p>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <button
+                          aria-label="+ Docena"
+                          className="rounded-xl bg-[#FF6912] py-2 text-sm font-black text-white"
+                          onClick={() => setQuantity(menuItem.id, 12)}
+                          type="button"
+                        >
+                          +12
+                        </button>
+                        <button
+                          aria-label="+ Media"
+                          className="rounded-xl bg-[#F89D00] py-2 text-sm font-black text-white"
+                          onClick={() => setQuantity(menuItem.id, 6)}
+                          type="button"
+                        >
+                          +6
+                        </button>
+                        <button
+                          aria-label="+ Unidad"
+                          className="rounded-xl bg-[#B54431] py-2 text-sm font-black text-white"
+                          onClick={() => setQuantity(menuItem.id, 1)}
+                          type="button"
+                        >
+                          +1
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <button
+                      aria-label={`Restar ${menuItem.name}`}
+                      className="rounded-full border border-[#E8D3BF] p-2 text-[#B54431] disabled:opacity-40"
+                      disabled={quantity === 0}
+                      onClick={() => setQuantity(menuItem.id, -1)}
+                      type="button"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <span className="text-sm font-black tabular-nums">{quantity} u.</span>
+                    <button
+                      aria-label={`Sumar ${menuItem.name}`}
+                      className="rounded-full border border-[#B54431] p-2 text-[#B54431]"
+                      onClick={() => setQuantity(menuItem.id, 1)}
+                      type="button"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        )}
+
+        {mobileOrderStep === 3 && (
+          <>
+            <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm">
+              <h4 className="mb-3 flex items-center gap-2 text-lg font-black">
+                <Plus className="h-5 w-5 text-[#B54431]" /> Toppings / Salsas
+              </h4>
+              <div className="space-y-2">
+                {availableAddons.map((addon) => {
+                  const quantity = form.addonQuantities[addon.addonId] ?? 0;
+                  return (
+                    <article
+                      aria-label={`Topping ${addon.name}`}
+                      className="rounded-2xl border border-[#E8D3BF] bg-white p-3"
+                      key={addon.addonId}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-black">{addon.name}</p>
+                          <p className="text-sm font-semibold text-[#74655B]">
+                            {formatMoney(addon.price)} c/u
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            aria-label={`Restar ${addon.name}`}
+                            className="rounded-full border border-[#E8D3BF] p-2 text-[#74655B] disabled:opacity-40"
+                            disabled={quantity === 0}
+                            onClick={() => setAddonQuantity(addon.addonId, -1)}
+                            type="button"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="w-8 text-center text-sm font-black">{quantity} u.</span>
+                          <button
+                            aria-label={`Sumar ${addon.name}`}
+                            className="rounded-full bg-[#088954] p-2 text-white"
+                            onClick={() => setAddonQuantity(addon.addonId, 1)}
+                            type="button"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm">
+              <h4 className="mb-3 flex items-center gap-2 text-lg font-black">
+                <StickyNote className="h-5 w-5 text-[#B54431]" /> Notas
+              </h4>
+              <textarea
+                aria-label="Notas"
+                className="min-h-36 w-full rounded-2xl border border-[#E8D3BF] bg-white px-3 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#B54431]/25"
+                maxLength={250}
+                onChange={(e) => setForm((c) => ({ ...c, notes: e.target.value }))}
+                placeholder="Indicaciones especiales, referencias de dirección, etc."
+                value={form.notes}
+              />
+              <p className="mt-1 text-right text-xs font-semibold text-[#74655B]">
+                {form.notes.length}/250
+              </p>
+            </section>
+
+            <section
+              aria-label="Preview de total"
+              className="rounded-[1.5rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-sm"
+            >
+              <h4 className="mb-3 flex items-center gap-2 text-lg font-black">
+                <ReceiptText className="h-5 w-5 text-[#B54431]" /> Resumen del pedido
+              </h4>
+              <div className="space-y-2 text-sm font-semibold text-[#74655B]">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>{formatMoney(preview.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-[#088954]">
+                  <span>Descuento ({preview.discountPercent}%)</span>
+                  <span>−{formatMoney(preview.discount)}</span>
+                </div>
+                <div className="border-t border-dashed border-[#E8D3BF] pt-3">
+                  <div className="flex items-end justify-between text-[#2D2622]">
+                    <span className="font-black">Total</span>
+                    <span className="text-3xl font-black text-[#B54431]">
+                      {formatMoney(preview.total)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800">
+              <div className="flex gap-3">
+                <CheckCircle2 className="h-5 w-5" />
+                <span>
+                  Pedido seguro y confirmado. Te contactaremos si necesitamos confirmar algún
+                  detalle.
+                </span>
+              </div>
+            </div>
+
+            {formErrors.length > 0 && (
+              <div
+                aria-label="Errores del pedido"
+                aria-live="polite"
+                className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3"
+                role="status"
+              >
+                <ul className="space-y-0.5 text-sm font-semibold text-destructive">
+                  {formErrors.map((error) => (
+                    <li key={error}>• {error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="sticky bottom-0 z-10 border-t border-[#E8D3BF] bg-[#FCF8F2]/95 px-4 py-3 backdrop-blur">
+        {mobileOrderStep < 3 ? (
+          <div className="flex items-center justify-between gap-3">
+            {mobileOrderStep === 2 && (
+              <div className="text-sm font-black text-[#2D2622]">
+                <p>{selectedUnitCount} u. seleccionadas</p>
+                <p className="text-[#74655B]">{formatMoney(preview.total)}</p>
+              </div>
+            )}
+            <button
+              className="ml-auto rounded-2xl bg-[#B54431] px-8 py-3.5 text-sm font-black text-white shadow-lg shadow-[#B54431]/20"
+              onClick={() => setMobileOrderStep((step) => (step === 1 ? 2 : 3))}
+              type="button"
+            >
+              Continuar
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1 text-sm font-black text-[#2D2622]">
+              <p>Total</p>
+              <p className="text-xl text-[#B54431]">{formatMoney(preview.total)}</p>
+            </div>
+            <button
+              className="rounded-2xl bg-[#B54431] px-7 py-3.5 text-sm font-black text-white shadow-lg shadow-[#B54431]/20 disabled:opacity-60"
+              disabled={createOrder.isPending || updateOrder.isPending}
+              type="submit"
+            >
+              {editingOrderId ? 'Guardar cambios' : 'Crear pedido'}
+            </button>
+          </div>
+        )}
+      </div>
     </form>
   );
 
@@ -2556,6 +3305,33 @@ export const OrdersPage = () => {
           ) : (
             <div className="space-y-2">{visibleOrders.map(renderOrderCard)}</div>
           )}
+
+          {orderPagination && orderPagination.total > 0 && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-white/80 p-3 text-sm font-bold text-muted-foreground shadow-card sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Mostrando página {orderPagination.page} de {orderPagination.totalPages} ·{' '}
+                {orderPagination.total} pedidos
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  className="rounded-full border border-border bg-white px-4 py-2 text-foreground transition hover:border-primary/30 disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!orderPagination.hasPreviousPage || ordersQuery.isFetching}
+                  onClick={() => setOrderPage((page) => Math.max(1, page - 1))}
+                  type="button"
+                >
+                  Anterior
+                </button>
+                <button
+                  className="rounded-full border border-border bg-white px-4 py-2 text-foreground transition hover:border-primary/30 disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!orderPagination.hasNextPage || ordersQuery.isFetching}
+                  onClick={() => setOrderPage((page) => page + 1)}
+                  type="button"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
@@ -2617,16 +3393,16 @@ export const OrdersPage = () => {
             }}
           >
             <section
-              aria-label={editingOrderId ? 'Editar pedido' : 'Nuevo pedido'}
+              aria-label={mobileDialogTitle}
               aria-modal="true"
-              className="animate-modal-enter flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl sm:max-h-[90dvh] sm:max-w-4xl sm:rounded-3xl"
+              className="animate-modal-enter flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-[#E8D3BF] bg-[#FCF8F2] shadow-2xl sm:max-h-[92dvh] sm:max-w-7xl sm:rounded-3xl"
               role="dialog"
             >
               {/* Header del modal — sticky */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-6">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E8D3BF] bg-[#FFFDF9] px-4 py-3.5 sm:px-6">
                 <div>
                   <h3 className="font-display text-lg font-bold text-foreground">
-                    {editingOrderId ? 'Editar pedido' : 'Nuevo pedido'}
+                    {mobileDialogTitle}
                   </h3>
                   {/* Indicador de progreso visual */}
                   {selectedItems.length > 0 && (
@@ -2647,7 +3423,9 @@ export const OrdersPage = () => {
               </div>
 
               {/* Body scrolleable */}
-              <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">{orderForm}</div>
+              <div className="flex-1 overflow-y-auto px-0 py-0 sm:px-5 sm:py-4">
+                {isDesktopDetail ? orderForm : mobileOrderForm}
+              </div>
             </section>
           </div>,
           document.body,

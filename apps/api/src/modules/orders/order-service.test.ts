@@ -11,6 +11,7 @@ import {
   createOrder,
   deleteOrder,
   getOrder,
+  listOrders,
   updateOrder,
   updateOrderPayment,
   updateOrderStatus,
@@ -63,7 +64,18 @@ const orderDetail = (overrides: Partial<OrderDetail> = {}): OrderDetail => ({
 });
 
 const createRepository = (overrides: Partial<OrderRepository> = {}): OrderRepository => ({
-  list: async () => [],
+  list: async () => ({
+    orders: [],
+    pagination: {
+      page: 1,
+      pageSize: 25,
+      total: 0,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    },
+    stats: { active: 0, finalized: 0 },
+  }),
   getById: async () => orderDetail(),
   findCustomerById: async () => customer(),
   findCustomerByPhone: async () => null,
@@ -90,6 +102,35 @@ const createRepository = (overrides: Partial<OrderRepository> = {}): OrderReposi
 });
 
 describe('order service', () => {
+  it('passes list filters through to the repository and returns pagination metadata', async () => {
+    const repository = createRepository({
+      list: async (filters) => ({
+        orders: [{ ...orderDetail(), itemCount: 1, totalQuantity: 13 }],
+        pagination: {
+          page: filters?.page ?? 1,
+          pageSize: filters?.pageSize ?? 25,
+          total: 1,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+        stats: { active: 1, finalized: 0 },
+      }),
+    });
+
+    const result = await listOrders(repository, {
+      visibility: 'active',
+      sortBy: 'deliveryDate',
+      sortDir: 'asc',
+      page: 2,
+      pageSize: 10,
+    });
+
+    expect(result.orders).toHaveLength(1);
+    expect(result.pagination).toMatchObject({ page: 2, pageSize: 10, total: 1 });
+    expect(result.stats.active).toBe(1);
+  });
+
   it('auto-creates new customers once, snapshots menu pricing, applies discount, and adds delivery fee', async () => {
     const createdCustomers: CustomerSnapshot[] = [];
     let persisted: Parameters<OrderRepository['createOrderWithItems']>[0] | undefined;

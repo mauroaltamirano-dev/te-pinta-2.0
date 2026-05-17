@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, not, or, type SQL } from 'drizzle-orm';
 
 import type { OrderFilters, OrderStatus } from '@te-pinta/shared';
 
@@ -11,6 +11,8 @@ import type {
   OrderDetail,
   OrderItemDetail,
   OrderListItem,
+  OrderListPagination,
+  OrderListStats,
   OrderRepository,
   PersistOrderInput,
 } from './order-service';
@@ -128,8 +130,22 @@ const toOrderAddonValues = (input: PersistOrderInput): (typeof orderAddons.$infe
     subtotal: moneyToDb(addon.subtotal),
   }));
 
-const buildFilterConditions = (filters: OrderFilters = {}): SQL[] => {
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 25;
+
+const resolvePagination = (
+  filters: OrderFilters = {},
+): Pick<OrderListPagination, 'page' | 'pageSize'> => ({
+  page: filters.page ?? DEFAULT_PAGE,
+  pageSize: filters.pageSize ?? DEFAULT_PAGE_SIZE,
+});
+
+const buildFilterConditions = (
+  filters: OrderFilters = {},
+  options: { includeVisibility?: boolean } = {},
+): SQL[] => {
   const conditions: SQL[] = [];
+  const includeVisibility = options.includeVisibility ?? true;
 
   if (filters.fecha) {
     conditions.push(eq(orders.deliveryDate, filters.fecha));
@@ -140,15 +156,156 @@ const buildFilterConditions = (filters: OrderFilters = {}): SQL[] => {
   if (filters.franja) {
     conditions.push(eq(orders.deliveryTime, filters.franja));
   }
+  if (filters.deliveryType) {
+    conditions.push(eq(orders.deliveryType, filters.deliveryType));
+  }
+  if (typeof filters.cooked === 'boolean') {
+    conditions.push(eq(orders.cooked, filters.cooked));
+  }
+  if (typeof filters.isPaid === 'boolean') {
+    conditions.push(eq(orders.isPaid, filters.isPaid));
+  }
   if (filters.cliente) {
     const term = `%${filters.cliente}%`;
-    const customerCondition = or(ilike(customers.name, term), ilike(customers.phone, term));
+    const customerCondition = or(
+      ilike(orders.id, term),
+      ilike(customers.name, term),
+      ilike(customers.phone, term),
+      ilike(customers.address, term),
+    );
     if (customerCondition) {
       conditions.push(customerCondition);
     }
   }
+  if (includeVisibility && filters.visibility === 'finalized') {
+    conditions.push(and(eq(orders.status, 'entregado'), eq(orders.isPaid, true))!);
+  }
+  if (includeVisibility && filters.visibility === 'active') {
+    conditions.push(not(and(eq(orders.status, 'entregado'), eq(orders.isPaid, true))!));
+  }
 
   return conditions;
+};
+
+const countOrders = async (db: DbClient, conditions: SQL[]): Promise<number> => {
+  const [row] = conditions.length
+    ? await db
+        .select({ value: count() })
+        .from(orders)
+        .innerJoin(customers, eq(orders.customerId, customers.id))
+        .where(and(...conditions))
+    : await db
+        .select({ value: count() })
+        .from(orders)
+        .innerJoin(customers, eq(orders.customerId, customers.id));
+
+  return row?.value ?? 0;
+};
+
+const getOrderByExpression = (filters: OrderFilters = {}) => {
+  const sortBy = filters.sortBy ?? 'deliveryDate';
+  const sortDir = filters.sortDir ?? 'desc';
+  const column =
+    sortBy === 'customerName'
+      ? customers.name
+      : sortBy === 'total'
+        ? orders.total
+        : sortBy === 'status'
+          ? orders.status
+          : sortBy === 'deliveryType'
+            ? orders.deliveryType
+            : sortBy === 'createdAt'
+              ? orders.createdAt
+              : orders.deliveryDate;
+
+  return sortDir === 'asc' ? asc(column) : desc(column);
+};
+
+const groupOrderItems = (
+  rows: { orderItem: OrderItemRow; menuItemName: string }[],
+): Map<string, OrderItemDetail[]> => {
+  const grouped = new Map<string, OrderItemDetail[]>();
+
+  for (const row of rows) {
+    const items = grouped.get(row.orderItem.orderId) ?? [];
+    items.push(mapOrderItem(row.orderItem, row.menuItemName));
+    grouped.set(row.orderItem.orderId, items);
+  }
+
+  return grouped;
+};
+
+const groupOrderAddons = (rows: OrderAddonRow[]): Map<string, OrderAddonDetail[]> => {
+  const grouped = new Map<string, OrderAddonDetail[]>();
+
+  for (const row of rows) {
+    const addons = grouped.get(row.orderId) ?? [];
+    addons.push(mapOrderAddon(row));
+    grouped.set(row.orderId, addons);
+  }
+
+  return grouped;
+};
+
+const getOrderItemsByOrderIds = async (
+  db: DbClient,
+  orderIds: string[],
+): Promise<Map<string, OrderItemDetail[]>> => {
+  if (orderIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({ orderItem: orderItems, menuItemName: menuItems.name })
+    .from(orderItems)
+    .innerJoin(menuItems, eq(orderItems.menuItemId, menuItems.id))
+    .where(inArray(orderItems.orderId, orderIds))
+    .orderBy(asc(orderItems.orderId), asc(orderItems.id));
+
+  return groupOrderItems(rows);
+};
+
+const getOrderAddonsByOrderIds = async (
+  db: DbClient,
+  orderIds: string[],
+): Promise<Map<string, OrderAddonDetail[]>> => {
+  if (orderIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select()
+    .from(orderAddons)
+    .where(inArray(orderAddons.orderId, orderIds))
+    .orderBy(asc(orderAddons.orderId), asc(orderAddons.id));
+
+  return groupOrderAddons(rows);
+};
+
+const buildPagination = (filters: OrderFilters, total: number): OrderListPagination => {
+  const { page, pageSize } = resolvePagination(filters);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return {
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: page > 1,
+  };
+};
+
+const getListStats = async (db: DbClient, filters: OrderFilters = {}): Promise<OrderListStats> => {
+  const baseConditions = buildFilterConditions(filters, { includeVisibility: false });
+  const finalizedCondition = and(eq(orders.status, 'entregado'), eq(orders.isPaid, true))!;
+
+  const [active, finalized] = await Promise.all([
+    countOrders(db, [...baseConditions, not(finalizedCondition)]),
+    countOrders(db, [...baseConditions, finalizedCondition]),
+  ]);
+
+  return { active, finalized };
 };
 
 const getOrderItems = async (db: DbClient, orderId: string): Promise<OrderItemDetail[]> => {
@@ -190,36 +347,58 @@ const getOrderDetail = async (db: DbClient, id: string): Promise<OrderDetail | n
 };
 
 export const createOrderRepository = (db: DbClient): OrderRepository => ({
-  async list(filters): Promise<OrderListItem[]> {
+  async list(filters = {}) {
     const conditions = buildFilterConditions(filters);
+    const { page, pageSize } = resolvePagination(filters);
+    const offset = (page - 1) * pageSize;
+    const orderByExpression = getOrderByExpression(filters);
+
+    const [total, stats] = await Promise.all([
+      countOrders(db, conditions),
+      getListStats(db, filters),
+    ]);
     const rows = conditions.length
       ? await db
           .select({ order: orders, customer: customers })
           .from(orders)
           .innerJoin(customers, eq(orders.customerId, customers.id))
           .where(and(...conditions))
-          .orderBy(desc(orders.deliveryDate), desc(orders.createdAt))
+          .orderBy(orderByExpression, desc(orders.createdAt))
+          .limit(pageSize)
+          .offset(offset)
       : await db
           .select({ order: orders, customer: customers })
           .from(orders)
           .innerJoin(customers, eq(orders.customerId, customers.id))
-          .orderBy(desc(orders.deliveryDate), desc(orders.createdAt));
+          .orderBy(orderByExpression, desc(orders.createdAt))
+          .limit(pageSize)
+          .offset(offset);
 
-    return Promise.all(
-      rows.map(async (row) => {
-        const items = await getOrderItems(db, row.order.id);
-        const addons = await getOrderAddons(db, row.order.id);
-        const detail = mapOrderDetail(row.order, row.customer, items, addons);
-        const { items: _items, addons: _addons, ...listItem } = detail;
-        void _items;
-        void _addons;
-        return {
-          ...listItem,
-          itemCount: items.length,
-          totalQuantity: items.reduce((total, item) => total + item.quantity, 0),
-        };
-      }),
-    );
+    const orderIds = rows.map((row) => row.order.id);
+    const [itemsByOrderId, addonsByOrderId] = await Promise.all([
+      getOrderItemsByOrderIds(db, orderIds),
+      getOrderAddonsByOrderIds(db, orderIds),
+    ]);
+
+    const listItems: OrderListItem[] = rows.map((row) => {
+      const items = itemsByOrderId.get(row.order.id) ?? [];
+      const addons = addonsByOrderId.get(row.order.id) ?? [];
+      const detail = mapOrderDetail(row.order, row.customer, items, addons);
+      const { items: _items, addons: _addons, ...listItem } = detail;
+      void _items;
+      void _addons;
+      return {
+        ...listItem,
+        itemCount: items.length,
+        totalQuantity: items.reduce((total, item) => total + item.quantity, 0),
+      };
+    });
+
+    return {
+      orders: listItems,
+      pagination: buildPagination(filters, total),
+      stats,
+    };
   },
 
   getById(id): Promise<OrderDetail | null> {

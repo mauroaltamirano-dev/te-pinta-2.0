@@ -15,6 +15,7 @@ import {
   updateOrder,
   updateOrderPayment,
   updateOrderStatus,
+  type OrderListItem,
 } from './orders-api';
 import { getDeliveryFee, getOrderPromotionSettings } from './settings-api';
 import { OrdersPage } from './OrdersPage';
@@ -98,6 +99,26 @@ const afternoonOrderListItem = {
 
 const orderList = [orderListItem];
 
+const orderListResponse = (orders: OrderListItem[]) => {
+  const finalized = orders.filter((order) => order.status === 'entregado' && order.isPaid).length;
+
+  return {
+    orders,
+    pagination: {
+      page: 1,
+      pageSize: 25,
+      total: orders.length,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    },
+    stats: {
+      active: orders.length - finalized,
+      finalized,
+    },
+  };
+};
+
 const orderDetail = {
   ...orderListItem,
   addons: [],
@@ -164,7 +185,7 @@ describe('OrdersPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockDesktopViewport(true);
-    vi.mocked(listOrders).mockResolvedValue(orderList);
+    vi.mocked(listOrders).mockResolvedValue(orderListResponse(orderList));
     vi.mocked(getOrder).mockResolvedValue(orderDetail);
     vi.mocked(updateOrder).mockResolvedValue(orderDetail);
     vi.mocked(deleteOrder).mockResolvedValue(undefined);
@@ -216,7 +237,9 @@ describe('OrdersPage', () => {
   });
 
   it('opens the selected order detail in a desktop drawer and updates it when selecting another order', async () => {
-    vi.mocked(listOrders).mockResolvedValue([orderListItem, afternoonOrderListItem]);
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([orderListItem, afternoonOrderListItem]),
+    );
     vi.mocked(getOrder).mockImplementation(async (id) =>
       id === 'order-3'
         ? { ...orderDetail, ...afternoonOrderListItem, items: orderDetail.items }
@@ -290,7 +313,9 @@ describe('OrdersPage', () => {
   });
 
   it('shows active orders by default, finalized orders by filter, and formats order preview for Argentina', async () => {
-    vi.mocked(listOrders).mockResolvedValue([orderListItem, finalizedOrderListItem]);
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([orderListItem, finalizedOrderListItem]),
+    );
 
     renderOrdersPage();
 
@@ -314,7 +339,9 @@ describe('OrdersPage', () => {
   });
 
   it('renders dashboard summary panels and the order table header', async () => {
-    vi.mocked(listOrders).mockResolvedValue([orderListItem, finalizedOrderListItem]);
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([orderListItem, finalizedOrderListItem]),
+    );
 
     renderOrdersPage();
 
@@ -343,15 +370,17 @@ describe('OrdersPage', () => {
     const todayIso = toLocalIsoDate(today);
     const tomorrowIso = toLocalIsoDate(addDays(today, 1));
 
-    vi.mocked(listOrders).mockResolvedValue([
-      { ...orderListItem, deliveryDate: todayIso },
-      {
-        ...afternoonOrderListItem,
-        id: 'order-tomorrow',
-        customer: { ...afternoonOrderListItem.customer, name: 'Pedido Mañana' },
-        deliveryDate: tomorrowIso,
-      },
-    ]);
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([
+        { ...orderListItem, deliveryDate: todayIso },
+        {
+          ...afternoonOrderListItem,
+          id: 'order-tomorrow',
+          customer: { ...afternoonOrderListItem.customer, name: 'Pedido Mañana' },
+          deliveryDate: tomorrowIso,
+        },
+      ]),
+    );
 
     renderOrdersPage();
 
@@ -363,17 +392,19 @@ describe('OrdersPage', () => {
   });
 
   it('filters active orders by delivery date in the table', async () => {
-    vi.mocked(listOrders).mockResolvedValue([
-      orderListItem,
-      afternoonOrderListItem,
-      {
-        ...orderListItem,
-        id: 'order-4',
-        deliveryDate: '2026-05-07',
-        customer: { ...orderListItem.customer, name: 'Otro día' },
-      },
-      finalizedOrderListItem,
-    ]);
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([
+        orderListItem,
+        afternoonOrderListItem,
+        {
+          ...orderListItem,
+          id: 'order-4',
+          deliveryDate: '2026-05-07',
+          customer: { ...orderListItem.customer, name: 'Otro día' },
+        },
+        finalizedOrderListItem,
+      ]),
+    );
 
     renderOrdersPage();
 
@@ -389,19 +420,21 @@ describe('OrdersPage', () => {
   });
 
   it('searches, sorts, and applies status and method filters from the toolbar', async () => {
-    vi.mocked(listOrders).mockResolvedValue([
-      orderListItem,
-      afternoonOrderListItem,
-      {
-        ...orderListItem,
-        id: 'order-4',
-        customer: { ...orderListItem.customer, id: 'customer-4', name: 'Zoe Torres' },
-        cooked: true,
-        deliveryType: 'retiro' as const,
-        isPaid: true,
-        total: 45000,
-      },
-    ]);
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([
+        orderListItem,
+        afternoonOrderListItem,
+        {
+          ...orderListItem,
+          id: 'order-4',
+          customer: { ...orderListItem.customer, id: 'customer-4', name: 'Zoe Torres' },
+          cooked: true,
+          deliveryType: 'retiro' as const,
+          isPaid: true,
+          total: 45000,
+        },
+      ]),
+    );
 
     renderOrdersPage();
 
@@ -461,6 +494,51 @@ describe('OrdersPage', () => {
     expect(generatedListText).not.toContain('*Entrega:*');
     expect(generatedListText).not.toContain('_Tel:_');
     expect(screen.getByText(/la podés copiar desde abajo/i)).toBeInTheDocument();
+  });
+
+  it('shows the redesigned desktop order form sections and updates the sticky summary', async () => {
+    renderOrdersPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /\+ nuevo pedido/i }));
+    const dialog = within(await screen.findByRole('dialog', { name: /nuevo pedido/i }));
+
+    expect(dialog.getByRole('heading', { name: /1\. cliente/i })).toBeInTheDocument();
+    expect(dialog.getByRole('heading', { name: /2\. detalles del pedido/i })).toBeInTheDocument();
+    expect(dialog.getByRole('heading', { name: /3\. productos/i })).toBeInTheDocument();
+    expect(dialog.getByRole('heading', { name: /4\. resumen del pedido/i })).toBeInTheDocument();
+    expect(dialog.getByText(/podrás revisar el pedido antes de confirmarlo/i)).toBeInTheDocument();
+
+    await userEvent.click(dialog.getByRole('button', { name: /seleccionar cliente ana pérez/i }));
+    const carneCard = within(dialog.getByLabelText(/variedad carne suave/i));
+    await userEvent.click(carneCard.getByRole('button', { name: /\+ docena/i }));
+    const summary = within(dialog.getByLabelText(/preview de total/i));
+
+    expect(summary.getByText('Ana Pérez')).toBeInTheDocument();
+    expect(summary.getByText(/Carne suave/)).toBeInTheDocument();
+    expect(summary.getByText(/1 × \$ 12\.000/)).toBeInTheDocument();
+    expect(summary.getByText(/Total del pedido/i)).toHaveTextContent('$ 13.500');
+  });
+
+  it('shows the mobile order wizard and advances through the three steps', async () => {
+    mockDesktopViewport(false);
+    renderOrdersPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /\+ nuevo pedido/i }));
+    const dialog = within(await screen.findByRole('dialog', { name: /nuevo pedido/i }));
+
+    expect(dialog.getByRole('heading', { name: /nuevo pedido/i })).toBeInTheDocument();
+    expect(dialog.getByText(/cliente y entrega/i)).toBeInTheDocument();
+    expect(dialog.getByText(/variedades/i)).toBeInTheDocument();
+    expect(dialog.getByText(/extras y resumen/i)).toBeInTheDocument();
+
+    await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
+    expect(dialog.getByRole('heading', { name: /^variedades$/i })).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: /^continuar$/i })).toHaveTextContent(/continuar/i);
+
+    await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
+    expect(dialog.getByRole('heading', { name: /extras y resumen/i })).toBeInTheDocument();
+    expect(dialog.getByText(/pedido seguro y confirmado/i)).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: /^crear pedido$/i })).toBeInTheDocument();
   });
 
   it('creates an order for an existing customer with delivery, discount, fee preview and varieties', async () => {

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { OrderFilters, OrderStatus, UpdateOrderInput } from '@te-pinta/shared';
 
@@ -22,6 +22,8 @@ export const useOrders = (filters: OrderFilters = {}) =>
   useQuery({
     queryKey: orderQueryKeys.list(filters),
     queryFn: () => listOrders(filters),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
   });
 
 export const useOrderDetail = (id: string | null) =>

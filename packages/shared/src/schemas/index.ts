@@ -103,6 +103,24 @@ export const orderFiltersSchema = z.object({
   estado: orderStatusSchema.optional(),
   cliente: z.string().trim().optional(),
   franja: deliveryTimeSchema.optional(),
+  deliveryType: deliveryTypeSchema.optional(),
+  cooked: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .or(z.boolean())
+    .optional(),
+  isPaid: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .or(z.boolean())
+    .optional(),
+  visibility: z.enum(['active', 'finalized']).optional(),
+  sortBy: z
+    .enum(['deliveryDate', 'customerName', 'total', 'status', 'deliveryType', 'createdAt'])
+    .optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export const dashboardQuerySchema = z.object({
