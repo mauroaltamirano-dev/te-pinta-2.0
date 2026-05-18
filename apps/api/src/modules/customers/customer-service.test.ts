@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { ApiError } from '../../middlewares/error-handler';
 import type { Customer, CustomerRepository } from './customer-service';
 import { createCustomer, deleteCustomer } from './customer-service';
-import { ApiError } from '../../middlewares/error-handler';
 
 const customer = (overrides: Partial<Customer> = {}): Customer => ({
   id: 'customer-1',
@@ -18,6 +18,7 @@ describe('customer service', () => {
       list: async () => [],
       create: async (input) => customer(input),
       update: async () => null,
+      countOrders: async () => 0,
       delete: async () => false,
     };
 
@@ -32,11 +33,26 @@ describe('customer service', () => {
       list: async () => [],
       create: async (input) => customer(input),
       update: async () => null,
+      countOrders: async () => 0,
       delete: async () => false,
     };
 
     await expect(deleteCustomer('missing', repository)).rejects.toMatchObject(
       new ApiError(404, 'Customer not found', 'CUSTOMER_NOT_FOUND'),
+    );
+  });
+
+  it('throws 409 when deleting a customer with orders', async () => {
+    const repository: CustomerRepository = {
+      list: async () => [],
+      create: async (input) => customer(input),
+      update: async () => null,
+      countOrders: async () => 2,
+      delete: async () => true,
+    };
+
+    await expect(deleteCustomer('customer-1', repository)).rejects.toMatchObject(
+      new ApiError(409, 'Customer has orders and cannot be deleted directly', 'CUSTOMER_HAS_ORDERS'),
     );
   });
 });

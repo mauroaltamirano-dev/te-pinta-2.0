@@ -1,9 +1,9 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, count, eq } from 'drizzle-orm';
 
 import type { UpdateCustomerInput } from '@te-pinta/shared';
 
 import type { createDbClient } from '../../db/index';
-import { customers } from '../../db/schema';
+import { customers, orders } from '../../db/schema';
 import type { Customer, CustomerRepository } from './customer-service';
 
 type DbClient = ReturnType<typeof createDbClient>['db'];
@@ -60,6 +60,15 @@ export const createCustomerRepository = (db: DbClient): CustomerRepository => ({
       .returning();
 
     return row ? mapCustomer(row) : null;
+  },
+
+  async countOrders(id): Promise<number> {
+    const [row] = await db
+      .select({ value: count() })
+      .from(orders)
+      .where(eq(orders.customerId, id));
+
+    return row?.value ?? 0;
   },
 
   async delete(id): Promise<boolean> {

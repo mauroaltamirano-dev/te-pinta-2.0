@@ -22,6 +22,7 @@ import type { CreateMenuItemInput } from '@te-pinta/shared';
 
 import { PageHero } from '@/components/layout/PageHero';
 
+import type { DashboardTopVariety } from '../dashboard/dashboard-api';
 import { useDailyDashboard } from '../dashboard/dashboard-hooks';
 import type { MenuItem } from './menu-api';
 import { useCreateMenuItem, useMenuItems, useUpdateMenuItem } from './menu-hooks';
@@ -72,8 +73,6 @@ const toFormState = (item: MenuItem): MenuFormState => ({
 
 const formatMoney = (value: number): string => moneyFormatter.format(value);
 
-const today = (): string => new Date().toISOString().slice(0, 10);
-
 const formatDozenLabel = (quantity: number): string => {
   if (!quantity) return '0 docenas';
   const dozens = quantity / 12;
@@ -95,6 +94,14 @@ const menuBadgeClassName =
 const inputClassName =
   'mt-2 w-full rounded-full border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20';
 
+type SalesPeriod = 'all' | 'last30' | 'last7';
+
+const salesPeriodLabels: Record<SalesPeriod, string> = {
+  all: 'Total',
+  last30: '30 días',
+  last7: '7 días',
+};
+
 const useIsDesktopPanel = () => {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
@@ -115,29 +122,49 @@ const useIsDesktopPanel = () => {
 
 const MenuItemDetailAnalytics = ({
   item,
-  quantitySoldToday,
+  quantitySold,
+  salesPeriod,
+  onSalesPeriodChange,
 }: {
   item: MenuItem;
-  quantitySoldToday: number;
+  quantitySold: number;
+  salesPeriod: SalesPeriod;
+  onSalesPeriodChange: (period: SalesPeriod) => void;
 }) => {
   const marginPerDozen = item.priceDozen - item.costPerDozen;
   const marginPercent = item.priceDozen ? Math.round((marginPerDozen / item.priceDozen) * 100) : 0;
-  const estimatedRevenue = (quantitySoldToday / 12) * item.priceDozen;
-  const estimatedCost = (quantitySoldToday / 12) * item.costPerDozen;
+  const estimatedRevenue = (quantitySold / 12) * item.priceDozen;
+  const estimatedCost = (quantitySold / 12) * item.costPerDozen;
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2 rounded-2xl bg-muted/50 p-1">
+        {(Object.keys(salesPeriodLabels) as SalesPeriod[]).map((period) => (
+          <button
+            className={`rounded-xl px-2 py-2 text-xs font-black transition ${
+              salesPeriod === period
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-background'
+            }`}
+            key={period}
+            onClick={() => onSalesPeriodChange(period)}
+            type="button"
+          >
+            {salesPeriodLabels[period]}
+          </button>
+        ))}
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
         <article className="rounded-2xl bg-primary/5 p-4 ring-1 ring-primary/10">
           <div className="flex items-center gap-2 text-primary">
             <BarChart3 className="h-4 w-4" aria-hidden="true" />
-            <p className="text-xs font-black uppercase tracking-wide">Vendidas hoy</p>
+            <p className="text-xs font-black uppercase tracking-wide">Vendidas</p>
           </div>
           <p className="mt-2 text-2xl font-black tabular-nums text-foreground">
-            {formatDozenLabel(quantitySoldToday)}
+            {formatDozenLabel(quantitySold)}
           </p>
           <p className="mt-1 text-xs font-bold text-muted-foreground">
-            {quantitySoldToday.toLocaleString('es-AR')} unidades registradas.
+            {quantitySold.toLocaleString('es-AR')} unidades en {salesPeriodLabels[salesPeriod].toLowerCase()}.
           </p>
         </article>
 
@@ -189,7 +216,7 @@ const MenuItemDetailAnalytics = ({
       </div>
 
       <div className="rounded-2xl border border-dashed border-border bg-background p-4 text-sm">
-        <p className="font-black text-foreground">Estimación del día</p>
+        <p className="font-black text-foreground">Estimación del período</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
           <p className="rounded-2xl bg-white/80 px-3 py-2 font-bold text-muted-foreground ring-1 ring-border/60">
             Venta estimada:{' '}
@@ -212,11 +239,12 @@ export const MenuPage = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [recentlyEditedItemId, setRecentlyEditedItemId] = useState<string | null>(null);
+  const [salesPeriod, setSalesPeriod] = useState<SalesPeriod>('all');
   const formPanelRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const itemRefs = useRef(new Map<string, HTMLElement>());
   const menuItemsQuery = useMenuItems();
-  const dashboardQuery = useDailyDashboard({ date: today() });
+  const dashboardQuery = useDailyDashboard();
   const createMenuItem = useCreateMenuItem();
   const updateMenuItem = useUpdateMenuItem();
   const isDesktopPanel = useIsDesktopPanel();
@@ -346,8 +374,9 @@ export const MenuPage = () => {
   };
 
   const panelItem = isDesktopPanel ? selectedItem : selectedItemId ? selectedItem : null;
-  const panelItemQuantitySoldToday = panelItem
-    ? (dashboardQuery.data?.topVarieties.find((variety) => variety.menuItemId === panelItem.id)
+  const selectedVarietySales = dashboardQuery.data?.varietySales?.[salesPeriod] ?? [];
+  const panelItemQuantitySold = panelItem
+    ? (selectedVarietySales.find((variety: DashboardTopVariety) => variety.menuItemId === panelItem.id)
         ?.quantity ?? 0)
     : 0;
   const hasSidePanel = Boolean(editingItem || isCreating || panelItem);
@@ -828,7 +857,9 @@ export const MenuPage = () => {
               </div>
               <MenuItemDetailAnalytics
                 item={panelItem}
-                quantitySoldToday={panelItemQuantitySoldToday}
+                onSalesPeriodChange={setSalesPeriod}
+                quantitySold={panelItemQuantitySold}
+                salesPeriod={salesPeriod}
               />
               <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
                 <button
@@ -1029,7 +1060,9 @@ export const MenuPage = () => {
                   </div>
                   <MenuItemDetailAnalytics
                     item={panelItem}
-                    quantitySoldToday={panelItemQuantitySoldToday}
+                    onSalesPeriodChange={setSalesPeriod}
+                    quantitySold={panelItemQuantitySold}
+                    salesPeriod={salesPeriod}
                   />
                   <button
                     className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-primary bg-primary px-4 py-2 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"

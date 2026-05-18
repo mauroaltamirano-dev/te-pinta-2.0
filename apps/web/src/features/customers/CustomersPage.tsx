@@ -519,6 +519,12 @@ export const CustomersPage = () => {
               </p>
             ) : null}
 
+            {deleteCustomer.isError ? (
+              <p className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                No se pudo eliminar: ese cliente tiene pedidos asociados. Primero fusioná o mové sus pedidos a otro cliente.
+              </p>
+            ) : null}
+
             <div className="mt-5 grid gap-3">
               {filteredCustomers.map((customer) => {
                 const hasAddress = Boolean(customer.address?.trim());

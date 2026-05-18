@@ -91,7 +91,11 @@ export type OrderListResult = {
   stats: OrderListStats;
 };
 
-export type PersistOrderItem = Omit<OrderItemDetail, 'id'> & { id: string };
+export type PersistOrderItem = Omit<OrderItemDetail, 'id'> & {
+  id: string;
+  priceUnit?: number;
+  priceDozen?: number;
+};
 export type PersistOrderAddon = Omit<OrderAddonDetail, 'id'> & { id: string };
 
 export type PersistOrderInput = {

@@ -21,7 +21,13 @@ export type OrderPromotionConfig = {
 };
 
 export type CalculateOrderPromotionInput = {
-  items: { quantity: number; subtotal: number; priceHalfDozen?: number }[];
+  items: {
+    quantity: number;
+    subtotal: number;
+    priceUnit?: number;
+    priceHalfDozen?: number;
+    priceDozen?: number;
+  }[];
   addons?: { quantity: number; subtotal: number }[];
   manualDiscountPercent?: number;
   deliveryFee?: number;
@@ -113,29 +119,39 @@ export const calculateOrderPromotion = ({
 
   let promoItemsSubtotal = itemsSubtotal;
 
-  const halfDozenGroups = items.flatMap((item) => {
-    const halfDozensOutsideFullDozens = Math.floor((item.quantity % 12) / 6);
-    if (halfDozensOutsideFullDozens === 0) {
+  const combinedUnitValues = items.flatMap((item) => {
+    const remainingQuantity = item.quantity % config.combinedDozenQuantity;
+    if (remainingQuantity === 0) {
       return [];
     }
 
-    const halfDozenPrice = item.priceHalfDozen ?? (item.quantity === 6 ? item.subtotal : 0);
-    if (halfDozenPrice <= 0) {
-      return [];
+    const safeUnitPrice = toSafeNonNegative(item.priceUnit, item.subtotal / item.quantity);
+    const safeHalfDozenPrice = toSafeNonNegative(item.priceHalfDozen);
+    const halfDozens = Math.floor(remainingQuantity / 6);
+    const units = remainingQuantity % 6;
+    const values: number[] = [];
+
+    for (let group = 0; group < halfDozens; group += 1) {
+      const halfDozenUnitValue = safeHalfDozenPrice > 0 ? safeHalfDozenPrice / 6 : safeUnitPrice;
+      values.push(...Array.from({ length: 6 }, () => halfDozenUnitValue));
     }
 
-    return Array.from({ length: halfDozensOutsideFullDozens }, () => halfDozenPrice);
+    values.push(...Array.from({ length: units }, () => safeUnitPrice));
+
+    return values;
   });
 
   const combinedDozens =
-    items.length > 1 && config.combinedDozenPrice > 0 ? Math.floor(halfDozenGroups.length / 2) : 0;
+    items.length > 1 && config.combinedDozenPrice > 0
+      ? Math.floor(combinedUnitValues.length / config.combinedDozenQuantity)
+      : 0;
 
   if (combinedDozens > 0) {
-    const combinedHalfPrices = [...halfDozenGroups]
-      .sort((left, right) => right - left)
-      .slice(0, combinedDozens * 2);
     const combinedBaseSubtotal = roundMoney(
-      combinedHalfPrices.reduce((total, price) => total + price, 0),
+      [...combinedUnitValues]
+        .sort((left, right) => right - left)
+        .slice(0, combinedDozens * config.combinedDozenQuantity)
+        .reduce((total, price) => total + price, 0),
     );
     const combinedPromoSubtotal = roundMoney(combinedDozens * config.combinedDozenPrice);
 
