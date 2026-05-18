@@ -2,6 +2,8 @@ services:
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: te_pinta
       POSTGRES_USER: te_pinta
