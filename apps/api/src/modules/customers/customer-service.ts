@@ -15,6 +15,7 @@ export type CustomerRepository = {
   list(): Promise<Customer[]>;
   create(customer: Customer): Promise<Customer>;
   update(id: string, updates: UpdateCustomerInput): Promise<Customer | null>;
+  countOrders(id: string): Promise<number>;
   delete(id: string): Promise<boolean>;
 };
 
@@ -50,6 +51,16 @@ export const updateCustomer = async (
 };
 
 export const deleteCustomer = async (id: string, repository: CustomerRepository): Promise<void> => {
+  const orderCount = await repository.countOrders(id);
+
+  if (orderCount > 0) {
+    throw new ApiError(
+      409,
+      'Customer has orders and cannot be deleted directly',
+      'CUSTOMER_HAS_ORDERS',
+    );
+  }
+
   const deleted = await repository.delete(id);
 
   if (!deleted) {

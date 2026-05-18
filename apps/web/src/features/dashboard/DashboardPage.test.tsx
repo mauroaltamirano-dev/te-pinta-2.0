@@ -92,7 +92,7 @@ describe('DashboardPage', () => {
         itemCount: 2,
         totalQuantity: 24,
       },
-    ]);
+    ] as any);
     vi.mocked(listCustomers).mockResolvedValue([
       { id: 'customer-1', name: 'Ana Pérez', phone: '1122334455', address: 'Av. Siempre Viva 742' },
       { id: 'customer-2', name: 'Mauro Altamirano', phone: '3537559269', address: 'Alcorta 66' },
@@ -133,7 +133,24 @@ describe('DashboardPage', () => {
         { menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 },
         { menuItemId: 'menu-2', name: 'Humita', quantity: 12 },
       ],
-    });
+      topClients: [{ customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 33600 }],
+      upcomingOrders: [],
+      nextSevenDays: [{ date: '2026-05-06', count: 3, revenue: 45600 }],
+      totals: {
+        orderCount: 3,
+        activeOrderCount: 1,
+        finalizedOrderCount: 2,
+        unpaidOrderCount: 1,
+        grossRevenue: 45600,
+        paidRevenue: 33600,
+        pendingRevenue: 12000,
+        estimatedCosts: 16000,
+        estimatedProfit: 29600,
+        totalUnits: 36,
+        averageTicket: 15200,
+      },
+      varietySales: { all: [], last30: [], last7: [], selectedDate: [] },
+    } as any);
   });
 
   it('shows daily order count, revenue, delivery shifts and top varieties', async () => {
@@ -141,13 +158,14 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Centro operativo')).toBeInTheDocument();
     expect(await screen.findByText('3')).toBeInTheDocument();
-    expect(screen.getByText('$ 45.600')).toBeInTheDocument();
+    expect(screen.getAllByText('$ 45.600').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/mediodía/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/noche/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Carne suave')).toBeInTheDocument();
     expect(screen.getByText(/24 u./i)).toBeInTheDocument();
     expect(screen.getByText(/alertas operativas/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /accesos rápidos/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /resumen financiero/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /accesos rápidos/i })).not.toBeInTheDocument();
   });
 
   it('reloads the dashboard for the selected date', async () => {

@@ -1174,7 +1174,9 @@ export const OrdersPage = () => {
         priceHalfDozen: menuItem.priceHalfDozen,
         priceDozen: menuItem.priceDozen,
       }).total,
+      priceUnit: menuItem.priceUnit,
       priceHalfDozen: menuItem.priceHalfDozen,
+      priceDozen: menuItem.priceDozen,
     }));
     const deliveryFee = form.deliveryType === 'envio' ? (deliveryFeeQuery.data ?? 0) : 0;
     const pricing = calculateOrderPromotion({
@@ -1197,6 +1199,9 @@ export const OrdersPage = () => {
     selectedAddons,
     selectedItems,
   ]);
+  const combinedDozenPromo = preview.appliedPromotions.find(
+    (promotion) => promotion.key === 'combined_dozen',
+  );
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -1778,7 +1783,7 @@ export const OrdersPage = () => {
 
   const orderForm = (
     <form
-      className="grid gap-5 rounded-[2rem] bg-[#FCF8F2] p-2 text-[#2D2622] lg:grid-cols-[minmax(0,1fr)_23rem]"
+      className="grid items-start gap-5 rounded-[2rem] bg-[#FCF8F2] p-2 text-[#2D2622] lg:grid-cols-[minmax(0,1fr)_23rem]"
       noValidate
       onSubmit={handleSubmit}
     >
@@ -2264,7 +2269,7 @@ export const OrdersPage = () => {
 
       <aside
         aria-label="Preview de total"
-        className="h-fit rounded-[1.75rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-xl shadow-[#B54431]/10 lg:sticky lg:top-4 sm:p-5"
+        className="rounded-[1.75rem] border border-[#E8D3BF] bg-[#FFFDF9] p-4 shadow-xl shadow-[#B54431]/10 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto sm:p-5"
       >
         <h4 className="flex items-center gap-2 text-base font-black text-[#2D2622]">
           <ReceiptText className="h-4 w-4 text-[#B54431]" />
@@ -2380,49 +2385,56 @@ export const OrdersPage = () => {
         <div className="mt-5 rounded-2xl border border-[#E8D3BF] bg-[#FCF8F2] p-4">
           <div className="space-y-2 text-sm text-[#74655B]">
             <div className="flex justify-between gap-4">
-              <span>Subtotal {formatMoney(preview.subtotal)}</span>
-              <span aria-hidden="true" className="font-bold tabular-nums text-[#2D2622]">
+              <span>Subtotal</span>
+              <span className="font-bold tabular-nums text-[#2D2622]">
                 {formatMoney(preview.subtotal)}
               </span>
             </div>
+            {combinedDozenPromo && (
+              <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700 ring-1 ring-emerald-100">
+                <div className="flex justify-between gap-4">
+                  <span className="font-black">{combinedDozenPromo.label}</span>
+                  <span className="font-black tabular-nums">-{formatMoney(combinedDozenPromo.amount)}</span>
+                </div>
+                <p className="mt-0.5 text-xs font-bold text-emerald-700/80">
+                  {selectedUnitCount} unidades combinadas aplican precio por docena.
+                </p>
+              </div>
+            )}
             {preview.promoSubtotal !== preview.subtotal && (
               <div className="flex justify-between gap-4">
-                <span>Promo docena {formatMoney(preview.promoSubtotal)}</span>
-                <span aria-hidden="true" className="font-bold tabular-nums text-[#088954]">
+                <span>Subtotal con promos</span>
+                <span className="font-bold tabular-nums text-[#088954]">
                   {formatMoney(preview.promoSubtotal)}
                 </span>
               </div>
             )}
             {preview.addonsSubtotal > 0 && (
               <div className="flex justify-between gap-4">
-                <span>Toppings {formatMoney(preview.addonsSubtotal)}</span>
-                <span aria-hidden="true" className="font-bold tabular-nums text-[#2D2622]">
+                <span>Adicionales</span>
+                <span className="font-bold tabular-nums text-[#2D2622]">
                   {formatMoney(preview.addonsSubtotal)}
                 </span>
               </div>
             )}
             {preview.deliveryFee > 0 && (
               <div className="flex justify-between gap-4">
-                <span>Delivery {formatMoney(preview.deliveryFee)}</span>
-                <span aria-hidden="true" className="font-bold tabular-nums text-[#2D2622]">
+                <span>Delivery</span>
+                <span className="font-bold tabular-nums text-[#2D2622]">
                   {formatMoney(preview.deliveryFee)}
                 </span>
               </div>
             )}
             <div className="flex justify-between gap-4">
-              <span>
-                Descuento ({preview.discountPercent}%) −{formatMoney(preview.discount)}
-              </span>
-              <span aria-hidden="true" className="font-bold tabular-nums text-[#088954]">
-                −{formatMoney(preview.discount)}
+              <span>Descuento ({preview.discountPercent}%)</span>
+              <span className="font-bold tabular-nums text-[#088954]">
+                -{formatMoney(preview.discount)}
               </span>
             </div>
           </div>
           <div className="mt-4 flex items-end justify-between gap-4 border-t border-[#E8D3BF] pt-4">
-            <span className="text-sm font-black text-[#2D2622]">
-              Total del pedido {formatMoney(preview.total)}
-            </span>
-            <span aria-hidden="true" className="text-2xl font-black tabular-nums text-[#B54431]">
+            <span className="text-sm font-black text-[#2D2622]">Total del pedido</span>
+            <span className="text-2xl font-black tabular-nums text-[#B54431]">
               {formatMoney(preview.total)}
             </span>
           </div>

@@ -75,6 +75,27 @@ describe('calculateOrderPromotion', () => {
     });
   });
 
+
+  it('applies the combined dozen promo to any 12 mixed units across varieties', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [
+          { quantity: 5, subtotal: 7750, priceUnit: 1550, priceHalfDozen: 8500 },
+          { quantity: 5, subtotal: 7750, priceUnit: 1550, priceHalfDozen: 8500 },
+          { quantity: 1, subtotal: 1450, priceUnit: 1450, priceHalfDozen: 8000 },
+          { quantity: 1, subtotal: 1550, priceUnit: 1550, priceHalfDozen: 8500 },
+        ],
+      }),
+    ).toMatchObject({
+      subtotal: 18500,
+      totalQuantity: 12,
+      promoSubtotal: 15000,
+      discount: 0,
+      total: 15000,
+      appliedPromotions: [{ key: 'combined_dozen', amount: 3500 }],
+    });
+  });
+
   it('applies the combined dozen promo to several split dozens', () => {
     expect(
       calculateOrderPromotion({

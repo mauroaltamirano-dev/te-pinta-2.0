@@ -51,7 +51,8 @@ describe('CustomersPage', () => {
     vi.resetAllMocks();
     mockDesktopViewport(true);
     Element.prototype.scrollIntoView = vi.fn();
-    vi.mocked(listOrders).mockResolvedValue([
+    vi.mocked(listOrders).mockResolvedValue({
+      orders: [
       {
         id: 'order-3',
         customer: {
@@ -118,7 +119,10 @@ describe('CustomersPage', () => {
         itemCount: 1,
         totalQuantity: 6,
       },
-    ]);
+      ],
+      pagination: { page: 1, pageSize: 25, total: 3, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+      stats: { active: 2, finalized: 1 },
+    });
     vi.mocked(listCustomers).mockResolvedValue([
       {
         id: 'customer-1',

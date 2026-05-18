@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -6,21 +6,17 @@ import {
   CircleDollarSign,
   ClipboardList,
   Clock3,
-  PackagePlus,
+  ReceiptText,
   Search,
   ShoppingBasket,
   TrendingUp,
+  Trophy,
   Truck,
-  Users,
-  Wheat,
+  Wallet,
 } from 'lucide-react';
 
-import type { DeliveryTime, OrderStatus } from '@te-pinta/shared';
+import type { DeliveryTime } from '@te-pinta/shared';
 
-import { useCustomers } from '../customers/customers-hooks';
-import { useIngredients } from '../ingredients/ingredients-hooks';
-import { useMenuItems } from '../menu/menu-hooks';
-import { useOrders } from '../orders/orders-hooks';
 import { PageHero } from '@/components/layout/PageHero';
 
 import { useDailyDashboard } from './dashboard-hooks';
@@ -29,12 +25,6 @@ const deliveryLabels: Record<DeliveryTime, string> = {
   mediodia: 'Mediodía',
   tarde: 'Tarde',
   noche: 'Noche',
-};
-
-const statusLabels: Record<OrderStatus, string> = {
-  confirmado: 'Confirmado',
-  preparado: 'Preparado',
-  entregado: 'Entregado',
 };
 
 const weekdayFormatter = new Intl.DateTimeFormat('es-AR', { weekday: 'short' });
@@ -52,132 +42,41 @@ const parseLocalDate = (date: string): Date => {
   return new Date(year || 0, (month || 1) - 1, day || 1);
 };
 
-const addDays = (date: Date, days: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-};
-
 const today = (): string => toLocalIsoDate(new Date());
 
 const formatMoney = (value: number): string => `$ ${Math.round(value).toLocaleString('es-AR')}`;
-
 const formatDateLabel = (date: string): string => dateFormatter.format(parseLocalDate(date));
 
-const isFinalized = (order: { status: OrderStatus; isPaid: boolean }) =>
-  order.status === 'entregado' && order.isPaid;
-
 const kpiCardClassName =
-  'rounded-2xl border border-border/70 bg-white/85 p-4 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft';
+  'relative overflow-hidden rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-soft';
 
 export const DashboardPage = () => {
   const [date, setDate] = useState(today);
   const dashboardQuery = useDailyDashboard({ date });
-  const ordersQuery = useOrders({ pageSize: 100, sortBy: 'deliveryDate', sortDir: 'asc' });
-  const customersQuery = useCustomers();
-  const menuQuery = useMenuItems();
-  const ingredientsQuery = useIngredients();
-
   const dashboard = dashboardQuery.data;
-  const orders = ordersQuery.data?.orders ?? [];
-  const customers = customersQuery.data ?? [];
-  const menuItems = menuQuery.data ?? [];
-  const ingredients = ingredientsQuery.data ?? [];
-  const todayIso = today();
-  const tomorrowIso = toLocalIsoDate(addDays(new Date(), 1));
+  const totals = dashboard?.totals;
+  const maxCalendarCount = Math.max(1, ...(dashboard?.nextSevenDays?.map((day) => day.count) ?? [0]));
+  const maxShiftCount = Math.max(1, ...(dashboard ? Object.values(dashboard.deliveryShifts) : [0]));
 
-  const operations = useMemo(() => {
-    const activeOrders = orders.filter((order) => !isFinalized(order));
-    const unpaidOrders = orders.filter((order) => !order.isPaid);
-    const overdueOrders = activeOrders.filter((order) => order.deliveryDate < todayIso);
-    const todayOrders = orders.filter((order) => order.deliveryDate === todayIso);
-    const tomorrowOrders = orders.filter((order) => order.deliveryDate === tomorrowIso);
-    const selectedDateOrders = orders.filter((order) => order.deliveryDate === date);
-    const nextSevenDays = Array.from({ length: 7 }, (_, index) => {
-      const currentDate = toLocalIsoDate(addDays(new Date(), index));
-      const dayOrders = orders.filter((order) => order.deliveryDate === currentDate);
-      return {
-        date: currentDate,
-        count: dayOrders.length,
-        revenue: dayOrders.reduce((total, order) => total + order.total, 0),
-      };
-    });
-    const maxCalendarCount = Math.max(1, ...nextSevenDays.map((day) => day.count));
-    const unpaidTotal = unpaidOrders.reduce((total, order) => total + order.total, 0);
-    const selectedDateUnits = selectedDateOrders.reduce(
-      (total, order) => total + order.totalQuantity,
-      0,
-    );
-
-    return {
-      activeOrders,
-      overdueOrders,
-      selectedDateOrders,
-      selectedDateUnits,
-      todayOrders,
-      tomorrowOrders,
-      unpaidOrders,
-      unpaidTotal,
-      nextSevenDays,
-      maxCalendarCount,
-    };
-  }, [date, orders, todayIso, tomorrowIso]);
-
-  const alerts = useMemo(() => {
-    const items: { label: string; detail: string; tone: string }[] = [];
-
-    if (operations.overdueOrders.length > 0) {
-      items.push({
-        label: `${operations.overdueOrders.length} pedido(s) vencidos`,
-        detail: 'Revisar entregas pendientes de fechas anteriores.',
-        tone: 'border-red-200 bg-red-50 text-red-700',
-      });
-    }
-    if (operations.unpaidOrders.length > 0) {
-      items.push({
-        label: `${operations.unpaidOrders.length} pedido(s) sin pagar`,
-        detail: `${formatMoney(operations.unpaidTotal)} pendientes de cobrar.`,
-        tone: 'border-amber-200 bg-amber-50 text-amber-800',
-      });
-    }
-    if (operations.todayOrders.length > 0) {
-      items.push({
-        label: `${operations.todayOrders.length} pedido(s) para hoy`,
-        detail: 'Prioridad operativa del día.',
-        tone: 'border-primary/20 bg-primary/8 text-primary',
-      });
-    }
-    if (ingredients.length === 0) {
-      items.push({
-        label: 'Sin ingredientes cargados',
-        detail: 'Completá insumos para controlar costos.',
-        tone: 'border-sky-200 bg-sky-50 text-sky-800',
-      });
-    }
-
-    return items.slice(0, 4);
-  }, [ingredients.length, operations]);
-
-  const topUpcomingOrders = operations.activeOrders
-    .slice()
-    .sort(
-      (a, b) =>
-        a.deliveryDate.localeCompare(b.deliveryDate) ||
-        a.deliveryTime.localeCompare(b.deliveryTime) ||
-        a.customer.name.localeCompare(b.customer.name, 'es-AR'),
-    )
-    .slice(0, 5);
-
-  const quickActions = [
-    { label: 'Nuevo pedido', href: '/orders', icon: PackagePlus, hint: 'Cargar venta' },
-    {
-      label: 'Ver pedidos',
-      href: '/orders',
-      icon: ClipboardList,
-      hint: 'Agenda y estados',
-    },
-    { label: 'Menú', href: '/menu', icon: ShoppingBasket, hint: 'Variedades' },
-    { label: 'Clientes', href: '/customers', icon: Users, hint: 'Historial' },
+  const alerts = [
+    ...(totals && totals.unpaidOrderCount > 0
+      ? [
+          {
+            label: `${totals.unpaidOrderCount} pedido(s) sin pagar`,
+            detail: `${formatMoney(totals.pendingRevenue)} pendientes de cobrar.`,
+            tone: 'border-amber-200 bg-amber-50 text-amber-800',
+          },
+        ]
+      : []),
+    ...(totals && totals.activeOrderCount > 0
+      ? [
+          {
+            label: `${totals.activeOrderCount} pedido(s) activos`,
+            detail: 'Seguimiento de producción, entregas y cobros pendientes.',
+            tone: 'border-primary/20 bg-primary/8 text-primary',
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -185,7 +84,7 @@ export const DashboardPage = () => {
       <PageHero
         eyebrow="Centro operativo"
         title="Dashboard"
-        description="Ventas, pedidos críticos, calendario cercano y accesos rápidos para operar sin perder contexto."
+        description="Ventas, costos, ganancias, clientes principales y agenda real de Te Pinta."
       >
         <div className="w-full rounded-3xl border border-white/10 bg-white/10 p-2 shadow-inner backdrop-blur sm:w-auto">
           <div className="grid gap-2 sm:grid-cols-[minmax(13rem,1fr)_auto] sm:items-center">
@@ -223,85 +122,116 @@ export const DashboardPage = () => {
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <article className={kpiCardClassName}>
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ClipboardList className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-                Pedidos del día
-              </p>
-              <p className="text-2xl font-black text-foreground tabular-nums">
-                {dashboard?.orderCount ?? operations.selectedDateOrders.length}
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs font-bold text-muted-foreground">
-            {operations.selectedDateUnits} unidades para {formatDateLabel(date)}.
+          <ClipboardList className="h-6 w-6 text-primary" aria-hidden="true" />
+          <p className="mt-4 text-xs font-black uppercase tracking-wide text-muted-foreground">
+            Pedidos totales
+          </p>
+          <p className="mt-1 text-3xl font-black tabular-nums text-foreground">
+            {totals?.orderCount ?? 0}
+          </p>
+          <p className="mt-2 text-xs font-bold text-muted-foreground">
+            {dashboard?.orderCount ?? 0} para {formatDateLabel(date)}.
           </p>
         </article>
 
         <article className={kpiCardClassName}>
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-              <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-                Facturación
-              </p>
-              <p className="text-2xl font-black text-foreground tabular-nums">
-                {formatMoney(dashboard?.totalRevenue ?? 0)}
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs font-bold text-muted-foreground">
-            Total estimado del día seleccionado.
+          <CircleDollarSign className="h-6 w-6 text-emerald-700" aria-hidden="true" />
+          <p className="mt-4 text-xs font-black uppercase tracking-wide text-muted-foreground">
+            Bruto vendido
+          </p>
+          <p className="mt-1 text-3xl font-black tabular-nums text-foreground">
+            {formatMoney(totals?.grossRevenue ?? 0)}
+          </p>
+          <p className="mt-2 text-xs font-bold text-muted-foreground">
+            Cobrado: {formatMoney(totals?.paidRevenue ?? 0)}.
           </p>
         </article>
 
         <article className={kpiCardClassName}>
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800">
-              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-                Alertas
-              </p>
-              <p className="text-2xl font-black text-foreground tabular-nums">{alerts.length}</p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs font-bold text-muted-foreground">
-            {operations.unpaidOrders.length} sin pagar · {operations.overdueOrders.length} vencidos.
+          <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
+          <p className="mt-4 text-xs font-black uppercase tracking-wide text-muted-foreground">
+            Ganancia estimada
+          </p>
+          <p className="mt-1 text-3xl font-black tabular-nums text-foreground">
+            {formatMoney(totals?.estimatedProfit ?? 0)}
+          </p>
+          <p className="mt-2 text-xs font-bold text-muted-foreground">
+            Costos: {formatMoney(totals?.estimatedCosts ?? 0)}.
           </p>
         </article>
 
         <article className={kpiCardClassName}>
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-100 text-sky-700">
-              <TrendingUp className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-                Base activa
-              </p>
-              <p className="text-2xl font-black text-foreground tabular-nums">
-                {customers.length +
-                  menuItems.filter((item) => item.isActive).length +
-                  ingredients.length}
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs font-bold text-muted-foreground">
-            Clientes, variedades activas e insumos.
+          <Wallet className="h-6 w-6 text-amber-700" aria-hidden="true" />
+          <p className="mt-4 text-xs font-black uppercase tracking-wide text-muted-foreground">
+            Pendiente de cobrar
+          </p>
+          <p className="mt-1 text-3xl font-black tabular-nums text-foreground">
+            {formatMoney(totals?.pendingRevenue ?? 0)}
+          </p>
+          <p className="mt-2 text-xs font-bold text-muted-foreground">
+            Ticket prom.: {formatMoney(totals?.averageTicket ?? 0)}.
           </p>
         </article>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.75fr)]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
         <div className="space-y-6">
-          <section className="rounded-2xl border border-border/70 bg-white/85 p-4 shadow-card sm:p-5">
+          <section className="grid gap-6 lg:grid-cols-3">
+            <article className="rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card lg:col-span-2">
+              <div className="flex items-center gap-2">
+                <ReceiptText className="h-5 w-5 text-primary" aria-hidden="true" />
+                <h2 className="text-lg font-black text-foreground">Resumen financiero</h2>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {[
+                  ['Venta bruta', totals?.grossRevenue ?? 0],
+                  ['Cobrado', totals?.paidRevenue ?? 0],
+                  ['Costos estimados', totals?.estimatedCosts ?? 0],
+                  ['Ganancia estimada', totals?.estimatedProfit ?? 0],
+                ].map(([label, value]) => (
+                  <div className="rounded-2xl bg-background px-4 py-3 ring-1 ring-border/70" key={label}>
+                    <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                      {label}
+                    </p>
+                    <p className="mt-1 text-xl font-black tabular-nums text-foreground">
+                      {formatMoney(Number(value))}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800 ring-1 ring-amber-100">
+                Los costos se estiman con el costo por docena de cada variedad. Gastos manuales o compras todavía no están cargados en la app nueva.
+              </p>
+            </article>
+
+            <article className="rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-primary" aria-hidden="true" />
+                <h2 className="text-lg font-black text-foreground">Franjas</h2>
+              </div>
+              <div className="mt-5 grid gap-3">
+                {(['mediodia', 'tarde', 'noche'] as DeliveryTime[]).map((shift) => {
+                  const count = dashboard?.deliveryShifts[shift] ?? 0;
+                  return (
+                    <div className="rounded-2xl bg-background p-3 ring-1 ring-border/70" key={shift}>
+                      <div className="flex items-center justify-between text-sm font-black">
+                        <span className="text-foreground">{deliveryLabels[shift]}</span>
+                        <span className="text-primary">{count}</span>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full bg-white ring-1 ring-border/60">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.round((count / maxShiftCount) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </article>
+          </section>
+
+          <section className="rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-black text-foreground">Calendario cercano</h2>
@@ -318,12 +248,9 @@ export const DashboardPage = () => {
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
-              {operations.nextSevenDays.map((day, index) => {
-                const isToday = day.date === todayIso;
-                const height = Math.max(
-                  10,
-                  Math.round((day.count / operations.maxCalendarCount) * 58),
-                );
+              {(dashboard?.nextSevenDays ?? []).map((day, index) => {
+                const isToday = day.date === today();
+                const height = Math.max(10, Math.round((day.count / maxCalendarCount) * 58));
 
                 return (
                   <article
@@ -364,47 +291,14 @@ export const DashboardPage = () => {
           </section>
 
           <section className="grid gap-6 lg:grid-cols-2">
-            <article className="rounded-2xl border border-border/70 bg-white/85 p-4 shadow-card sm:p-5">
-              <div className="flex items-center gap-2">
-                <Truck className="h-5 w-5 text-primary" aria-hidden="true" />
-                <h2 className="text-lg font-black text-foreground">Franjas del día</h2>
-              </div>
-              <div className="mt-5 grid gap-3">
-                {(['mediodia', 'tarde', 'noche'] as DeliveryTime[]).map((shift) => {
-                  const count = dashboard?.deliveryShifts[shift] ?? 0;
-                  const max = Math.max(
-                    1,
-                    ...(dashboard ? Object.values(dashboard.deliveryShifts) : [0]),
-                  );
-                  return (
-                    <div
-                      className="rounded-2xl bg-background p-3 ring-1 ring-border/70"
-                      key={shift}
-                    >
-                      <div className="flex items-center justify-between text-sm font-black">
-                        <span className="text-foreground">{deliveryLabels[shift]}</span>
-                        <span className="text-primary">{count}</span>
-                      </div>
-                      <div className="mt-2 h-2 rounded-full bg-white ring-1 ring-border/60">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${Math.round((count / max) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </article>
-
-            <article className="rounded-2xl border border-border/70 bg-white/85 p-4 shadow-card sm:p-5">
+            <article className="rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card">
               <div className="flex items-center gap-2">
                 <ShoppingBasket className="h-5 w-5 text-primary" aria-hidden="true" />
-                <h2 className="text-lg font-black text-foreground">Top variedades</h2>
+                <h2 className="text-lg font-black text-foreground">Top variedades del día</h2>
               </div>
               <div className="mt-5 grid gap-3">
                 {dashboard?.topVarieties.length ? (
-                  dashboard.topVarieties.slice(0, 5).map((variety, index) => (
+                  dashboard.topVarieties.slice(0, 6).map((variety, index) => (
                     <div
                       className="flex items-center justify-between gap-3 rounded-2xl bg-background px-3 py-2 ring-1 ring-border/70"
                       key={variety.menuItemId}
@@ -425,11 +319,42 @@ export const DashboardPage = () => {
                 )}
               </div>
             </article>
+
+            <article className="rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-primary" aria-hidden="true" />
+                <h2 className="text-lg font-black text-foreground">Mejores clientes</h2>
+              </div>
+              <div className="mt-5 grid gap-3">
+                {dashboard?.topClients?.length ? (
+                  dashboard.topClients.map((client, index) => (
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-2xl bg-background px-3 py-2 ring-1 ring-border/70"
+                      key={client.customerId}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-black text-foreground">{client.name}</p>
+                        <p className="text-xs font-bold text-muted-foreground">
+                          #{index + 1} · {client.orderCount} pedidos
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 ring-1 ring-emerald-100">
+                        {formatMoney(client.totalRevenue)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-2xl bg-background px-4 py-3 text-sm font-semibold text-muted-foreground ring-1 ring-border/70">
+                    Todavía no hay clientes con ventas.
+                  </p>
+                )}
+              </div>
+            </article>
           </section>
         </div>
 
         <aside className="space-y-6">
-          <section className="rounded-2xl border border-border/70 bg-white/85 p-4 shadow-card sm:p-5">
+          <section className="rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-primary" aria-hidden="true" />
               <h2 className="text-lg font-black text-foreground">Alertas operativas</h2>
@@ -437,10 +362,7 @@ export const DashboardPage = () => {
             <div className="mt-5 grid gap-3">
               {alerts.length ? (
                 alerts.map((alert) => (
-                  <article
-                    className={`rounded-2xl border px-3 py-3 ${alert.tone}`}
-                    key={alert.label}
-                  >
+                  <article className={`rounded-2xl border px-3 py-3 ${alert.tone}`} key={alert.label}>
                     <p className="font-black">{alert.label}</p>
                     <p className="mt-1 text-xs font-bold opacity-80">{alert.detail}</p>
                   </article>
@@ -457,29 +379,25 @@ export const DashboardPage = () => {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-border/70 bg-white/85 p-4 shadow-card sm:p-5">
+          <section className="rounded-3xl border border-border/70 bg-white/90 p-5 shadow-card">
             <div className="flex items-center gap-2">
               <Clock3 className="h-5 w-5 text-primary" aria-hidden="true" />
               <h2 className="text-lg font-black text-foreground">Próximos pedidos</h2>
             </div>
             <div className="mt-5 grid gap-3">
-              {topUpcomingOrders.length ? (
-                topUpcomingOrders.map((order) => (
-                  <article
-                    className="rounded-2xl bg-background px-3 py-3 ring-1 ring-border/70"
-                    key={order.id}
-                  >
+              {dashboard?.upcomingOrders?.length ? (
+                dashboard.upcomingOrders.map((order) => (
+                  <article className="rounded-2xl bg-background px-3 py-3 ring-1 ring-border/70" key={order.id}>
                     <div className="flex items-center justify-between gap-3">
                       <p className="min-w-0 truncate font-black text-foreground">
-                        {order.customer.name}
+                        {order.customerName}
                       </p>
                       <p className="font-black tabular-nums text-foreground">
                         {formatMoney(order.total)}
                       </p>
                     </div>
                     <p className="mt-1 text-xs font-bold text-muted-foreground">
-                      {formatDateLabel(order.deliveryDate)} · {deliveryLabels[order.deliveryTime]} ·{' '}
-                      {statusLabels[order.status]}
+                      {formatDateLabel(order.deliveryDate)} · {deliveryLabels[order.deliveryTime]}
                     </p>
                   </article>
                 ))
@@ -489,58 +407,6 @@ export const DashboardPage = () => {
                 </p>
               )}
             </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-sidebar p-4 text-card shadow-premium sm:p-5">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  'radial-gradient(circle at 10% -20%, rgba(210, 138, 45, 0.22), transparent 12rem), radial-gradient(circle at 100% 20%, rgba(181, 74, 50, 0.2), transparent 11rem)',
-              }}
-            />
-            <div className="relative">
-              <h2 className="text-lg font-black text-white">Accesos rápidos</h2>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                {quickActions.map(({ label, href, icon: Icon, hint }) => (
-                  <Link
-                    className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/10 px-3 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
-                    key={label}
-                    to={href}
-                  >
-                    <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-primary shadow-card transition group-hover:scale-105">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
-                    <span className="mt-3 block text-sm font-black text-white">{label}</span>
-                    <span className="mt-1 block text-[0.68rem] font-bold uppercase tracking-wide text-sidebar-muted">
-                      {hint}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="grid grid-cols-3 gap-3">
-            <article className="rounded-2xl border border-border/70 bg-white/85 p-3 text-center shadow-card">
-              <Users className="mx-auto h-5 w-5 text-primary" aria-hidden="true" />
-              <p className="mt-2 text-xl font-black text-foreground">{customers.length}</p>
-              <p className="text-[0.68rem] font-black uppercase text-muted-foreground">Clientes</p>
-            </article>
-            <article className="rounded-2xl border border-border/70 bg-white/85 p-3 text-center shadow-card">
-              <ShoppingBasket className="mx-auto h-5 w-5 text-primary" aria-hidden="true" />
-              <p className="mt-2 text-xl font-black text-foreground">
-                {menuItems.filter((item) => item.isActive).length}
-              </p>
-              <p className="text-[0.68rem] font-black uppercase text-muted-foreground">Activas</p>
-            </article>
-            <article className="rounded-2xl border border-border/70 bg-white/85 p-3 text-center shadow-card">
-              <Wheat className="mx-auto h-5 w-5 text-primary" aria-hidden="true" />
-              <p className="mt-2 text-xl font-black text-foreground">{ingredients.length}</p>
-              <p className="text-[0.68rem] font-black uppercase text-muted-foreground">Insumos</p>
-            </article>
           </section>
         </aside>
       </section>

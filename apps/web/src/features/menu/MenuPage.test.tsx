@@ -62,7 +62,32 @@ describe('MenuPage', () => {
         { menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 },
         { menuItemId: 'menu-2', name: 'Humita', quantity: 6 },
       ],
-    });
+      topClients: [],
+      upcomingOrders: [],
+      nextSevenDays: [],
+      totals: {
+        orderCount: 3,
+        activeOrderCount: 1,
+        finalizedOrderCount: 2,
+        unpaidOrderCount: 0,
+        grossRevenue: 48000,
+        paidRevenue: 48000,
+        pendingRevenue: 0,
+        estimatedCosts: 18000,
+        estimatedProfit: 30000,
+        totalUnits: 30,
+        averageTicket: 16000,
+      },
+      varietySales: {
+        all: [
+          { menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 },
+          { menuItemId: 'menu-2', name: 'Humita', quantity: 6 },
+        ],
+        last30: [],
+        last7: [],
+        selectedDate: [],
+      },
+    } as any);
     vi.mocked(listMenuItems).mockResolvedValue([
       {
         id: 'menu-1',
