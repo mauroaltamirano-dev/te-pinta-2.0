@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/server.ts",
+    "db:import-legacy": "tsx src/db/import-legacy.ts"
   },
   "dependencies": {
     "@te-pinta/shared": "workspace:*",
