@@ -24,3 +24,20 @@ pnpm build
 ## Seguridad de entorno
 
 Las credenciales reales van en `.env` y no se commitean. Los ejemplos deben vivir en `.env.example`.
+
+## Self-host en notebook
+
+La configuración para correr **web + API + PostgreSQL** en la notebook vive en:
+
+- `deploy/self-host/compose.yml`
+- `deploy/self-host/.env.example`
+- `docs/self-host-notebook.md`
+
+Guía rápida:
+
+```bash
+cp deploy/self-host/.env.example deploy/self-host/.env
+docker compose -f deploy/self-host/compose.yml --env-file deploy/self-host/.env build
+docker compose -f deploy/self-host/compose.yml --env-file deploy/self-host/.env --profile tools run --rm migrate
+docker compose -f deploy/self-host/compose.yml --env-file deploy/self-host/.env up -d postgres api web
+```

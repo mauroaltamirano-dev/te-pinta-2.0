@@ -27,6 +27,7 @@ yarn-error.log*
 *.db
 *.sqlite
 *.sqlite3
+deploy/self-host/backups/
 
 # OS / editor
 .DS_Store
