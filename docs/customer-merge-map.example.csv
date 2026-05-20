@@ -1,0 +1,10 @@
+# Manual customer merge map.
+# Put the duplicate/old customer in duplicate_customer_id and the customer you want to keep in canonical_customer_id.
+# Run dry-run first:
+#   pnpm --filter @te-pinta/api db:merge-customers -- --file docs/customer-merge-map.example.csv
+# Execute only after reviewing the output:
+#   pnpm --filter @te-pinta/api db:merge-customers -- --file customer-merge-map.csv --execute
+# Optional delete of empty duplicates after moving orders:
+#   pnpm --filter @te-pinta/api db:merge-customers -- --file customer-merge-map.csv --execute --delete-duplicates
+duplicate_customer_id,canonical_customer_id,note
+legacy_client_old-id-here,new_customer_id_here,"Example: Nicolas old profile into current Nicolas"

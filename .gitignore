@@ -28,6 +28,8 @@ yarn-error.log*
 *.sqlite
 *.sqlite3
 deploy/self-host/backups/
+/customer-merge-map.csv
+/customer-merge-map.*.csv
 
 # OS / editor
 .DS_Store
@@ -39,3 +41,5 @@ deploy/self-host/backups/
 # Local agent artifacts
 .atl/
 .vercel
+
+/customer-history-manual/
