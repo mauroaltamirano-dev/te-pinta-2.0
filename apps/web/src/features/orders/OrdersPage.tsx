@@ -37,7 +37,6 @@ import {
 import {
   calculateItemPrice,
   calculateOrderPromotion,
-  type AppliedPromotion,
   type CreateOrderInput,
   type DeliveryTime,
   type OrderFilters,
@@ -348,14 +347,6 @@ const formatDozenLabel = (quantity?: number): string => {
     ? String(dozens)
     : dozens.toLocaleString('es-AR', { maximumFractionDigits: 2 });
   return `${label} ${dozens === 1 ? 'docena' : 'docenas'}`;
-};
-
-const getPromotionDisplayLabel = (promotion: AppliedPromotion, discountPercent: number): string => {
-  if (promotion.key === 'bulk_dozen') {
-    return `${discountPercent}% descuento 3+ docenas`;
-  }
-
-  return promotion.label;
 };
 
 const getOrderDetailPricing = (detail: OrderDetail) => {

@@ -1,4 +1,4 @@
-import type { DashboardQuery, DeliveryTime } from '@te-pinta/shared';
+import type { DashboardQuery, DeliveryTime, OrderStatus } from '@te-pinta/shared';
 
 import { apiClient } from '@/lib/api-client';
 
@@ -20,7 +20,7 @@ export type DashboardUpcomingOrder = {
   customerName: string;
   deliveryDate: string;
   deliveryTime: DeliveryTime;
-  status: string;
+  status: OrderStatus;
   total: number;
 };
 
@@ -28,6 +28,24 @@ export type DashboardCalendarDay = {
   date: string;
   count: number;
   revenue: number;
+};
+
+export type DashboardStatusSummary = {
+  confirmed: number;
+  inProduction: number;
+  ready: number;
+  delivered: number;
+  total: number;
+};
+
+export type DashboardRecentOrder = {
+  id: string;
+  customerName: string;
+  deliveryDate: string;
+  deliveryTime: DeliveryTime;
+  status: OrderStatus;
+  isPaid: boolean;
+  total: number;
 };
 
 export type DashboardTotals = {
@@ -53,6 +71,9 @@ export type DailyDashboard = {
   topClients: DashboardTopClient[];
   upcomingOrders: DashboardUpcomingOrder[];
   nextSevenDays: DashboardCalendarDay[];
+  lastSevenDays: DashboardCalendarDay[];
+  statusSummary: DashboardStatusSummary;
+  recentOrders: DashboardRecentOrder[];
   totals: DashboardTotals;
   varietySales: {
     all: DashboardTopVariety[];

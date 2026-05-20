@@ -20,6 +20,7 @@ const order = (overrides: Partial<DashboardOrder> = {}): DashboardOrder => ({
   deliveryTime: 'noche',
   status: 'entregado',
   isPaid: true,
+  createdAt: new Date('2026-05-06T10:00:00.000Z'),
   subtotal: 15000,
   total: 15000,
   items: [item()],
@@ -82,6 +83,13 @@ describe('dashboard service', () => {
         pendingRevenue: 9000,
         totalUnits: 23,
         averageTicket: 9500,
+      },
+      statusSummary: {
+        confirmed: 1,
+        inProduction: 0,
+        ready: 0,
+        delivered: 2,
+        total: 3,
       },
       topClients: [
         { customerId: 'customer-1', name: 'Ana', orderCount: 2, totalRevenue: 19500 },

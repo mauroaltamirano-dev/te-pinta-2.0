@@ -34,6 +34,7 @@ export const createDashboardRepository = (db: DbClient): DashboardRepository => 
         deliveryTime: row.order.deliveryTime,
         status: row.order.status,
         isPaid: row.order.isPaid,
+        createdAt: row.order.createdAt,
         subtotal: Number(row.order.subtotal),
         total: Number(row.order.total),
         items: [],

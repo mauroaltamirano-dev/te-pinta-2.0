@@ -8,8 +8,8 @@ import { createQueryClient } from '@/lib/query-client';
 import { listCustomers } from '../customers/customers-api';
 import { listIngredients } from '../ingredients/ingredients-api';
 import { listMenuItems } from '../menu/menu-api';
-import { listOrders } from '../orders/orders-api';
-import { getDailyDashboard } from './dashboard-api';
+import { listOrders, type OrderListResponse } from '../orders/orders-api';
+import { getDailyDashboard, type DailyDashboard } from './dashboard-api';
 import { DashboardPage } from './DashboardPage';
 
 vi.mock('../customers/customers-api', () => ({
@@ -47,52 +47,64 @@ const renderDashboardPage = () => {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(listOrders).mockResolvedValue([
-      {
-        id: 'order-1',
-        customer: {
-          id: 'customer-1',
-          name: 'Ana Pérez',
-          phone: '1122334455',
-          address: 'Av. Siempre Viva 742',
+    const ordersResponse: OrderListResponse = {
+      orders: [
+        {
+          id: 'order-1',
+          customer: {
+            id: 'customer-1',
+            name: 'Ana Pérez',
+            phone: '1122334455',
+            address: 'Av. Siempre Viva 742',
+          },
+          deliveryDate: '2026-05-06',
+          deliveryTime: 'mediodia',
+          deliveryType: 'envio',
+          cooked: false,
+          notes: null,
+          discountPercent: 0,
+          deliveryFee: 0,
+          subtotal: 12000,
+          total: 12000,
+          status: 'confirmado',
+          isPaid: false,
+          itemCount: 1,
+          totalQuantity: 12,
         },
-        deliveryDate: '2026-05-06',
-        deliveryTime: 'mediodia',
-        deliveryType: 'envio',
-        cooked: false,
-        notes: null,
-        discountPercent: 0,
-        deliveryFee: 0,
-        subtotal: 12000,
-        total: 12000,
-        status: 'confirmado',
-        isPaid: false,
-        itemCount: 1,
-        totalQuantity: 12,
-      },
-      {
-        id: 'order-2',
-        customer: {
-          id: 'customer-2',
-          name: 'Mauro Altamirano',
-          phone: '3537559269',
-          address: 'Alcorta 66',
+        {
+          id: 'order-2',
+          customer: {
+            id: 'customer-2',
+            name: 'Mauro Altamirano',
+            phone: '3537559269',
+            address: 'Alcorta 66',
+          },
+          deliveryDate: '2026-05-06',
+          deliveryTime: 'noche',
+          deliveryType: 'retiro',
+          cooked: true,
+          notes: null,
+          discountPercent: 0,
+          deliveryFee: 0,
+          subtotal: 33600,
+          total: 33600,
+          status: 'entregado',
+          isPaid: true,
+          itemCount: 2,
+          totalQuantity: 24,
         },
-        deliveryDate: '2026-05-06',
-        deliveryTime: 'noche',
-        deliveryType: 'retiro',
-        cooked: true,
-        notes: null,
-        discountPercent: 0,
-        deliveryFee: 0,
-        subtotal: 33600,
-        total: 33600,
-        status: 'entregado',
-        isPaid: true,
-        itemCount: 2,
-        totalQuantity: 24,
+      ],
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        total: 2,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
       },
-    ] as any);
+      stats: { active: 1, finalized: 1 },
+    };
+    vi.mocked(listOrders).mockResolvedValue(ordersResponse);
     vi.mocked(listCustomers).mockResolvedValue([
       { id: 'customer-1', name: 'Ana Pérez', phone: '1122334455', address: 'Av. Siempre Viva 742' },
       { id: 'customer-2', name: 'Mauro Altamirano', phone: '3537559269', address: 'Alcorta 66' },
@@ -120,7 +132,7 @@ describe('DashboardPage', () => {
     vi.mocked(listIngredients).mockResolvedValue([
       { id: 'ingredient-1', name: 'Harina 0000', unit: 'kg', purchasePrice: 900 },
     ]);
-    vi.mocked(getDailyDashboard).mockResolvedValue({
+    const dashboardResponse: DailyDashboard = {
       date: '2026-05-06',
       orderCount: 3,
       totalRevenue: 45600,
@@ -136,6 +148,9 @@ describe('DashboardPage', () => {
       topClients: [{ customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 33600 }],
       upcomingOrders: [],
       nextSevenDays: [{ date: '2026-05-06', count: 3, revenue: 45600 }],
+      lastSevenDays: [{ date: '2026-05-06', count: 3, revenue: 45600 }],
+      statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 2, total: 3 },
+      recentOrders: [],
       totals: {
         orderCount: 3,
         activeOrderCount: 1,
@@ -150,7 +165,8 @@ describe('DashboardPage', () => {
         averageTicket: 15200,
       },
       varietySales: { all: [], last30: [], last7: [], selectedDate: [] },
-    } as any);
+    };
+    vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
   });
 
   it('shows daily order count, revenue, delivery shifts and top varieties', async () => {
@@ -158,13 +174,12 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Centro operativo')).toBeInTheDocument();
     expect(await screen.findByText('3')).toBeInTheDocument();
-    expect(screen.getAllByText('$ 45.600').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('ARS 45.600').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/mediodía/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/noche/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Carne suave')).toBeInTheDocument();
-    expect(screen.getByText(/24 u./i)).toBeInTheDocument();
-    expect(screen.getByText(/alertas operativas/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /resumen financiero/i })).toBeInTheDocument();
+    expect(screen.getByText(/24 unidades/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /resumen general/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /accesos rápidos/i })).not.toBeInTheDocument();
   });
 

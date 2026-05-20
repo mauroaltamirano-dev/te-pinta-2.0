@@ -16,6 +16,7 @@ export type DashboardOrder = {
   deliveryTime: DeliveryTime;
   status: OrderStatus;
   isPaid: boolean;
+  createdAt: Date;
   subtotal: number;
   total: number;
   items: DashboardOrderItem[];
@@ -49,6 +50,24 @@ export type DashboardCalendarDay = {
   revenue: number;
 };
 
+export type DashboardStatusSummary = {
+  confirmed: number;
+  inProduction: number;
+  ready: number;
+  delivered: number;
+  total: number;
+};
+
+export type DashboardRecentOrder = {
+  id: string;
+  customerName: string;
+  deliveryDate: string;
+  deliveryTime: DeliveryTime;
+  status: OrderStatus;
+  isPaid: boolean;
+  total: number;
+};
+
 export type DashboardTotals = {
   orderCount: number;
   activeOrderCount: number;
@@ -72,6 +91,9 @@ export type DailyDashboard = {
   topClients: DashboardTopClient[];
   upcomingOrders: DashboardUpcomingOrder[];
   nextSevenDays: DashboardCalendarDay[];
+  lastSevenDays: DashboardCalendarDay[];
+  statusSummary: DashboardStatusSummary;
+  recentOrders: DashboardRecentOrder[];
   totals: DashboardTotals;
   varietySales: {
     all: DashboardTopVariety[];
@@ -185,15 +207,40 @@ export const getDailyDashboard = async (
     0,
   );
   const todayIso = toIsoDate(currentDate);
-  const nextSevenDays = Array.from({ length: 7 }, (_, index) => {
-    const dayDate = toIsoDate(addDays(currentDate, index));
+  const buildCalendarDay = (dayDate: string): DashboardCalendarDay => {
     const dayOrders = allOrders.filter((order) => order.deliveryDate === dayDate);
     return {
       date: dayDate,
       count: dayOrders.length,
       revenue: roundMoney(dayOrders.reduce((total, order) => total + order.total, 0)),
     };
-  });
+  };
+  const nextSevenDays = Array.from({ length: 7 }, (_, index) =>
+    buildCalendarDay(toIsoDate(addDays(currentDate, index))),
+  );
+  const lastSevenDays = Array.from({ length: 7 }, (_, index) =>
+    buildCalendarDay(toIsoDate(addDays(currentDate, index - 6))),
+  );
+  const statusSummary: DashboardStatusSummary = {
+    confirmed: allOrders.filter((order) => order.status === 'confirmado').length,
+    inProduction: 0,
+    ready: allOrders.filter((order) => order.status === 'preparado').length,
+    delivered: allOrders.filter((order) => order.status === 'entregado').length,
+    total: allOrders.length,
+  };
+  const recentOrders = [...allOrders]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 8)
+    .map((order) => ({
+      id: order.id,
+      customerName: order.customerName,
+      deliveryDate: order.deliveryDate,
+      deliveryTime: order.deliveryTime,
+      status: order.status,
+      isPaid: order.isPaid,
+      total: order.total,
+    }));
+
   const upcomingOrders = allOrders
     .filter((order) => order.deliveryDate >= todayIso && !isFinalized(order))
     .sort(
@@ -221,6 +268,9 @@ export const getDailyDashboard = async (
     topClients: buildTopClients(allOrders),
     upcomingOrders,
     nextSevenDays,
+    lastSevenDays,
+    statusSummary,
+    recentOrders,
     totals: {
       orderCount,
       activeOrderCount: allOrders.filter((order) => !isFinalized(order)).length,

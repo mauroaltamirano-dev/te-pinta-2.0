@@ -157,9 +157,9 @@ export const Sidebar = () => {
           </div>
 
           <div className="mt-4 rounded-2xl border border-sidebar-foreground/12 bg-sidebar-foreground/8 p-3">
-            <p className="truncate text-xs font-black text-white">{user?.name ?? 'Admin'}</p>
+            <p className="truncate text-xs font-black text-white">{user?.name ?? 'Admin Te Pinta'}</p>
             <p className="mt-0.5 truncate text-[0.68rem] font-semibold text-sidebar-muted">
-              Gestión interna
+              Administrador
             </p>
             <button
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-sidebar-foreground/15 bg-white/10 px-3 py-2 text-xs font-black text-white transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-70"

@@ -5,7 +5,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import { createQueryClient } from '@/lib/query-client';
 
-import { getDailyDashboard } from '../dashboard/dashboard-api';
+import { getDailyDashboard, type DailyDashboard } from '../dashboard/dashboard-api';
 import { MenuPage } from './MenuPage';
 import { createMenuItem, listMenuItems, updateMenuItem } from './menu-api';
 
@@ -53,7 +53,7 @@ describe('MenuPage', () => {
     mockDesktopViewport(true);
     scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
-    vi.mocked(getDailyDashboard).mockResolvedValue({
+    const dashboardResponse: DailyDashboard = {
       date: '2026-05-13',
       orderCount: 3,
       totalRevenue: 48000,
@@ -65,6 +65,9 @@ describe('MenuPage', () => {
       topClients: [],
       upcomingOrders: [],
       nextSevenDays: [],
+      lastSevenDays: [],
+      statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 2, total: 3 },
+      recentOrders: [],
       totals: {
         orderCount: 3,
         activeOrderCount: 1,
@@ -87,7 +90,8 @@ describe('MenuPage', () => {
         last7: [],
         selectedDate: [],
       },
-    } as any);
+    };
+    vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
     vi.mocked(listMenuItems).mockResolvedValue([
       {
         id: 'menu-1',

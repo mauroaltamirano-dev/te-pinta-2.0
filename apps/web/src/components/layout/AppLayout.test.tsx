@@ -67,7 +67,7 @@ describe('AppLayout', () => {
       'href',
       '/orders',
     );
-    expect(within(mobileNav).getByRole('link', { name: /menú/i })).toHaveAttribute('href', '/menu');
+    expect(within(mobileNav).getByRole('link', { name: /productos/i })).toHaveAttribute('href', '/menu');
     expect(within(mobileNav).queryByRole('link', { name: /settings/i })).not.toBeInTheDocument();
   });
 });

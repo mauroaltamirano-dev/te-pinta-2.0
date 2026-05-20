@@ -10,6 +10,7 @@ import { OrdersPage } from '@/features/orders/OrdersPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { HomePage } from '@/routes/HomePage';
 import { LoginPage } from '@/routes/LoginPage';
+import { FeaturePage } from '@/routes/FeaturePage';
 
 const protectedRoutes = [
   {
@@ -19,6 +20,15 @@ const protectedRoutes = [
   {
     path: 'orders',
     element: <OrdersPage />,
+  },
+  {
+    path: 'agenda',
+    element: (
+      <FeaturePage
+        title="Agenda"
+        description="Vista planificada para organizar entregas, producción y recordatorios del negocio."
+      />
+    ),
   },
   {
     path: 'menu',
@@ -31,6 +41,24 @@ const protectedRoutes = [
   {
     path: 'ingredients',
     element: <IngredientsPage />,
+  },
+  {
+    path: 'finances',
+    element: (
+      <FeaturePage
+        title="Finanzas"
+        description="Resumen financiero avanzado para cobros, costos, márgenes y rentabilidad."
+      />
+    ),
+  },
+  {
+    path: 'reports',
+    element: (
+      <FeaturePage
+        title="Reportes"
+        description="Reportes operativos y comerciales para analizar la evolución de Te Pinta."
+      />
+    ),
   },
   {
     path: 'settings',
