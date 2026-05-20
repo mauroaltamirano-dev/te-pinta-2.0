@@ -169,6 +169,7 @@ const buildFilterConditions = (
     const term = `%${filters.cliente}%`;
     const customerCondition = or(
       ilike(orders.id, term),
+      ilike(customers.id, term),
       ilike(customers.name, term),
       ilike(customers.phone, term),
       ilike(customers.address, term),

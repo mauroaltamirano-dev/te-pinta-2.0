@@ -273,14 +273,19 @@ export const CustomersPage = () => {
   const formPanelRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const customersQuery = useCustomers();
-  const ordersQuery = useOrders({ pageSize: 100, sortBy: 'deliveryDate', sortDir: 'desc' });
+  const allCustomers = customersQuery.data ?? [];
+  const selectedCustomer =
+    allCustomers.find((customer) => customer.id === selectedCustomerId) ?? null;
+  const ordersQuery = useOrders({
+    cliente: selectedCustomer?.name ?? '__no_customer_selected__',
+    pageSize: 100,
+    sortBy: 'deliveryDate',
+    sortDir: 'desc',
+  });
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
   const isDesktopPanel = useIsDesktopPanel();
-  const allCustomers = customersQuery.data ?? [];
-  const selectedCustomer =
-    allCustomers.find((customer) => customer.id === selectedCustomerId) ?? null;
   const selectedCustomerOrders = useMemo(() => {
     if (!selectedCustomer) return [];
 
