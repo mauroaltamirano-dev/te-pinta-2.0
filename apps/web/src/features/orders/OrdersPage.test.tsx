@@ -538,9 +538,11 @@ describe('OrdersPage', () => {
 
     await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
     expect(dialog.getByRole('heading', { name: /^variedades$/i })).toBeInTheDocument();
-    expect(dialog.getByRole('button', { name: /^continuar$/i })).toHaveTextContent(/continuar/i);
+    const stepTwoContinue = dialog.getByRole('button', { name: /^continuar$/i });
+    expect(stepTwoContinue).toHaveTextContent(/continuar/i);
+    expect(stepTwoContinue.closest('form')).toBeNull();
 
-    await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
+    await userEvent.click(stepTwoContinue);
     expect(dialog.getByRole('heading', { name: /extras y resumen/i })).toBeInTheDocument();
     expect(dialog.getByText(/pedido seguro y confirmado/i)).toBeInTheDocument();
     expect(dialog.getByRole('button', { name: /^crear pedido$/i })).toBeInTheDocument();

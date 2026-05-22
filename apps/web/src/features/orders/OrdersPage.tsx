@@ -1341,17 +1341,7 @@ export const OrdersPage = () => {
     setIsCreateDialogOpen(true);
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
-    const isMobileContinueSubmit =
-      submitter?.getAttribute('data-mobile-action') === 'continue';
-
-    if (!isDesktopDetail && (mobileOrderStep < 3 || isMobileContinueSubmit)) {
-      advanceMobileOrderStep();
-      return;
-    }
-
+  const submitOrder = async () => {
     const validationErrors = buildValidationErrors();
     setFormErrors(validationErrors);
     if (validationErrors.length > 0) return;
@@ -1362,6 +1352,11 @@ export const OrdersPage = () => {
       : await createOrder.mutateAsync(input);
     setExpandedOrderId(order.id);
     resetAndCloseCreateDialog();
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await submitOrder();
   };
 
   const markStatus = async (id: string, status: OrderStatus) => {
@@ -2535,10 +2530,9 @@ export const OrdersPage = () => {
   );
 
   const mobileOrderForm = (
-    <form
+    <div
       className="flex min-h-[70dvh] flex-col bg-[#FCF8F2] text-[#2D2622]"
-      noValidate
-      onSubmit={handleSubmit}
+      data-testid="mobile-order-wizard"
     >
       <div className="sticky top-0 z-10 border-b border-[#E8D3BF] bg-[#FCF8F2] px-4 pb-3 pt-1">
         <div className="grid grid-cols-3 gap-2" aria-label="Progreso nuevo pedido">
@@ -3089,7 +3083,6 @@ export const OrdersPage = () => {
             )}
             <button
               className="ml-auto rounded-2xl bg-[#B54431] px-8 py-3.5 text-sm font-black text-white shadow-lg shadow-[#B54431]/20"
-              data-mobile-action="continue"
               onClick={advanceMobileOrderStep}
               type="button"
             >
@@ -3112,14 +3105,15 @@ export const OrdersPage = () => {
             <button
               className="rounded-2xl bg-[#B54431] px-7 py-3.5 text-sm font-black text-white shadow-lg shadow-[#B54431]/20 disabled:opacity-60"
               disabled={createOrder.isPending || updateOrder.isPending}
-              type="submit"
+              onClick={() => void submitOrder()}
+              type="button"
             >
               {editingOrderId ? 'Guardar cambios' : 'Crear pedido'}
             </button>
           </div>
         )}
       </div>
-    </form>
+    </div>
   );
 
   // ─── Render principal ────────────────────────────────────────────────────────
