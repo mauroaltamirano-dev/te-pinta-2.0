@@ -7,12 +7,24 @@ import {
   Settings2,
   Truck,
   Utensils,
+  Flame,
 } from 'lucide-react';
 
 import type { Setting } from './settings-api';
 import { PageHero } from '@/components/layout/PageHero';
 
 import { useSettings, useUpdateSetting } from './settings-hooks';
+
+const defaultOperationalSettings: Setting[] = [
+  { key: 'delivery_fee', value: '0' },
+  { key: 'cooked_order_fee', value: '0' },
+  { key: 'promo_bulk_dozen_threshold', value: '3' },
+  { key: 'promo_bulk_discount_percent', value: '10' },
+  { key: 'promo_combined_dozen_quantity', value: '12' },
+  { key: 'promo_combined_dozen_price', value: '15000' },
+  { key: 'addon_yasgua_salsa_price', value: '500' },
+  { key: 'addon_yasgua_cremosa_price', value: '1000' },
+];
 
 const formatMoney = (value: string | number): string => {
   const parsed = Number(value);
@@ -26,6 +38,10 @@ const settingLabels: Record<string, { title: string; description: string; suffix
   delivery_fee: {
     title: 'Precio de envío',
     description: 'Se aplica automáticamente cuando el pedido es con envío.',
+  },
+  cooked_order_fee: {
+    title: 'Precio de cocinado',
+    description: 'Se suma automáticamente cuando el pedido se marca como cocinado.',
   },
   promo_bulk_dozen_threshold: {
     title: 'Mínimo para promo mayorista',
@@ -62,6 +78,7 @@ const settingLabels: Record<string, { title: string; description: string; suffix
 
 const moneyKeys = new Set([
   'delivery_fee',
+  'cooked_order_fee',
   'promo_combined_dozen_price',
   'addon_yasgua_salsa_price',
   'addon_yasgua_cremosa_price',
@@ -160,13 +177,24 @@ const StatCard = ({
 
 export const SettingsPage = () => {
   const settingsQuery = useSettings();
-  const settings = settingsQuery.data ?? [];
+  const settings = useMemo(() => {
+    if (!settingsQuery.data) return [];
+
+    const settingsByKey = new Map(
+      defaultOperationalSettings.map((setting) => [setting.key, setting]),
+    );
+    for (const setting of settingsQuery.data) {
+      settingsByKey.set(setting.key, setting);
+    }
+    return [...settingsByKey.values()].sort((left, right) => left.key.localeCompare(right.key));
+  }, [settingsQuery.data]);
   const settingsByKey = useMemo(
     () => new Map(settings.map((setting) => [setting.key, setting])),
     [settings],
   );
 
   const deliveryFee = settingsByKey.get('delivery_fee');
+  const cookedOrderFee = settingsByKey.get('cooked_order_fee');
   const bulkDiscount = settingsByKey.get('promo_bulk_discount_percent');
   const combinedDozen = settingsByKey.get('promo_combined_dozen_price');
   const addonCount = settings.filter((setting) => setting.key.startsWith('addon_')).length;
@@ -176,7 +204,7 @@ export const SettingsPage = () => {
       title: 'Delivery',
       description: 'Costo operativo de envío.',
       icon: Truck,
-      keys: ['delivery_fee'],
+      keys: ['delivery_fee', 'cooked_order_fee'],
     },
     {
       title: 'Promos',
@@ -215,6 +243,11 @@ export const SettingsPage = () => {
           value={deliveryFee ? formatMoney(deliveryFee.value) : '—'}
         />
         <StatCard
+          icon={Flame}
+          label="Cocinado"
+          value={cookedOrderFee ? formatMoney(cookedOrderFee.value) : '$ 0'}
+        />
+        <StatCard
           icon={BadgePercent}
           label="3+ docenas"
           value={`${bulkDiscount?.value ?? '10'}%`}
@@ -224,7 +257,6 @@ export const SettingsPage = () => {
           label="Docena surtida"
           value={combinedDozen ? formatMoney(combinedDozen.value) : '$ 15.000'}
         />
-        <StatCard icon={Utensils} label="Adicionales" value={String(addonCount)} />
       </section>
 
       {settingsQuery.isLoading ? (
@@ -292,6 +324,9 @@ export const SettingsPage = () => {
               <li>
                 • 1 docena combinada cuesta{' '}
                 {combinedDozen ? formatMoney(combinedDozen.value) : '$ 15.000'}.
+              </li>
+              <li>
+                • Pedido cocinado suma {cookedOrderFee ? formatMoney(cookedOrderFee.value) : '$ 0'}.
               </li>
               <li>
                 • Las salsas quedan configuradas para el próximo paso de adicionales en pedido.

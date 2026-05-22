@@ -1,5 +1,6 @@
-import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -357,7 +358,10 @@ const getOrderDetailPricing = (detail: OrderDetail) => {
   const baseSubtotal = roundMoney(itemsSubtotal + addonsSubtotal);
   const promoSubtotal = detail.subtotal;
   const promoSavings = Math.max(0, roundMoney(baseSubtotal - promoSubtotal));
-  const discount = Math.max(0, roundMoney(promoSubtotal + detail.deliveryFee - detail.total));
+  const discount = Math.max(
+    0,
+    roundMoney(promoSubtotal + detail.deliveryFee + detail.cookingFee - detail.total),
+  );
   const totalQuantity = detail.items.reduce((total, item) => total + item.quantity, 0);
   const halfDozenGroups = detail.items.reduce(
     (total, item) => total + Math.floor((item.quantity % 12) / 6),
@@ -387,6 +391,7 @@ const getOrderDetailPricing = (detail: OrderDetail) => {
     promoSubtotal,
     promoSavings,
     discount,
+    cookingFee: detail.cookingFee,
     totalQuantity,
     combinedDozens,
     promotionLabels,
@@ -575,6 +580,10 @@ const OrderDetailPanel = ({
 
   const pricing = getOrderDetailPricing(detail);
 
+  const readyActionStatus: OrderStatus = detail.status === 'preparado' ? 'confirmado' : 'preparado';
+  const readyActionLabel =
+    detail.status === 'preparado' ? 'Volver a preparación' : 'Marcar como listo';
+
   const actions = (
     <div
       aria-label="Acciones principales del pedido"
@@ -587,11 +596,11 @@ const OrderDetailPanel = ({
     >
       <button
         className="rounded-full bg-primary/10 px-4 py-3 text-sm font-black text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:bg-primary/10 disabled:text-primary/60"
-        disabled={detail.status === 'preparado'}
-        onClick={() => onMarkStatus(detail.id, 'preparado')}
+        disabled={detail.status === 'entregado'}
+        onClick={() => onMarkStatus(detail.id, readyActionStatus)}
         type="button"
       >
-        Marcar como listo
+        {readyActionLabel}
       </button>
       <button
         className="rounded-full bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-55"
@@ -760,6 +769,11 @@ const OrderDetailPanel = ({
                   <br />
                   <b>{formatMoney(detail.deliveryFee)}</b>
                 </p>
+                <p>
+                  <span className="font-bold text-muted-foreground">Costo cocinado</span>
+                  <br />
+                  <b>{formatMoney(detail.cookingFee)}</b>
+                </p>
               </div>
               <p className="mt-3 rounded-full bg-muted/60 px-3 py-2 text-sm font-semibold text-muted-foreground">
                 Referencia:{' '}
@@ -849,6 +863,12 @@ const OrderDetailPanel = ({
                   <span>Envío</span>
                   <b className="text-foreground">{formatMoney(detail.deliveryFee)}</b>
                 </p>
+                {detail.cookingFee > 0 && (
+                  <p className="flex justify-between gap-4">
+                    <span>Cocinado</span>
+                    <b className="text-foreground">{formatMoney(detail.cookingFee)}</b>
+                  </p>
+                )}
                 {pricing.discount > 0 && (
                   <p className="flex justify-between gap-4">
                     <span>Descuento {detail.discountPercent}%</span>
@@ -926,6 +946,7 @@ const OrderDetailPanel = ({
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export const OrdersPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<OrderVisibilityFilter>('active');
   const [deliveryDateFilter, setDeliveryDateFilter] = useState('');
@@ -947,6 +968,7 @@ export const OrdersPage = () => {
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [mobileOrderStep, setMobileOrderStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState<OrderFormState>(initialFormState);
+  const ignoredOrderParamRef = useRef<string | null>(null);
   const deferredOrderSearch = useDeferredValue(orderSearch);
 
   useEffect(() => {
@@ -1011,13 +1033,32 @@ export const OrdersPage = () => {
   const isDesktopDetail = useIsDesktopDetail();
 
   useEffect(() => {
+    const orderIdFromUrl = searchParams.get('orderId');
+    if (!orderIdFromUrl) {
+      ignoredOrderParamRef.current = null;
+      return;
+    }
+    if (ignoredOrderParamRef.current === orderIdFromUrl) {
+      return;
+    }
+    if (orderIdFromUrl && expandedOrderId !== orderIdFromUrl) {
+      setExpandedOrderId(orderIdFromUrl);
+    }
+  }, [expandedOrderId, searchParams]);
+
+  useEffect(() => {
     if (!expandedOrderId || !isDesktopDetail) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setExpandedOrderId(null);
+      if (event.key !== 'Escape') return;
+      ignoredOrderParamRef.current = expandedOrderId ?? searchParams.get('orderId');
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('orderId');
+      setSearchParams(nextParams, { replace: true });
+      setExpandedOrderId(null);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [expandedOrderId, isDesktopDetail]);
+  }, [expandedOrderId, isDesktopDetail, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (isDesktopDetail) return;
@@ -1170,6 +1211,7 @@ export const OrdersPage = () => {
       priceDozen: menuItem.priceDozen,
     }));
     const deliveryFee = form.deliveryType === 'envio' ? (deliveryFeeQuery.data ?? 0) : 0;
+    const cookingFee = form.cooked ? (orderPromotionSettingsQuery.data?.cookingFee ?? 0) : 0;
     const pricing = calculateOrderPromotion({
       items: pricedItems,
       addons: selectedAddons.map(({ addon, quantity }) => ({
@@ -1178,6 +1220,7 @@ export const OrdersPage = () => {
       })),
       manualDiscountPercent: toNumber(form.discountPercent),
       deliveryFee,
+      cookingFee,
       promotions: orderPromotionSettingsQuery.data,
     });
 
@@ -1237,6 +1280,21 @@ export const OrdersPage = () => {
     return errors;
   };
 
+  const advanceMobileOrderStep = () => {
+    setFormErrors([]);
+    setMobileOrderStep((step) => (step === 1 ? 2 : 3));
+  };
+
+  const goBackMobileOrderStep = () => {
+    setFormErrors([]);
+    setMobileOrderStep((step) => (step === 3 ? 2 : 1));
+  };
+
+  const goToMobileOrderStep = (step: 1 | 2 | 3) => {
+    setFormErrors([]);
+    setMobileOrderStep(step);
+  };
+
   const buildOrderInput = (): CreateOrderInput => ({
     customer:
       form.customerMode === 'existing'
@@ -1285,6 +1343,15 @@ export const OrdersPage = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
+    const isMobileContinueSubmit =
+      submitter?.getAttribute('data-mobile-action') === 'continue';
+
+    if (!isDesktopDetail && (mobileOrderStep < 3 || isMobileContinueSubmit)) {
+      advanceMobileOrderStep();
+      return;
+    }
+
     const validationErrors = buildValidationErrors();
     setFormErrors(validationErrors);
     if (validationErrors.length > 0) return;
@@ -1406,16 +1473,29 @@ export const OrdersPage = () => {
   };
 
   const toggleOrderDetail = (id: string) => {
-    setExpandedOrderId((current) => {
-      if (current === id) return null;
-      if (!isDesktopDetail && typeof window !== 'undefined') {
-        window.history.pushState({ orderDetailId: id }, '', window.location.href);
-      }
-      return id;
-    });
+    const nextParams = new URLSearchParams(searchParams);
+    if (expandedOrderId === id) {
+      ignoredOrderParamRef.current = id;
+      nextParams.delete('orderId');
+      setSearchParams(nextParams, { replace: true });
+      setExpandedOrderId(null);
+      return;
+    }
+
+    ignoredOrderParamRef.current = null;
+    nextParams.set('orderId', id);
+    setSearchParams(nextParams, { replace: true });
+    if (!isDesktopDetail && typeof window !== 'undefined') {
+      window.history.pushState({ orderDetailId: id }, '', window.location.href);
+    }
+    setExpandedOrderId(id);
   };
 
   const closeOrderDetail = () => {
+    ignoredOrderParamRef.current = expandedOrderId ?? searchParams.get('orderId');
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('orderId');
+    setSearchParams(nextParams, { replace: true });
     if (!isDesktopDetail && expandedOrderId && window.history.state?.orderDetailId) {
       window.history.back();
       return;
@@ -1837,7 +1917,7 @@ export const OrdersPage = () => {
               </div>
 
               {/* Lista de clientes */}
-              <div className="max-h-52 overflow-y-auto space-y-1.5 pr-0.5">
+              <div className="h-72 max-h-72 space-y-1.5 overflow-y-auto pr-0.5">
                 {filteredCustomers.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
                     Sin resultados para "{customerSearch}"
@@ -2075,27 +2155,27 @@ export const OrdersPage = () => {
                   <div className="mt-2.5 flex gap-1.5">
                     <button
                       aria-label="+ Docena"
-                      className="flex-1 rounded-lg bg-orange-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 active:scale-95"
+                      className="flex-1 rounded-lg bg-[#17325c] py-2 text-xs font-black text-white shadow-sm transition hover:bg-[#234579] active:scale-95"
                       onClick={() => setQuantity(menuItem.id, 12)}
                       type="button"
                     >
-                      +12
+                      + Docena
                     </button>
                     <button
                       aria-label="+ Media"
-                      className="flex-1 rounded-lg bg-amber-500 py-2 text-sm font-black text-white shadow-sm transition hover:bg-amber-600 active:scale-95"
+                      className="flex-1 rounded-lg bg-[#d28a2d] py-2 text-xs font-black text-white shadow-sm transition hover:bg-[#b97318] active:scale-95"
                       onClick={() => setQuantity(menuItem.id, 6)}
                       type="button"
                     >
-                      +6
+                      + ½ docena
                     </button>
                     <button
                       aria-label="+ Unidad"
-                      className="flex-1 rounded-lg bg-primary py-2 text-sm font-black text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-95"
+                      className="flex-1 rounded-lg bg-[#b54a32] py-2 text-xs font-black text-white shadow-sm transition hover:bg-[#933427] active:scale-95"
                       onClick={() => setQuantity(menuItem.id, 1)}
                       type="button"
                     >
-                      +1
+                      + Unidad
                     </button>
                   </div>
 
@@ -2125,15 +2205,6 @@ export const OrdersPage = () => {
                 </article>
               );
             })}
-            <button
-              className="min-h-[9rem] rounded-2xl border border-dashed border-[#E8D3BF] bg-[#FFFDF9] p-4 text-center text-sm font-bold text-[#933427] transition hover:border-[#B54431]/50 hover:bg-[#B54431]/5"
-              type="button"
-            >
-              <span className="block text-lg">+ Agregar otra variedad</span>
-              <span className="mt-1 block text-xs font-semibold text-[#74655B]">
-                ¿No ves una variedad?
-              </span>
-            </button>
           </div>
         </section>
 
@@ -2204,12 +2275,6 @@ export const OrdersPage = () => {
                 </article>
               );
             })}
-            <button
-              className="rounded-2xl border border-dashed border-[#E8D3BF] bg-[#FFFDF9] p-4 text-center text-sm font-bold text-[#933427] transition hover:border-[#B54431]/50 hover:bg-[#B54431]/5"
-              type="button"
-            >
-              + Agregar topping / salsa
-            </button>
           </div>
         </section>
 
@@ -2385,7 +2450,9 @@ export const OrdersPage = () => {
               <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-700 ring-1 ring-emerald-100">
                 <div className="flex justify-between gap-4">
                   <span className="font-black">{combinedDozenPromo.label}</span>
-                  <span className="font-black tabular-nums">-{formatMoney(combinedDozenPromo.amount)}</span>
+                  <span className="font-black tabular-nums">
+                    -{formatMoney(combinedDozenPromo.amount)}
+                  </span>
                 </div>
                 <p className="mt-0.5 text-xs font-bold text-emerald-700/80">
                   {selectedUnitCount} unidades combinadas aplican precio por docena.
@@ -2413,6 +2480,14 @@ export const OrdersPage = () => {
                 <span>Delivery</span>
                 <span className="font-bold tabular-nums text-[#2D2622]">
                   {formatMoney(preview.deliveryFee)}
+                </span>
+              </div>
+            )}
+            {preview.cookingFee > 0 && (
+              <div className="flex justify-between gap-4">
+                <span>Cocinado</span>
+                <span className="font-bold tabular-nums text-[#2D2622]">
+                  {formatMoney(preview.cookingFee)}
                 </span>
               </div>
             )}
@@ -2471,9 +2546,21 @@ export const OrdersPage = () => {
             const step = (index + 1) as 1 | 2 | 3;
             const isDone = mobileOrderStep > step;
             const isActive = mobileOrderStep === step;
+            const canNavigateToStep = step <= mobileOrderStep;
             return (
               <div key={label} className="text-center">
-                <div className="flex items-center justify-center gap-1">
+                <button
+                  aria-current={isActive ? 'step' : undefined}
+                  className={[
+                    'flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 transition',
+                    canNavigateToStep
+                      ? 'cursor-pointer hover:bg-white/70 active:scale-[0.98]'
+                      : 'cursor-not-allowed opacity-70',
+                  ].join(' ')}
+                  disabled={!canNavigateToStep}
+                  onClick={() => goToMobileOrderStep(step)}
+                  type="button"
+                >
                   <span
                     className={[
                       'flex h-8 w-8 items-center justify-center rounded-full text-sm font-black',
@@ -2484,15 +2571,15 @@ export const OrdersPage = () => {
                   >
                     {isDone ? '✓' : step}
                   </span>
-                </div>
-                <p
-                  className={[
-                    'mt-1 text-[0.68rem] font-bold',
-                    isActive ? 'text-[#2D2622]' : 'text-[#74655B]',
-                  ].join(' ')}
-                >
-                  {label}
-                </p>
+                  <span
+                    className={[
+                      'mt-1 text-[0.68rem] font-bold',
+                      isActive ? 'text-[#2D2622]' : 'text-[#74655B]',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </span>
+                </button>
               </div>
             );
           })}
@@ -2544,7 +2631,7 @@ export const OrdersPage = () => {
                       value={customerSearch}
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                     {filteredCustomers.map((customer) => {
                       const isSelected = form.existingCustomerId === customer.id;
                       return (
@@ -2760,27 +2847,27 @@ export const OrdersPage = () => {
                       <div className="mt-2 grid grid-cols-3 gap-2">
                         <button
                           aria-label="+ Docena"
-                          className="rounded-xl bg-[#FF6912] py-2 text-sm font-black text-white"
+                          className="rounded-xl bg-[#17325c] py-2 text-xs font-black text-white"
                           onClick={() => setQuantity(menuItem.id, 12)}
                           type="button"
                         >
-                          +12
+                          + Docena
                         </button>
                         <button
                           aria-label="+ Media"
-                          className="rounded-xl bg-[#F89D00] py-2 text-sm font-black text-white"
+                          className="rounded-xl bg-[#d28a2d] py-2 text-xs font-black text-white"
                           onClick={() => setQuantity(menuItem.id, 6)}
                           type="button"
                         >
-                          +6
+                          + ½
                         </button>
                         <button
                           aria-label="+ Unidad"
-                          className="rounded-xl bg-[#B54431] py-2 text-sm font-black text-white"
+                          className="rounded-xl bg-[#b54a32] py-2 text-xs font-black text-white"
                           onClick={() => setQuantity(menuItem.id, 1)}
                           type="button"
                         >
-                          +1
+                          + Unidad
                         </button>
                       </div>
                     </div>
@@ -2885,10 +2972,60 @@ export const OrdersPage = () => {
                 <ReceiptText className="h-5 w-5 text-[#B54431]" /> Resumen del pedido
               </h4>
               <div className="space-y-2 text-sm font-semibold text-[#74655B]">
-                <div className="flex justify-between">
+                {selectedItems.map(({ menuItem, quantity }) => {
+                  const itemTotal = calculateItemPrice({
+                    quantity,
+                    priceUnit: menuItem.priceUnit,
+                    priceHalfDozen: menuItem.priceHalfDozen,
+                    priceDozen: menuItem.priceDozen,
+                  }).total;
+                  return (
+                    <div className="flex justify-between gap-3" key={menuItem.id}>
+                      <span className="min-w-0 truncate">
+                        {menuItem.name} · {quantity} u.
+                      </span>
+                      <span className="font-bold text-[#2D2622]">{formatMoney(itemTotal)}</span>
+                    </div>
+                  );
+                })}
+                {selectedAddons.map(({ addon, quantity }) => (
+                  <div className="flex justify-between gap-3" key={addon.addonId}>
+                    <span>
+                      {addon.name} · {quantity} u.
+                    </span>
+                    <span className="font-bold text-[#2D2622]">
+                      {formatMoney(addon.price * quantity)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-[#E8D3BF] pt-2">
                   <span>Subtotal</span>
                   <span>{formatMoney(preview.subtotal)}</span>
                 </div>
+                {combinedDozenPromo && (
+                  <div className="flex justify-between rounded-xl bg-emerald-50 px-3 py-2 text-[#088954] ring-1 ring-emerald-100">
+                    <span>{combinedDozenPromo.label}</span>
+                    <span>−{formatMoney(combinedDozenPromo.amount)}</span>
+                  </div>
+                )}
+                {preview.promoSubtotal !== preview.subtotal && (
+                  <div className="flex justify-between text-[#088954]">
+                    <span>Subtotal con promos</span>
+                    <span>{formatMoney(preview.promoSubtotal)}</span>
+                  </div>
+                )}
+                {preview.deliveryFee > 0 && (
+                  <div className="flex justify-between">
+                    <span>Delivery</span>
+                    <span>{formatMoney(preview.deliveryFee)}</span>
+                  </div>
+                )}
+                {preview.cookingFee > 0 && (
+                  <div className="flex justify-between">
+                    <span>Cocinado</span>
+                    <span>{formatMoney(preview.cookingFee)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-[#088954]">
                   <span>Descuento ({preview.discountPercent}%)</span>
                   <span>−{formatMoney(preview.discount)}</span>
@@ -2935,15 +3072,25 @@ export const OrdersPage = () => {
       <div className="sticky bottom-0 z-10 border-t border-[#E8D3BF] bg-[#FCF8F2]/95 px-4 py-3 backdrop-blur">
         {mobileOrderStep < 3 ? (
           <div className="flex items-center justify-between gap-3">
+            {mobileOrderStep > 1 && (
+              <button
+                className="rounded-2xl border border-[#E8D3BF] bg-white px-5 py-3.5 text-sm font-black text-[#2D2622] shadow-sm"
+                onClick={goBackMobileOrderStep}
+                type="button"
+              >
+                Volver
+              </button>
+            )}
             {mobileOrderStep === 2 && (
-              <div className="text-sm font-black text-[#2D2622]">
+              <div className="min-w-0 flex-1 text-sm font-black text-[#2D2622]">
                 <p>{selectedUnitCount} u. seleccionadas</p>
                 <p className="text-[#74655B]">{formatMoney(preview.total)}</p>
               </div>
             )}
             <button
               className="ml-auto rounded-2xl bg-[#B54431] px-8 py-3.5 text-sm font-black text-white shadow-lg shadow-[#B54431]/20"
-              onClick={() => setMobileOrderStep((step) => (step === 1 ? 2 : 3))}
+              data-mobile-action="continue"
+              onClick={advanceMobileOrderStep}
               type="button"
             >
               Continuar
@@ -2951,6 +3098,13 @@ export const OrdersPage = () => {
           </div>
         ) : (
           <div className="flex items-center gap-3">
+            <button
+              className="rounded-2xl border border-[#E8D3BF] bg-white px-5 py-3.5 text-sm font-black text-[#2D2622] shadow-sm"
+              onClick={goBackMobileOrderStep}
+              type="button"
+            >
+              Volver
+            </button>
             <div className="min-w-0 flex-1 text-sm font-black text-[#2D2622]">
               <p>Total</p>
               <p className="text-xl text-[#B54431]">{formatMoney(preview.total)}</p>

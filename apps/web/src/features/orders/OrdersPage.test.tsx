@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
@@ -58,6 +59,7 @@ const orderListItem = {
   notes: 'Tocar timbre',
   discountPercent: 10,
   deliveryFee: 1500,
+  cookingFee: 0,
   subtotal: 24000,
   total: 23100,
   status: 'confirmado' as const,
@@ -146,9 +148,11 @@ const renderOrdersPage = () => {
   const queryClient = createQueryClient();
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <OrdersPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <OrdersPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 };
 
@@ -229,6 +233,7 @@ describe('OrdersPage', () => {
       bulkDiscountPercent: 10,
       combinedDozenQuantity: 12,
       combinedDozenPrice: 15000,
+      cookingFee: 0,
       addons: [
         { addonId: 'yasgua_salsa', name: 'Yasgua salsa', price: 500 },
         { addonId: 'yasgua_cremosa', name: 'Yasgua cremosa', price: 1000 },
@@ -539,6 +544,53 @@ describe('OrdersPage', () => {
     expect(dialog.getByRole('heading', { name: /extras y resumen/i })).toBeInTheDocument();
     expect(dialog.getByText(/pedido seguro y confirmado/i)).toBeInTheDocument();
     expect(dialog.getByRole('button', { name: /^crear pedido$/i })).toBeInTheDocument();
+  });
+
+  it('does not create the mobile order when continuing from varieties to extras', async () => {
+    mockDesktopViewport(false);
+    renderOrdersPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /\+ nuevo pedido/i }));
+    const dialog = within(await screen.findByRole('dialog', { name: /nuevo pedido/i }));
+
+    await dialog.findByText('Ana Pérez');
+    await userEvent.click(dialog.getByRole('button', { name: /seleccionar cliente ana pérez/i }));
+    await userEvent.type(dialog.getByLabelText(/fecha de entrega/i), '2026-05-07');
+    await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
+
+    const carneCard = within(await dialog.findByLabelText(/variedad carne suave/i));
+    await userEvent.click(carneCard.getByRole('button', { name: /\+ docena/i }));
+    await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
+
+    expect(createOrder).not.toHaveBeenCalled();
+    expect(dialog.getByRole('heading', { name: /extras y resumen/i })).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: /^crear pedido$/i })).toBeInTheDocument();
+  });
+
+  it('lets mobile users return to the first step after final validation errors', async () => {
+    mockDesktopViewport(false);
+    renderOrdersPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /\+ nuevo pedido/i }));
+    const dialog = within(await screen.findByRole('dialog', { name: /nuevo pedido/i }));
+
+    await userEvent.type(dialog.getByLabelText(/fecha de entrega/i), '2026-05-07');
+    await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
+
+    const carneCard = within(await dialog.findByLabelText(/variedad carne suave/i));
+    await userEvent.click(carneCard.getByRole('button', { name: /\+ docena/i }));
+    await userEvent.click(dialog.getByRole('button', { name: /^continuar$/i }));
+    await userEvent.click(dialog.getByRole('button', { name: /^crear pedido$/i }));
+
+    expect(createOrder).not.toHaveBeenCalled();
+    expect(dialog.getByRole('status', { name: /errores del pedido/i })).toHaveTextContent(
+      /seleccioná un cliente/i,
+    );
+
+    await userEvent.click(dialog.getByRole('button', { name: /cliente y entrega/i }));
+
+    expect(dialog.getByRole('searchbox', { name: /buscar cliente/i })).toBeInTheDocument();
+    expect(dialog.getByText('Ana Pérez')).toBeInTheDocument();
   });
 
   it('creates an order for an existing customer with delivery, discount, fee preview and varieties', async () => {

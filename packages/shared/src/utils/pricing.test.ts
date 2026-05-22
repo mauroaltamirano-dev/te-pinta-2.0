@@ -75,7 +75,6 @@ describe('calculateOrderPromotion', () => {
     });
   });
 
-
   it('applies the combined dozen promo to any 12 mixed units across varieties', () => {
     expect(
       calculateOrderPromotion({
@@ -206,6 +205,19 @@ describe('calculateOrderPromotion', () => {
       discountPercent: 10,
       discount: 4650,
       total: 41850,
+    });
+  });
+
+  it('adds the cooking fee after promos and discounts', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [{ quantity: 12, subtotal: 15000 }],
+        cookingFee: 2000,
+      }),
+    ).toMatchObject({
+      subtotal: 15000,
+      cookingFee: 2000,
+      total: 17000,
     });
   });
 

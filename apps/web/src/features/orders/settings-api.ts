@@ -10,6 +10,7 @@ export type OrderPromotionSettings = {
   bulkDiscountPercent: number;
   combinedDozenQuantity: number;
   combinedDozenPrice: number;
+  cookingFee: number;
   addons: { addonId: string; name: string; price: number }[];
 };
 
@@ -34,6 +35,7 @@ export const getOrderPromotionSettings = async (): Promise<OrderPromotionSetting
     bulkDiscountPercent: parseSettingNumber(byKey.get('promo_bulk_discount_percent'), 10),
     combinedDozenQuantity: parseSettingNumber(byKey.get('promo_combined_dozen_quantity'), 12),
     combinedDozenPrice: parseSettingNumber(byKey.get('promo_combined_dozen_price'), 15000),
+    cookingFee: parseSettingNumber(byKey.get('cooked_order_fee'), 0),
     addons: [
       {
         addonId: 'yasgua_salsa',

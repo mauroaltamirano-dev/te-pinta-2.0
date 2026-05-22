@@ -15,6 +15,7 @@ export type SettingsRepository = {
 
 export const defaultSettings: Setting[] = [
   { key: 'delivery_fee', value: '0' },
+  { key: 'cooked_order_fee', value: '0' },
   { key: 'promo_bulk_dozen_threshold', value: '3' },
   { key: 'promo_bulk_discount_percent', value: '10' },
   { key: 'promo_combined_dozen_quantity', value: '12' },

@@ -45,6 +45,7 @@ const orderDetail = (overrides: Partial<OrderDetail> = {}): OrderDetail => ({
   notes: null,
   discountPercent: 10,
   deliveryFee: 1000,
+  cookingFee: 0,
   subtotal: 16500,
   total: 15850,
   status: 'confirmado',
@@ -84,6 +85,7 @@ const createRepository = (overrides: Partial<OrderRepository> = {}): OrderReposi
   getSetting: async (key) => {
     const settings: Record<string, string> = {
       delivery_fee: '1000',
+      cooked_order_fee: '0',
       promo_bulk_dozen_threshold: '3',
       promo_bulk_discount_percent: '10',
       promo_combined_dozen_quantity: '12',
@@ -265,6 +267,7 @@ describe('order service', () => {
       getSetting: async (key) => {
         const settings: Record<string, string> = {
           delivery_fee: '1500',
+          cooked_order_fee: '0',
           promo_bulk_dozen_threshold: '3',
           promo_bulk_discount_percent: '10',
           promo_combined_dozen_quantity: '12',
@@ -387,6 +390,50 @@ describe('order service', () => {
           subtotal: 1000,
         },
       ],
+    });
+  });
+
+  it('adds the cooked order fee from settings when the order is cooked', async () => {
+    let persisted: Parameters<OrderRepository['createOrderWithItems']>[0] | undefined;
+    const repository = createRepository({
+      getSetting: async (key) => {
+        const settings: Record<string, string> = {
+          delivery_fee: '0',
+          cooked_order_fee: '2000',
+          promo_bulk_dozen_threshold: '3',
+          promo_bulk_discount_percent: '10',
+          promo_combined_dozen_quantity: '12',
+          promo_combined_dozen_price: '15000',
+          addon_yasgua_salsa_price: '500',
+          addon_yasgua_cremosa_price: '1000',
+        };
+        return settings[key] ?? null;
+      },
+      createOrderWithItems: async (input) => {
+        persisted = input;
+        return orderDetail(input);
+      },
+    });
+
+    await createOrder(
+      {
+        customer: { existingCustomerId: 'customer-1' },
+        deliveryDate: '2026-05-10',
+        deliveryTime: 'noche',
+        deliveryType: 'retiro',
+        cooked: true,
+        discountPercent: 0,
+        deliveryFee: 0,
+        items: [{ menuItemId: 'menu-1', quantity: 12 }],
+        addons: [],
+      },
+      repository,
+    );
+
+    expect(persisted).toMatchObject({
+      cooked: true,
+      cookingFee: 2000,
+      total: 17000,
     });
   });
 

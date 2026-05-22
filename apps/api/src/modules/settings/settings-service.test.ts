@@ -49,6 +49,7 @@ describe('settings service', () => {
     const result = await listSettings(repository);
 
     expect(result).toContainEqual({ key: 'delivery_fee', value: '1500' });
+    expect(result).toContainEqual({ key: 'cooked_order_fee', value: '0' });
     expect(result).toContainEqual({ key: 'promo_bulk_discount_percent', value: '10' });
     expect(result).toContainEqual({ key: 'addon_yasgua_cremosa_price', value: '1000' });
   });

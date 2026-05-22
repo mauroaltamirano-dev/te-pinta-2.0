@@ -71,6 +71,7 @@ export const orders = pgTable(
     notes: text('notes'),
     discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
     deliveryFee: numeric('delivery_fee', { precision: 12, scale: 2 }).notNull().default('0'),
+    cookingFee: numeric('cooking_fee', { precision: 12, scale: 2 }).notNull().default('0'),
     subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull(),
     total: numeric('total', { precision: 12, scale: 2 }).notNull(),
     status: orderStatusEnum('status').notNull().default('confirmado'),

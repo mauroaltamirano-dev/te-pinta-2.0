@@ -28,6 +28,7 @@ export type DashboardCalendarDay = {
   date: string;
   count: number;
   revenue: number;
+  estimatedProfit?: number;
 };
 
 export type DashboardStatusSummary = {
@@ -48,6 +49,8 @@ export type DashboardRecentOrder = {
   total: number;
 };
 
+export type DashboardRange = 'all' | 'last30' | 'last7';
+
 export type DashboardTotals = {
   orderCount: number;
   activeOrderCount: number;
@@ -60,6 +63,15 @@ export type DashboardTotals = {
   estimatedProfit: number;
   totalUnits: number;
   averageTicket: number;
+};
+
+export type DashboardRangeAnalytics = {
+  totals: DashboardTotals;
+  topClients: DashboardTopClient[];
+  topVarieties: DashboardTopVariety[];
+  statusSummary: DashboardStatusSummary;
+  recentOrders: DashboardRecentOrder[];
+  chartDays: DashboardCalendarDay[];
 };
 
 export type DailyDashboard = {
@@ -75,6 +87,8 @@ export type DailyDashboard = {
   statusSummary: DashboardStatusSummary;
   recentOrders: DashboardRecentOrder[];
   totals: DashboardTotals;
+  rangeTotals: Record<DashboardRange, DashboardTotals>;
+  rangeAnalytics?: Record<DashboardRange, DashboardRangeAnalytics>;
   varietySales: {
     all: DashboardTopVariety[];
     last30: DashboardTopVariety[];

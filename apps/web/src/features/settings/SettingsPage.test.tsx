@@ -28,6 +28,7 @@ describe('SettingsPage', () => {
     vi.resetAllMocks();
     vi.mocked(listSettings).mockResolvedValue([
       { key: 'delivery_fee', value: '1500' },
+      { key: 'cooked_order_fee', value: '2000' },
       { key: 'promo_bulk_dozen_threshold', value: '3' },
       { key: 'promo_bulk_discount_percent', value: '10' },
       { key: 'promo_combined_dozen_quantity', value: '12' },

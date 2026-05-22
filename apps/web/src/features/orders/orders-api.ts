@@ -45,6 +45,7 @@ export type OrderDetail = {
   notes: string | null;
   discountPercent: number;
   deliveryFee: number;
+  cookingFee: number;
   subtotal: number;
   total: number;
   status: OrderStatus;

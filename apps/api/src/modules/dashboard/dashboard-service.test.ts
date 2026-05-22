@@ -111,4 +111,44 @@ describe('dashboard service', () => {
 
     expect(result.date).toBe('2026-05-06');
   });
+
+  it('builds range analytics anchored to the selected date', async () => {
+    const repository: DashboardRepository = {
+      listOrders: async () => [
+        order({
+          id: 'order-recent',
+          deliveryDate: '2026-05-06',
+          total: 15000,
+          items: [item({ menuItemId: 'menu-1', menuItemName: 'Carne suave', quantity: 12 })],
+        }),
+        order({
+          id: 'order-last30',
+          deliveryDate: '2026-04-20',
+          total: 9000,
+          items: [item({ menuItemId: 'menu-2', menuItemName: 'Humita', quantity: 6 })],
+        }),
+        order({
+          id: 'order-old',
+          deliveryDate: '2026-03-01',
+          total: 6000,
+          items: [item({ menuItemId: 'menu-3', menuItemName: 'Verdura', quantity: 3 })],
+        }),
+      ],
+    };
+
+    const result = await getDailyDashboard(
+      { date: '2026-05-06' },
+      repository,
+      () => new Date('2026-05-06T12:00:00.000Z'),
+    );
+
+    expect(result.rangeAnalytics.all.totals.orderCount).toBe(3);
+    expect(result.rangeAnalytics.last30.totals.orderCount).toBe(2);
+    expect(result.rangeAnalytics.last7.totals.orderCount).toBe(1);
+    expect(result.rangeAnalytics.last7.topVarieties).toEqual([
+      { menuItemId: 'menu-1', name: 'Carne suave', quantity: 12 },
+    ]);
+    expect(result.rangeAnalytics.last30.chartDays).toHaveLength(30);
+    expect(result.rangeAnalytics.last7.chartDays).toHaveLength(7);
+  });
 });

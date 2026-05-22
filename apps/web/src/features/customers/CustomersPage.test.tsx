@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
@@ -24,9 +25,11 @@ const renderCustomersPage = () => {
   const queryClient = createQueryClient();
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <CustomersPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <CustomersPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 };
 
@@ -53,74 +56,84 @@ describe('CustomersPage', () => {
     Element.prototype.scrollIntoView = vi.fn();
     vi.mocked(listOrders).mockResolvedValue({
       orders: [
-      {
-        id: 'order-3',
-        customer: {
-          id: 'customer-1',
-          name: 'Ana Pérez',
-          phone: '1122334455',
-          address: 'Av. Siempre Viva 742',
+        {
+          id: 'order-3',
+          customer: {
+            id: 'customer-1',
+            name: 'Ana Pérez',
+            phone: '1122334455',
+            address: 'Av. Siempre Viva 742',
+          },
+          deliveryDate: '2026-05-08',
+          deliveryTime: 'tarde',
+          deliveryType: 'envio',
+          cooked: true,
+          notes: null,
+          discountPercent: 0,
+          deliveryFee: 0,
+          cookingFee: 0,
+          subtotal: 24000,
+          total: 24000,
+          status: 'entregado',
+          isPaid: true,
+          itemCount: 2,
+          totalQuantity: 24,
         },
-        deliveryDate: '2026-05-08',
-        deliveryTime: 'tarde',
-        deliveryType: 'envio',
-        cooked: true,
-        notes: null,
-        discountPercent: 0,
-        deliveryFee: 0,
-        subtotal: 24000,
-        total: 24000,
-        status: 'entregado',
-        isPaid: true,
-        itemCount: 2,
-        totalQuantity: 24,
-      },
-      {
-        id: 'order-1',
-        customer: {
-          id: 'customer-1',
-          name: 'Ana Pérez',
-          phone: '1122334455',
-          address: 'Av. Siempre Viva 742',
+        {
+          id: 'order-1',
+          customer: {
+            id: 'customer-1',
+            name: 'Ana Pérez',
+            phone: '1122334455',
+            address: 'Av. Siempre Viva 742',
+          },
+          deliveryDate: '2026-05-06',
+          deliveryTime: 'tarde',
+          deliveryType: 'envio',
+          cooked: false,
+          notes: null,
+          discountPercent: 0,
+          deliveryFee: 0,
+          cookingFee: 0,
+          subtotal: 12000,
+          total: 12000,
+          status: 'confirmado',
+          isPaid: false,
+          itemCount: 1,
+          totalQuantity: 12,
         },
-        deliveryDate: '2026-05-06',
-        deliveryTime: 'tarde',
-        deliveryType: 'envio',
-        cooked: false,
-        notes: null,
-        discountPercent: 0,
-        deliveryFee: 0,
-        subtotal: 12000,
-        total: 12000,
-        status: 'confirmado',
-        isPaid: false,
-        itemCount: 1,
-        totalQuantity: 12,
-      },
-      {
-        id: 'order-2',
-        customer: {
-          id: 'customer-2',
-          name: 'Bruno Gómez',
-          phone: '1199887766',
-          address: null,
+        {
+          id: 'order-2',
+          customer: {
+            id: 'customer-2',
+            name: 'Bruno Gómez',
+            phone: '1199887766',
+            address: null,
+          },
+          deliveryDate: '2026-05-07',
+          deliveryTime: 'mediodia',
+          deliveryType: 'retiro',
+          cooked: false,
+          notes: null,
+          discountPercent: 0,
+          deliveryFee: 0,
+          cookingFee: 0,
+          subtotal: 6500,
+          total: 6500,
+          status: 'preparado',
+          isPaid: true,
+          itemCount: 1,
+          totalQuantity: 6,
         },
-        deliveryDate: '2026-05-07',
-        deliveryTime: 'mediodia',
-        deliveryType: 'retiro',
-        cooked: false,
-        notes: null,
-        discountPercent: 0,
-        deliveryFee: 0,
-        subtotal: 6500,
-        total: 6500,
-        status: 'preparado',
-        isPaid: true,
-        itemCount: 1,
-        totalQuantity: 6,
-      },
       ],
-      pagination: { page: 1, pageSize: 25, total: 3, totalPages: 1, hasNextPage: false, hasPreviousPage: false },
+      pagination: {
+        page: 1,
+        pageSize: 25,
+        total: 3,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
       stats: { active: 2, finalized: 1 },
     });
     vi.mocked(listCustomers).mockResolvedValue([

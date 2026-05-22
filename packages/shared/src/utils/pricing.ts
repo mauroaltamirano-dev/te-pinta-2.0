@@ -18,6 +18,7 @@ export type OrderPromotionConfig = {
   bulkDiscountPercent: number;
   combinedDozenQuantity: number;
   combinedDozenPrice: number;
+  cookingFee: number;
 };
 
 export type CalculateOrderPromotionInput = {
@@ -31,6 +32,7 @@ export type CalculateOrderPromotionInput = {
   addons?: { quantity: number; subtotal: number }[];
   manualDiscountPercent?: number;
   deliveryFee?: number;
+  cookingFee?: number;
   promotions?: Partial<OrderPromotionConfig>;
 };
 
@@ -49,6 +51,7 @@ export type CalculatedOrderPromotion = {
   discountPercent: number;
   discount: number;
   deliveryFee: number;
+  cookingFee: number;
   total: number;
   appliedPromotions: AppliedPromotion[];
 };
@@ -58,6 +61,7 @@ export const defaultOrderPromotionConfig: OrderPromotionConfig = {
   bulkDiscountPercent: 10,
   combinedDozenQuantity: 12,
   combinedDozenPrice: 15000,
+  cookingFee: 0,
 };
 
 const assertPositiveInteger = (value: number, label: string): void => {
@@ -108,6 +112,7 @@ export const calculateOrderPromotion = ({
   addons = [],
   manualDiscountPercent = 0,
   deliveryFee = 0,
+  cookingFee,
   promotions,
 }: CalculateOrderPromotionInput): CalculatedOrderPromotion => {
   const config = { ...defaultOrderPromotionConfig, ...promotions };
@@ -191,7 +196,8 @@ export const calculateOrderPromotion = ({
   }
 
   const safeDeliveryFee = toSafeNonNegative(deliveryFee);
-  const total = roundMoney(promoSubtotal - discount + safeDeliveryFee);
+  const safeCookingFee = toSafeNonNegative(cookingFee ?? config.cookingFee);
+  const total = roundMoney(promoSubtotal - discount + safeDeliveryFee + safeCookingFee);
 
   return {
     subtotal,
@@ -202,6 +208,7 @@ export const calculateOrderPromotion = ({
     discountPercent,
     discount,
     deliveryFee: safeDeliveryFee,
+    cookingFee: safeCookingFee,
     total,
     appliedPromotions,
   };

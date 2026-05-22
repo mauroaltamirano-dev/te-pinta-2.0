@@ -58,6 +58,7 @@ export type OrderDetail = {
   notes: string | null;
   discountPercent: number;
   deliveryFee: number;
+  cookingFee: number;
   subtotal: number;
   total: number;
   status: OrderStatus;
@@ -108,6 +109,7 @@ export type PersistOrderInput = {
   notes: string | null;
   discountPercent: number;
   deliveryFee: number;
+  cookingFee: number;
   subtotal: number;
   total: number;
   status: OrderStatus;
@@ -265,19 +267,23 @@ const buildPersistInput = async (
     bulkDiscountPercentSetting,
     combinedDozenQuantitySetting,
     combinedDozenPriceSetting,
+    cookedOrderFeeSetting,
   ] = await Promise.all([
     repository.getSetting('delivery_fee'),
     repository.getSetting('promo_bulk_dozen_threshold'),
     repository.getSetting('promo_bulk_discount_percent'),
     repository.getSetting('promo_combined_dozen_quantity'),
     repository.getSetting('promo_combined_dozen_price'),
+    repository.getSetting('cooked_order_fee'),
   ]);
   const deliveryFee = input.deliveryType === 'envio' ? parseMoneySetting(deliveryFeeSetting) : 0;
+  const cookingFee = input.cooked ? parseMoneySetting(cookedOrderFeeSetting) : 0;
   const pricing = calculateOrderPromotion({
     items,
     addons,
     manualDiscountPercent: input.discountPercent,
     deliveryFee,
+    cookingFee,
     promotions: {
       bulkDozenThreshold: parseNumberSetting(bulkDozenThresholdSetting) || undefined,
       bulkDiscountPercent: parseNumberSetting(bulkDiscountPercentSetting) || undefined,
@@ -296,6 +302,7 @@ const buildPersistInput = async (
     notes: input.notes || null,
     discountPercent: pricing.discountPercent,
     deliveryFee,
+    cookingFee,
     subtotal: pricing.promoSubtotal,
     total: roundMoney(pricing.total),
     status: options.status ?? 'confirmado',

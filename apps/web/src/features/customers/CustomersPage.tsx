@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   BadgeDollarSign,
   CalendarDays,
@@ -266,16 +267,47 @@ const CustomerDetailAnalytics = ({
 };
 
 export const CustomersPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [form, setForm] = useState<CustomerFormState>(initialFormState);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const formPanelRef = useRef<HTMLElement | null>(null);
+  const ignoredCustomerParamRef = useRef<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const customersQuery = useCustomers();
   const allCustomers = customersQuery.data ?? [];
+  const isDesktopPanel = useIsDesktopPanel();
   const selectedCustomer =
     allCustomers.find((customer) => customer.id === selectedCustomerId) ?? null;
+
+  useEffect(() => {
+    const customerIdFromUrl = searchParams.get('customerId');
+    if (!customerIdFromUrl) {
+      ignoredCustomerParamRef.current = null;
+      return;
+    }
+    if (
+      ignoredCustomerParamRef.current === customerIdFromUrl ||
+      selectedCustomerId === customerIdFromUrl
+    )
+      return;
+
+    const customerFromUrl = allCustomers.find((customer) => customer.id === customerIdFromUrl);
+    if (!customerFromUrl) return;
+
+    setSelectedCustomerId(customerFromUrl.id);
+    setIsCreating(false);
+    setForm(toFormState(customerFromUrl));
+    setSearch(customerFromUrl.name);
+    if (isDesktopPanel) {
+      setTimeout(
+        () => formPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        0,
+      );
+    }
+  }, [allCustomers, isDesktopPanel, searchParams, selectedCustomerId]);
+
   const ordersQuery = useOrders({
     cliente: selectedCustomer?.name ?? '__no_customer_selected__',
     pageSize: 100,
@@ -285,7 +317,6 @@ export const CustomersPage = () => {
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
-  const isDesktopPanel = useIsDesktopPanel();
   const selectedCustomerOrders = useMemo(() => {
     if (!selectedCustomer) return [];
 
@@ -328,6 +359,10 @@ export const CustomersPage = () => {
   };
 
   const handleStartCreate = () => {
+    ignoredCustomerParamRef.current = selectedCustomerId ?? searchParams.get('customerId');
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('customerId');
+    setSearchParams(nextParams, { replace: true });
     setSelectedCustomerId(null);
     setIsCreating(true);
     setForm(initialFormState);
@@ -335,6 +370,10 @@ export const CustomersPage = () => {
   };
 
   const handleSelectCustomer = (customer: Customer) => {
+    ignoredCustomerParamRef.current = null;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('customerId', customer.id);
+    setSearchParams(nextParams, { replace: true });
     setSelectedCustomerId(customer.id);
     setIsCreating(false);
     setForm(toFormState(customer));
@@ -344,6 +383,10 @@ export const CustomersPage = () => {
   };
 
   const closeMobilePanel = () => {
+    ignoredCustomerParamRef.current = selectedCustomerId ?? searchParams.get('customerId');
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('customerId');
+    setSearchParams(nextParams, { replace: true });
     setSelectedCustomerId(null);
     setIsCreating(false);
     setForm(initialFormState);
@@ -526,7 +569,8 @@ export const CustomersPage = () => {
 
             {deleteCustomer.isError ? (
               <p className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                No se pudo eliminar: ese cliente tiene pedidos asociados. Primero fusioná o mové sus pedidos a otro cliente.
+                No se pudo eliminar: ese cliente tiene pedidos asociados. Primero fusioná o mové sus
+                pedidos a otro cliente.
               </p>
             ) : null}
 

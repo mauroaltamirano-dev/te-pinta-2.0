@@ -64,6 +64,7 @@ describe('DashboardPage', () => {
           notes: null,
           discountPercent: 0,
           deliveryFee: 0,
+          cookingFee: 0,
           subtotal: 12000,
           total: 12000,
           status: 'confirmado',
@@ -86,6 +87,7 @@ describe('DashboardPage', () => {
           notes: null,
           discountPercent: 0,
           deliveryFee: 0,
+          cookingFee: 0,
           subtotal: 33600,
           total: 33600,
           status: 'entregado',
@@ -145,7 +147,9 @@ describe('DashboardPage', () => {
         { menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 },
         { menuItemId: 'menu-2', name: 'Humita', quantity: 12 },
       ],
-      topClients: [{ customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 33600 }],
+      topClients: [
+        { customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 33600 },
+      ],
       upcomingOrders: [],
       nextSevenDays: [{ date: '2026-05-06', count: 3, revenue: 45600 }],
       lastSevenDays: [{ date: '2026-05-06', count: 3, revenue: 45600 }],
@@ -164,7 +168,121 @@ describe('DashboardPage', () => {
         totalUnits: 36,
         averageTicket: 15200,
       },
-      varietySales: { all: [], last30: [], last7: [], selectedDate: [] },
+      rangeTotals: {
+        all: {
+          orderCount: 3,
+          activeOrderCount: 1,
+          finalizedOrderCount: 2,
+          unpaidOrderCount: 1,
+          grossRevenue: 45600,
+          paidRevenue: 33600,
+          pendingRevenue: 12000,
+          estimatedCosts: 16000,
+          estimatedProfit: 29600,
+          totalUnits: 36,
+          averageTicket: 15200,
+        },
+        last30: {
+          orderCount: 2,
+          activeOrderCount: 1,
+          finalizedOrderCount: 1,
+          unpaidOrderCount: 1,
+          grossRevenue: 33600,
+          paidRevenue: 21600,
+          pendingRevenue: 12000,
+          estimatedCosts: 12000,
+          estimatedProfit: 21600,
+          totalUnits: 24,
+          averageTicket: 16800,
+        },
+        last7: {
+          orderCount: 1,
+          activeOrderCount: 1,
+          finalizedOrderCount: 0,
+          unpaidOrderCount: 1,
+          grossRevenue: 12000,
+          paidRevenue: 0,
+          pendingRevenue: 12000,
+          estimatedCosts: 4000,
+          estimatedProfit: 8000,
+          totalUnits: 12,
+          averageTicket: 12000,
+        },
+      },
+      rangeAnalytics: {
+        all: {
+          totals: {
+            orderCount: 3,
+            activeOrderCount: 1,
+            finalizedOrderCount: 2,
+            unpaidOrderCount: 1,
+            grossRevenue: 45600,
+            paidRevenue: 33600,
+            pendingRevenue: 12000,
+            estimatedCosts: 16000,
+            estimatedProfit: 29600,
+            totalUnits: 36,
+            averageTicket: 15200,
+          },
+          topClients: [
+            { customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 33600 },
+          ],
+          topVarieties: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 }],
+          statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 2, total: 3 },
+          recentOrders: [],
+          chartDays: [{ date: '2026-05-06', count: 3, revenue: 45600, estimatedProfit: 29600 }],
+        },
+        last30: {
+          totals: {
+            orderCount: 2,
+            activeOrderCount: 1,
+            finalizedOrderCount: 1,
+            unpaidOrderCount: 1,
+            grossRevenue: 33600,
+            paidRevenue: 21600,
+            pendingRevenue: 12000,
+            estimatedCosts: 12000,
+            estimatedProfit: 21600,
+            totalUnits: 24,
+            averageTicket: 16800,
+          },
+          topClients: [
+            { customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 21600 },
+          ],
+          topVarieties: [{ menuItemId: 'menu-2', name: 'Humita', quantity: 12 }],
+          statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 1, total: 2 },
+          recentOrders: [],
+          chartDays: [{ date: '2026-05-06', count: 2, revenue: 33600, estimatedProfit: 21600 }],
+        },
+        last7: {
+          totals: {
+            orderCount: 1,
+            activeOrderCount: 1,
+            finalizedOrderCount: 0,
+            unpaidOrderCount: 1,
+            grossRevenue: 12000,
+            paidRevenue: 0,
+            pendingRevenue: 12000,
+            estimatedCosts: 4000,
+            estimatedProfit: 8000,
+            totalUnits: 12,
+            averageTicket: 12000,
+          },
+          topClients: [
+            { customerId: 'customer-1', name: 'Ana Pérez', orderCount: 1, totalRevenue: 12000 },
+          ],
+          topVarieties: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 6 }],
+          statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 0, total: 1 },
+          recentOrders: [],
+          chartDays: [{ date: '2026-05-06', count: 1, revenue: 12000, estimatedProfit: 8000 }],
+        },
+      },
+      varietySales: {
+        all: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 }],
+        last30: [{ menuItemId: 'menu-2', name: 'Humita', quantity: 12 }],
+        last7: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 6 }],
+        selectedDate: [],
+      },
     };
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
   });
@@ -175,12 +293,28 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Centro operativo')).toBeInTheDocument();
     expect(await screen.findByText('3')).toBeInTheDocument();
     expect(screen.getAllByText('ARS 45.600').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/mediodía/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/noche/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/rango de análisis/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /ventas en pesos · histórico completo/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Carne suave')).toBeInTheDocument();
     expect(screen.getByText(/24 unidades/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /resumen general/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /accesos rápidos/i })).not.toBeInTheDocument();
+  });
+
+  it('applies the selected dashboard range to KPIs, rankings, status and chart', async () => {
+    renderDashboardPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /últimos 7 días/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /ventas en pesos · últimos 7 días/i })).toBeInTheDocument();
+    });
+    expect(screen.getAllByText('ARS 12.000').length).toBeGreaterThan(0);
+    expect(screen.getByText('6 unidades')).toBeInTheDocument();
+    expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
+    expect(screen.getAllByText(/^1$/).length).toBeGreaterThan(0);
   });
 
   it('reloads the dashboard for the selected date', async () => {
