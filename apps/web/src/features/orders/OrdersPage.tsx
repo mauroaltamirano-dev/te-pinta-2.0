@@ -461,6 +461,47 @@ const copyTextToClipboard = async (text: string): Promise<boolean> => {
   }
 };
 
+const buildCustomerOrderMessage = (detail: OrderDetail): string => {
+  const pricing = getOrderDetailPricing(detail);
+  const reference = detail.notes?.trim() || detail.customer.address?.trim();
+  const lines = [
+    `*Pedido ${getOrderCode(detail.id)}*`,
+    '',
+    '*Productos:*',
+    ...detail.items.map(
+      (item) =>
+        `• ${formatVarietyLabel(item.quantity, item.menuItemName)} — ${formatMoney(item.subtotal)}`,
+    ),
+    ...detail.addons.map(
+      (addon) =>
+        `• ${formatVarietyLabel(addon.quantity, addon.name)} — ${formatMoney(addon.subtotal)}`,
+    ),
+    '',
+    '*Entrega:*',
+    `• ${detail.deliveryType === 'envio' ? 'Envío' : 'Retiro'}`,
+    `• Fecha: ${formatDateAr(detail.deliveryDate)} · ${deliveryTimeLabels[detail.deliveryTime]}`,
+    detail.cooked ? '• Cocinado' : null,
+    reference ? `• Referencia: ${reference}` : null,
+    '',
+    '*Resumen:*',
+    `• Empanadas: ${formatMoney(pricing.itemsSubtotal)}`,
+    pricing.addonsSubtotal > 0
+      ? `• Toppings / salsas: ${formatMoney(pricing.addonsSubtotal)}`
+      : null,
+    pricing.promoSavings > 0 ? `• Promo docena: -${formatMoney(pricing.promoSavings)}` : null,
+    detail.deliveryFee > 0 ? `• Envío: ${formatMoney(detail.deliveryFee)}` : null,
+    detail.cookingFee > 0 ? `• Cocinado: ${formatMoney(detail.cookingFee)}` : null,
+    pricing.discount > 0
+      ? `• Descuento ${detail.discountPercent}%: -${formatMoney(pricing.discount)}`
+      : null,
+    '',
+    `*Total: ${formatMoney(detail.total)}*`,
+    `Pago: ${detail.isPaid ? 'Pagado' : 'Pendiente'}`,
+  ];
+
+  return lines.filter((line): line is string => line !== null).join('\n');
+};
+
 const useIsDesktopDetail = () => {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true;
@@ -539,6 +580,7 @@ const OrderDetailPanel = ({
   onMarkPayment,
 }: OrderDetailPanelProps) => {
   const [activeTab, setActiveTab] = useState<OrderDetailTab>('summary');
+  const [clientCopyFeedback, setClientCopyFeedback] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -588,6 +630,14 @@ const OrderDetailPanel = ({
       : detail.status === 'preparado'
         ? 'Volver a preparación'
         : 'Marcar como listo';
+  const copyCustomerMessage = async () => {
+    const copied = await copyTextToClipboard(buildCustomerOrderMessage(detail));
+    setClientCopyFeedback(
+      copied
+        ? 'Detalle copiado para enviar al cliente.'
+        : 'No se pudo copiar automático. Probá de nuevo.',
+    );
+  };
 
   const actions = (
     <div
@@ -708,6 +758,30 @@ const OrderDetailPanel = ({
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
         {activeTab === 'summary' && (
           <>
+            <section className="rounded-3xl border border-primary/20 bg-primary/8 p-4 shadow-card">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="font-black text-foreground">Detalle para cliente</h4>
+                  <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                    Copia un resumen limpio para enviar por WhatsApp.
+                  </p>
+                  {clientCopyFeedback && (
+                    <p className="mt-2 text-xs font-black text-primary" role="status">
+                      {clientCopyFeedback}
+                    </p>
+                  )}
+                </div>
+                <button
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+                  onClick={() => void copyCustomerMessage()}
+                  type="button"
+                >
+                  <ReceiptText className="h-4 w-4" />
+                  Copiar para cliente
+                </button>
+              </div>
+            </section>
+
             <section className="rounded-3xl border border-border/70 bg-white p-4 shadow-card">
               <div className="mb-3 flex items-center gap-2">
                 <UserRound className="h-4 w-4 text-primary" />

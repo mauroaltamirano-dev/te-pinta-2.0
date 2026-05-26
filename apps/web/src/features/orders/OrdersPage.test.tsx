@@ -937,6 +937,34 @@ describe('OrdersPage', () => {
     expect(updateOrderPayment).toHaveBeenCalledWith('order-1', true);
   });
 
+  it('copies a clean customer-facing order detail from the detail panel', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText },
+    });
+
+    renderOrdersPage();
+
+    const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
+    await userEvent.click(orderCard.getByRole('button', { name: /ver detalle/i }));
+    const detail = within(await screen.findByRole('dialog', { name: /detalle del pedido/i }));
+
+    await userEvent.click(detail.getByRole('button', { name: /copiar para cliente/i }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const message = writeText.mock.calls[0]?.[0] as string;
+    expect(message).toContain('*Pedido #P-00001*');
+    expect(message).toContain('*Productos:*');
+    expect(message).toContain('• 12u. Carne suave — $ 12.000');
+    expect(message).toContain('• 12u. Humita — $ 12.000');
+    expect(message).toContain('*Entrega:*');
+    expect(message).toContain('• Envío');
+    expect(message).toContain('*Total: $ 23.100*');
+    expect(message).toContain('Pago: Pendiente');
+    expect(message).not.toContain('Hola');
+    expect(await detail.findByRole('status')).toHaveTextContent(/detalle copiado/i);
+  });
+
   it('keeps mobile filters collapsed until opening the filter panel', async () => {
     mockDesktopViewport(false);
     renderOrdersPage();
