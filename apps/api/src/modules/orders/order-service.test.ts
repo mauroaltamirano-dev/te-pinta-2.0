@@ -75,7 +75,7 @@ const createRepository = (overrides: Partial<OrderRepository> = {}): OrderReposi
       hasNextPage: false,
       hasPreviousPage: false,
     },
-    stats: { active: 0, finalized: 0 },
+    stats: { active: 0, finalized: 0, pending: 0, pendingVarieties: [] },
   }),
   getById: async () => orderDetail(),
   findCustomerById: async () => customer(),
@@ -116,7 +116,7 @@ describe('order service', () => {
           hasNextPage: false,
           hasPreviousPage: false,
         },
-        stats: { active: 1, finalized: 0 },
+        stats: { active: 1, finalized: 0, pending: 1, pendingVarieties: [] },
       }),
     });
 
@@ -131,6 +131,7 @@ describe('order service', () => {
     expect(result.orders).toHaveLength(1);
     expect(result.pagination).toMatchObject({ page: 2, pageSize: 10, total: 1 });
     expect(result.stats.active).toBe(1);
+    expect(result.stats.pending).toBe(1);
   });
 
   it('auto-creates new customers once, snapshots menu pricing, applies discount, and adds delivery fee', async () => {

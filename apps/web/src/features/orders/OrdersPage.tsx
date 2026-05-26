@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -54,6 +55,7 @@ import {
   useDeleteOrder,
   useOrderDetail,
   useOrders,
+  orderQueryKeys,
   useUpdateOrder,
   useUpdateOrderPayment,
   useUpdateOrderStatus,
@@ -341,14 +343,11 @@ const DeliveryDatePill = ({
   );
 };
 
-const formatDozenLabel = (quantity?: number): string => {
-  if (!quantity) return '0 docenas';
-  const dozens = quantity / 12;
-  const label = Number.isInteger(dozens)
-    ? String(dozens)
-    : dozens.toLocaleString('es-AR', { maximumFractionDigits: 2 });
-  return `${label} ${dozens === 1 ? 'docena' : 'docenas'}`;
-};
+const formatVarietyQuantity = (quantity: number): string =>
+  quantity === 1 ? '1' : `${quantity}u.`;
+
+const formatVarietyLabel = (quantity: number, name: string): string =>
+  `${formatVarietyQuantity(quantity)} ${name}`;
 
 const getOrderDetailPricing = (detail: OrderDetail) => {
   const itemsSubtotal = roundMoney(detail.items.reduce((total, item) => total + item.subtotal, 0));
@@ -527,6 +526,7 @@ type OrderDetailPanelProps = {
   onClose: () => void;
   onCancel: (id: string, customerName: string) => void;
   onMarkStatus: (id: string, status: OrderStatus) => void;
+  onMarkPayment: (id: string, isPaid: boolean) => void;
 };
 
 const OrderDetailPanel = ({
@@ -536,6 +536,7 @@ const OrderDetailPanel = ({
   onClose,
   onCancel,
   onMarkStatus,
+  onMarkPayment,
 }: OrderDetailPanelProps) => {
   const [activeTab, setActiveTab] = useState<OrderDetailTab>('summary');
 
@@ -582,7 +583,11 @@ const OrderDetailPanel = ({
 
   const readyActionStatus: OrderStatus = detail.status === 'preparado' ? 'confirmado' : 'preparado';
   const readyActionLabel =
-    detail.status === 'preparado' ? 'Volver a preparación' : 'Marcar como listo';
+    detail.status === 'entregado'
+      ? 'Volver a preparado'
+      : detail.status === 'preparado'
+        ? 'Volver a preparación'
+        : 'Marcar como listo';
 
   const actions = (
     <div
@@ -596,7 +601,6 @@ const OrderDetailPanel = ({
     >
       <button
         className="rounded-full bg-primary/10 px-4 py-3 text-sm font-black text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:bg-primary/10 disabled:text-primary/60"
-        disabled={detail.status === 'entregado'}
         onClick={() => onMarkStatus(detail.id, readyActionStatus)}
         type="button"
       >
@@ -633,6 +637,21 @@ const OrderDetailPanel = ({
             </h3>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className={`${compactBadgeClassName} ${status.badge}`}>{status.label}</span>
+              <button
+                aria-label={
+                  detail.isPaid ? 'Marcar pedido como no pagado' : 'Marcar pedido como pagado'
+                }
+                aria-pressed={detail.isPaid}
+                className={[
+                  compactBadgeClassName,
+                  'transition hover:scale-[1.02] active:scale-[0.98]',
+                  detail.isPaid ? paymentBadgeClassNames.paid : paymentBadgeClassNames.unpaid,
+                ].join(' ')}
+                onClick={() => onMarkPayment(detail.id, !detail.isPaid)}
+                type="button"
+              >
+                {detail.isPaid ? 'Pagado' : 'No pagado'}
+              </button>
               <span className={`${compactBadgeClassName} ${deliveryMethodClass}`}>
                 {detail.deliveryType === 'envio' ? 'Envío' : 'Retiro'}
               </span>
@@ -955,8 +974,9 @@ export const OrdersPage = () => {
   const [methodFilter, setMethodFilter] = useState<OrderMethodFilter>('todos');
   const [sortOption, setSortOption] = useState<OrderSortOption>('date_asc');
   const [tableSortCol, setTableSortCol] = useState<TableSortColumn>('date');
-  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('asc');
+  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('desc');
   const [orderPage, setOrderPage] = useState(1);
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(() => new Set());
   const [isGeneratingKitchenList, setIsGeneratingKitchenList] = useState(false);
@@ -1128,10 +1148,36 @@ export const OrdersPage = () => {
     visibilityFilter,
   ]);
 
+  const previewDetailOrderIds = useMemo(
+    () =>
+      visibleOrders
+        .filter((order) => !order.items || order.items.length === 0)
+        .map((order) => order.id),
+    [visibleOrders],
+  );
+  const previewDetailQueries = useQueries({
+    queries: previewDetailOrderIds.map((id) => ({
+      queryKey: orderQueryKeys.detail(id),
+      queryFn: () => getOrder(id),
+      enabled: Boolean(ordersQuery.data),
+      staleTime: 15_000,
+    })),
+  });
+  const previewDetailsByOrderId = useMemo(() => {
+    const details = new Map<string, OrderDetail>();
+    previewDetailQueries.forEach((query, index) => {
+      const orderId = previewDetailOrderIds[index];
+      if (orderId && query.data) {
+        details.set(orderId, query.data);
+      }
+    });
+    return details;
+  }, [previewDetailOrderIds, previewDetailQueries]);
+
   const summary = useMemo(() => {
     const activeOrders = allOrders.filter((order) => !isFinalizedOrder(order));
     const finalizedOrders = allOrders.filter(isFinalizedOrder);
-    const pendingOrders = activeOrders.filter((order) => order.status !== 'entregado');
+    const pendingOrders = activeOrders.filter((order) => order.status === 'confirmado');
     const salesDate = deliveryDateFilter || getTodayIsoDate();
     const dailySales = allOrders
       .filter((order) => order.deliveryDate === salesDate)
@@ -1140,10 +1186,67 @@ export const OrdersPage = () => {
     return {
       active: orderStats?.active ?? activeOrders.length,
       finalized: orderStats?.finalized ?? finalizedOrders.length,
-      pending: pendingOrders.length,
+      pending: orderStats?.pending ?? pendingOrders.length,
       dailySales,
+      pendingVarieties: orderStats?.pendingVarieties ?? [],
     };
   }, [allOrders, deliveryDateFilter, orderStats]);
+
+  const menuItemNameById = useMemo(
+    () => new Map((menuItemsQuery.data ?? []).map((item) => [item.id, item.name])),
+    [menuItemsQuery.data],
+  );
+
+  const activeFilterCount = [
+    deliveryDateFilter,
+    statusFilter !== 'todos',
+    methodFilter !== 'todos',
+    sortOption !== 'date_asc',
+  ].filter(Boolean).length;
+
+  const displayPendingVarieties = useMemo(() => {
+    const totals = new Map<
+      string,
+      { menuItemId: string; menuItemName: string; quantity: number }
+    >();
+    const addTotal = (menuItemId: string, quantity: number, menuItemName?: string) => {
+      const resolvedName = menuItemName?.trim() || menuItemNameById.get(menuItemId) || 'Variedad';
+      const current = totals.get(menuItemId) ?? {
+        menuItemId,
+        menuItemName: resolvedName,
+        quantity: 0,
+      };
+      current.menuItemName =
+        current.menuItemName === 'Variedad' ? resolvedName : current.menuItemName;
+      current.quantity += quantity;
+      totals.set(menuItemId, current);
+    };
+
+    if (summary.pendingVarieties.length > 0) {
+      summary.pendingVarieties.forEach((item) =>
+        addTotal(item.menuItemId, item.quantity, item.menuItemName),
+      );
+    } else {
+      visibleOrders
+        .filter((order) => order.status === 'confirmado')
+        .forEach((order) => {
+          const items =
+            order.items && order.items.length > 0
+              ? order.items
+              : (previewDetailsByOrderId.get(order.id)?.items ?? []);
+          items.forEach((item) => addTotal(item.menuItemId, item.quantity, item.menuItemName));
+        });
+    }
+
+    return [...totals.values()].sort((left, right) =>
+      left.menuItemName.localeCompare(right.menuItemName, 'es-AR'),
+    );
+  }, [menuItemNameById, previewDetailsByOrderId, summary.pendingVarieties, visibleOrders]);
+
+  const pendingVarietyUnits = displayPendingVarieties.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
 
   const activeMenuItems = useMemo(
     () => (menuItemsQuery.data ?? []).filter((item) => item.isActive),
@@ -1456,8 +1559,8 @@ export const OrdersPage = () => {
   const handleSortOptionChange = (option: OrderSortOption) => {
     setSortOption(option);
     const sortMap: Record<OrderSortOption, { col: TableSortColumn; dir: TableSortDir }> = {
-      date_asc: { col: 'date', dir: 'asc' },
-      date_desc: { col: 'date', dir: 'desc' },
+      date_asc: { col: 'date', dir: 'desc' },
+      date_desc: { col: 'date', dir: 'asc' },
       name_asc: { col: 'name', dir: 'asc' },
       name_desc: { col: 'name', dir: 'desc' },
       total_desc: { col: 'total', dir: 'desc' },
@@ -1504,6 +1607,10 @@ export const OrdersPage = () => {
 
   const markStatusFromDetail = (id: string, status: OrderStatus) => {
     void markStatus(id, status);
+  };
+
+  const markPaymentFromDetail = (id: string, isPaid: boolean) => {
+    void markPayment(id, isPaid);
   };
 
   const toggleOrderSelection = (id: string) => {
@@ -1608,9 +1715,18 @@ export const OrdersPage = () => {
 
   const renderOrderCard = (order: (typeof visibleOrders)[number]) => {
     const isExpanded = expandedOrderId === order.id;
-    const dozenLabel = formatDozenLabel(order.totalQuantity);
     const isMenuOpen = openMenuId === order.id;
     const isSelectedForKitchen = selectedOrderIds.has(order.id);
+    const previewItems =
+      order.items && order.items.length > 0
+        ? order.items
+        : (previewDetailsByOrderId.get(order.id)?.items ?? []);
+    const itemLabels = previewItems.map((item) =>
+      formatVarietyLabel(
+        item.quantity,
+        item.menuItemName.trim() || menuItemNameById.get(item.menuItemId) || 'Variedad',
+      ),
+    );
 
     return (
       <article
@@ -1657,9 +1773,22 @@ export const OrdersPage = () => {
               Pedido
             </p>
             <p className="font-black text-foreground tabular-nums">{getOrderCode(order.id)}</p>
-            <p className="mt-1 inline-flex rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-              {dozenLabel}
-            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {itemLabels.length > 0 ? (
+                itemLabels.map((label) => (
+                  <span
+                    className="inline-flex max-w-full rounded-full border border-primary/15 bg-primary/8 px-2 py-0.5 text-[0.68rem] font-black leading-tight text-primary"
+                    key={label}
+                  >
+                    {label}
+                  </span>
+                ))
+              ) : (
+                <span className="inline-flex rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                  {order.totalQuantity} u.
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Cliente */}
@@ -1718,9 +1847,36 @@ export const OrdersPage = () => {
               Estado
             </p>
             <div className={compactBadgeStackClassName}>
-              <span className={`${compactBadgeClassName} ${statusConfig[order.status].badge}`}>
-                {statusConfig[order.status].label}
-              </span>
+              {order.status === 'entregado' ? (
+                <span className={`${compactBadgeClassName} ${statusConfig[order.status].badge}`}>
+                  {statusConfig[order.status].label}
+                </span>
+              ) : (
+                <button
+                  aria-label={
+                    order.status === 'preparado'
+                      ? 'Volver pedido a confirmado'
+                      : 'Marcar pedido como preparado'
+                  }
+                  aria-pressed={order.status === 'preparado'}
+                  className={[
+                    compactBadgeClassName,
+                    statusConfig[order.status].badge,
+                    'transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60',
+                  ].join(' ')}
+                  disabled={updateOrderStatus.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void markStatus(
+                      order.id,
+                      order.status === 'preparado' ? 'confirmado' : 'preparado',
+                    );
+                  }}
+                  type="button"
+                >
+                  {statusConfig[order.status].label}
+                </button>
+              )}
               <button
                 aria-label={order.isPaid ? 'Marcar como no pagado' : 'Marcar como pagado'}
                 aria-pressed={order.isPaid}
@@ -3118,6 +3274,95 @@ export const OrdersPage = () => {
 
   // ─── Render principal ────────────────────────────────────────────────────────
 
+  const searchControl = (
+    <label className="block">
+      <span className="sr-only">Buscar pedido</span>
+      <div className="flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2.5 text-sm shadow-sm transition focus-within:ring-2 focus-within:ring-ring/30">
+        <Search className="h-4 w-4 text-muted-foreground" />
+        <input
+          aria-label="Buscar pedido"
+          className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/60"
+          onChange={(event) => setOrderSearch(event.target.value)}
+          placeholder="Buscar pedido, cliente o teléfono..."
+          role="searchbox"
+          type="search"
+          value={orderSearch}
+        />
+      </div>
+    </label>
+  );
+
+  const dateFilterControl = (
+    <label className="block">
+      <span className="sr-only">Fecha entrega</span>
+      <input
+        aria-label="Filtrar por fecha de entrega"
+        className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+        onChange={(event) => setDeliveryDateFilter(event.target.value)}
+        type="date"
+        value={deliveryDateFilter}
+      />
+    </label>
+  );
+
+  const statusFilterControl = (
+    <label className="block">
+      <span className="sr-only">Estado</span>
+      <select
+        aria-label="Estado"
+        className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+        onChange={(event) => setStatusFilter(event.target.value as OrderStatusFilter)}
+        value={statusFilter}
+      >
+        <option value="todos">Estado: Todos</option>
+        {orderStatuses.map((status) => (
+          <option key={status} value={status}>
+            {statusConfig[status].label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  const methodFilterControl = (
+    <label className="block">
+      <span className="sr-only">Método</span>
+      <select
+        aria-label="Método"
+        className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+        onChange={(event) => setMethodFilter(event.target.value as OrderMethodFilter)}
+        value={methodFilter}
+      >
+        {(Object.keys(orderMethodFilterLabels) as OrderMethodFilter[]).map((method) => (
+          <option key={method} value={method}>
+            {orderMethodFilterLabels[method]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
+  const sortFilterControl = (
+    <label className="block">
+      <span className="sr-only">Más filtros</span>
+      <div className="relative">
+        <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <select
+          aria-label="Ordenar por"
+          className="w-full rounded-full border border-border bg-white py-2.5 pl-9 pr-3 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
+          onChange={(event) => handleSortOptionChange(event.target.value as OrderSortOption)}
+          value={sortOption}
+        >
+          {(Object.keys(orderSortLabels) as OrderSortOption[]).map((option) => (
+            <option key={option} value={option}>
+              {orderSortLabels[option]}
+            </option>
+          ))}
+        </select>
+      </div>
+    </label>
+  );
+
   const summaryCards = [
     {
       label: 'Pedidos activos',
@@ -3229,6 +3474,46 @@ export const OrdersPage = () => {
           ))}
         </section>
 
+        <section
+          aria-label="Variedades pendientes"
+          className="rounded-3xl border border-primary/15 bg-white/85 p-4 shadow-card sm:p-5"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
+                Cocina pendiente
+              </p>
+              <h2 className="mt-1 text-xl font-black text-foreground">Variedades pendientes</h2>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                Suma sólo pedidos activos en confirmado; los listos o entregados no cuentan.
+              </p>
+            </div>
+            <span className="inline-flex w-fit rounded-full bg-primary/10 px-3 py-1 text-sm font-black text-primary">
+              {pendingVarietyUnits} u.
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {displayPendingVarieties.length > 0 ? (
+              displayPendingVarieties.map((item) => (
+                <span
+                  className="inline-flex items-center gap-2 rounded-full border border-[#E8D3BF] bg-[#FCF8F2] px-3 py-2 text-sm font-black text-[#2D2622]"
+                  key={item.menuItemId}
+                >
+                  <span className="rounded-full bg-[#B54431] px-2 py-0.5 text-xs text-white">
+                    {formatVarietyQuantity(item.quantity)}
+                  </span>
+                  {item.menuItemName}
+                </span>
+              ))
+            ) : (
+              <p className="rounded-2xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm font-bold text-muted-foreground">
+                No hay variedades pendientes de preparar.
+              </p>
+            )}
+          </div>
+        </section>
+
         <section className="min-w-0 space-y-4">
           <div className="flex gap-8 border-b border-border/80">
             {(['active', 'finalized'] as OrderVisibilityFilter[]).map((filter) => {
@@ -3257,92 +3542,51 @@ export const OrdersPage = () => {
             })}
           </div>
 
-          <div
-            className={[
-              'grid gap-3 rounded-2xl border border-border/70 bg-white/75 p-3 shadow-card',
-              isDesktopDetailOpen
-                ? 'md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_150px_155px_155px_165px] 2xl:items-center'
-                : 'xl:grid-cols-[minmax(260px,1fr)_170px_170px_170px_180px] xl:items-center',
-            ].join(' ')}
-          >
-            <label className="block">
-              <span className="sr-only">Buscar pedido</span>
-              <div className="flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2.5 text-sm shadow-sm transition focus-within:ring-2 focus-within:ring-ring/30">
-                <Search className="h-4 w-4 text-muted-foreground" />
-                <input
-                  aria-label="Buscar pedido"
-                  className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground/60"
-                  onChange={(event) => setOrderSearch(event.target.value)}
-                  placeholder="Buscar pedido, cliente o teléfono..."
-                  role="searchbox"
-                  type="search"
-                  value={orderSearch}
-                />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Fecha entrega</span>
-              <input
-                aria-label="Filtrar por fecha de entrega"
-                className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-                onChange={(event) => setDeliveryDateFilter(event.target.value)}
-                type="date"
-                value={deliveryDateFilter}
-              />
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Estado</span>
-              <select
-                className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-                onChange={(event) => setStatusFilter(event.target.value as OrderStatusFilter)}
-                value={statusFilter}
+          <div className="rounded-2xl border border-border/70 bg-white/75 p-3 shadow-card">
+            {isDesktopDetail ? (
+              <div
+                className={[
+                  'grid gap-3',
+                  isDesktopDetailOpen
+                    ? 'md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_150px_155px_155px_165px] 2xl:items-center'
+                    : 'xl:grid-cols-[minmax(260px,1fr)_170px_170px_170px_180px] xl:items-center',
+                ].join(' ')}
               >
-                <option value="todos">Estado: Todos</option>
-                {orderStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {statusConfig[status].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Método</span>
-              <select
-                className="w-full rounded-full border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-                onChange={(event) => setMethodFilter(event.target.value as OrderMethodFilter)}
-                value={methodFilter}
-              >
-                {(Object.keys(orderMethodFilterLabels) as OrderMethodFilter[]).map((method) => (
-                  <option key={method} value={method}>
-                    {orderMethodFilterLabels[method]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="sr-only">Más filtros</span>
-              <div className="relative">
-                <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <select
-                  aria-label="Ordenar por"
-                  className="w-full rounded-full border border-border bg-white py-2.5 pl-9 pr-3 text-sm font-semibold text-foreground outline-none shadow-sm transition focus:ring-2 focus:ring-ring/30"
-                  onChange={(event) =>
-                    handleSortOptionChange(event.target.value as OrderSortOption)
-                  }
-                  value={sortOption}
-                >
-                  {(Object.keys(orderSortLabels) as OrderSortOption[]).map((option) => (
-                    <option key={option} value={option}>
-                      {orderSortLabels[option]}
-                    </option>
-                  ))}
-                </select>
+                {searchControl}
+                {dateFilterControl}
+                {statusFilterControl}
+                {methodFilterControl}
+                {sortFilterControl}
               </div>
-            </label>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  {searchControl}
+                  <button
+                    aria-expanded={isFilterPanelOpen}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2.5 text-sm font-black text-foreground shadow-sm transition hover:border-primary/30 hover:text-primary"
+                    onClick={() => setIsFilterPanelOpen((open) => !open)}
+                    type="button"
+                  >
+                    <Filter className="h-4 w-4" />
+                    Filtros
+                    {activeFilterCount > 0 && (
+                      <span className="rounded-full bg-primary px-1.5 text-[0.65rem] text-primary-foreground">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                {isFilterPanelOpen && (
+                  <div className="grid gap-3 rounded-2xl border border-border/70 bg-background/60 p-3">
+                    {dateFilterControl}
+                    {statusFilterControl}
+                    {methodFilterControl}
+                    {sortFilterControl}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {selectedOrderIds.size > 0 && (
@@ -3498,6 +3742,7 @@ export const OrdersPage = () => {
             isLoading={orderDetailQuery.isLoading}
             onCancel={cancelOrderFromDetail}
             onClose={closeOrderDetail}
+            onMarkPayment={markPaymentFromDetail}
             onMarkStatus={markStatusFromDetail}
           />
         </aside>
@@ -3517,6 +3762,7 @@ export const OrdersPage = () => {
               isMobile
               onCancel={cancelOrderFromDetail}
               onClose={closeOrderDetail}
+              onMarkPayment={markPaymentFromDetail}
               onMarkStatus={markStatusFromDetail}
             />
           </section>,

@@ -55,6 +55,7 @@ export type OrderDetail = {
 };
 
 export type OrderListItem = Omit<OrderDetail, 'items' | 'addons'> & {
+  items?: OrderItemDetail[];
   itemCount: number;
   totalQuantity: number;
 };
@@ -71,6 +72,14 @@ export type OrderListPagination = {
 export type OrderListStats = {
   active: number;
   finalized: number;
+  pending?: number;
+  pendingVarieties?: PendingVarietyTotal[];
+};
+
+export type PendingVarietyTotal = {
+  menuItemId: string;
+  menuItemName: string;
+  quantity: number;
 };
 
 export type OrderListResponse = {

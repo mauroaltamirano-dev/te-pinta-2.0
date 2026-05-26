@@ -197,7 +197,6 @@ export const SettingsPage = () => {
   const cookedOrderFee = settingsByKey.get('cooked_order_fee');
   const bulkDiscount = settingsByKey.get('promo_bulk_discount_percent');
   const combinedDozen = settingsByKey.get('promo_combined_dozen_price');
-  const addonCount = settings.filter((setting) => setting.key.startsWith('addon_')).length;
 
   const groups = [
     {

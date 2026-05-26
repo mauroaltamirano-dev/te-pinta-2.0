@@ -64,6 +64,24 @@ const orderListItem = {
   total: 23100,
   status: 'confirmado' as const,
   isPaid: false,
+  items: [
+    {
+      id: 'item-1',
+      menuItemId: 'menu-1',
+      menuItemName: 'Carne suave',
+      quantity: 12,
+      unitPrice: 12000,
+      subtotal: 12000,
+    },
+    {
+      id: 'item-2',
+      menuItemId: 'menu-2',
+      menuItemName: 'Humita',
+      quantity: 12,
+      unitPrice: 12000,
+      subtotal: 12000,
+    },
+  ],
   itemCount: 2,
   totalQuantity: 24,
 };
@@ -103,6 +121,25 @@ const orderList = [orderListItem];
 
 const orderListResponse = (orders: OrderListItem[]) => {
   const finalized = orders.filter((order) => order.status === 'entregado' && order.isPaid).length;
+  const pendingVarieties = [
+    ...orders
+      .filter((order) => order.status === 'confirmado')
+      .flatMap((order) => order.items ?? [])
+      .reduce<Map<string, { menuItemId: string; menuItemName: string; quantity: number }>>(
+        (totals, item) => {
+          const current = totals.get(item.menuItemId) ?? {
+            menuItemId: item.menuItemId,
+            menuItemName: item.menuItemName,
+            quantity: 0,
+          };
+          current.quantity += item.quantity;
+          totals.set(item.menuItemId, current);
+          return totals;
+        },
+        new Map(),
+      )
+      .values(),
+  ].sort((left, right) => left.menuItemName.localeCompare(right.menuItemName, 'es-AR'));
 
   return {
     orders,
@@ -117,6 +154,8 @@ const orderListResponse = (orders: OrderListItem[]) => {
     stats: {
       active: orders.length - finalized,
       finalized,
+      pending: orders.filter((order) => order.status === 'confirmado').length,
+      pendingVarieties,
     },
   };
 };
@@ -329,6 +368,8 @@ describe('OrdersPage', () => {
     expect(activeCard.getByText(/6 may 2026/i)).toBeInTheDocument();
     expect(activeCard.getByText(/1122334455/)).toBeInTheDocument();
     expect(activeCard.getByText(/av. siempre viva 742/i)).toBeInTheDocument();
+    expect(activeCard.getByText(/12u\. carne suave/i)).toBeInTheDocument();
+    expect(activeCard.getByText(/12u\. humita/i)).toBeInTheDocument();
     expect(activeCard.getByLabelText(/total del pedido/i)).toHaveTextContent('$ 23.100');
     expect(activeCard.queryByText(/variedades/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/pedido mauro altamirano/i)).not.toBeInTheDocument();
@@ -341,6 +382,72 @@ describe('OrdersPage', () => {
     expect(finalizedCard.getByText(/3537559269/)).toBeInTheDocument();
     expect(finalizedCard.getByLabelText(/total del pedido/i)).toHaveTextContent('$ 39.500');
     expect(screen.queryByLabelText(/pedido ana pérez/i)).not.toBeInTheDocument();
+  });
+
+  it('shows pending varieties only from active confirmed orders', async () => {
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([
+        orderListItem,
+        afternoonOrderListItem,
+        {
+          ...orderListItem,
+          id: 'order-4',
+          customer: { ...orderListItem.customer, id: 'customer-4', name: 'Zoe Torres' },
+          items: [
+            {
+              id: 'item-4',
+              menuItemId: 'menu-1',
+              menuItemName: 'Carne suave',
+              quantity: 6,
+              unitPrice: 6500,
+              subtotal: 6500,
+            },
+          ],
+          totalQuantity: 6,
+        },
+        finalizedOrderListItem,
+      ]),
+    );
+
+    renderOrdersPage();
+
+    await screen.findByLabelText(/pedido ana pérez/i);
+    const pendingPanel = within(await screen.findByLabelText(/variedades pendientes/i));
+    expect(pendingPanel.getByText(/18u\./i)).toBeInTheDocument();
+    expect(pendingPanel.getByText(/carne suave/i)).toBeInTheDocument();
+    expect(pendingPanel.getByText(/12u\./i)).toBeInTheDocument();
+    expect(pendingPanel.getByText(/humita/i)).toBeInTheDocument();
+  });
+
+  it('hydrates variety names when the order list only has total quantities', async () => {
+    const { items: _items, ...legacyOrderListItem } = orderListItem;
+    void _items;
+    vi.mocked(listOrders).mockResolvedValue({
+      orders: [legacyOrderListItem],
+      pagination: {
+        page: 1,
+        pageSize: 25,
+        total: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      stats: {
+        active: 1,
+        finalized: 0,
+        pending: 1,
+      },
+    });
+
+    renderOrdersPage();
+
+    const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
+    expect(await orderCard.findByText(/12u\. carne suave/i)).toBeInTheDocument();
+    expect(orderCard.getByText(/12u\. humita/i)).toBeInTheDocument();
+
+    const pendingPanel = within(screen.getByLabelText(/variedades pendientes/i));
+    expect(await pendingPanel.findByText(/carne suave/i)).toBeInTheDocument();
+    expect(pendingPanel.getByText(/humita/i)).toBeInTheDocument();
   });
 
   it('renders dashboard summary panels and the order table header', async () => {
@@ -800,6 +907,50 @@ describe('OrdersPage', () => {
     expect(updateOrderPayment).toHaveBeenCalledWith('order-1', true);
   });
 
+  it('toggles confirmed and prepared from the order preview without using delivered', async () => {
+    vi.mocked(updateOrderStatus).mockResolvedValue({
+      ...orderDetail,
+      status: 'preparado',
+    });
+
+    renderOrdersPage();
+
+    const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
+    await userEvent.click(orderCard.getByRole('button', { name: /marcar pedido como preparado/i }));
+
+    expect(updateOrderStatus).toHaveBeenCalledWith('order-1', 'preparado');
+  });
+
+  it('updates payment from the order detail panel', async () => {
+    vi.mocked(updateOrderPayment).mockResolvedValue({
+      ...orderDetail,
+      isPaid: true,
+    });
+
+    renderOrdersPage();
+
+    const orderCard = within(await screen.findByLabelText(/pedido ana pérez/i));
+    await userEvent.click(orderCard.getByRole('button', { name: /ver detalle/i }));
+    const detail = within(await screen.findByRole('dialog', { name: /detalle del pedido/i }));
+    await userEvent.click(detail.getByRole('button', { name: /marcar pedido como pagado/i }));
+
+    expect(updateOrderPayment).toHaveBeenCalledWith('order-1', true);
+  });
+
+  it('keeps mobile filters collapsed until opening the filter panel', async () => {
+    mockDesktopViewport(false);
+    renderOrdersPage();
+
+    expect(await screen.findByRole('searchbox', { name: /buscar pedido/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/filtrar por fecha de entrega/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /filtros/i }));
+
+    expect(screen.getByLabelText(/filtrar por fecha de entrega/i)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /estado/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /método/i })).toBeInTheDocument();
+  });
+
   it('updates an order status from the detail panel actions', async () => {
     vi.mocked(updateOrderStatus).mockResolvedValue({
       ...orderDetail,
@@ -814,5 +965,37 @@ describe('OrdersPage', () => {
     await userEvent.click(detail.getByRole('button', { name: /marcar como listo/i }));
 
     expect(updateOrderStatus).toHaveBeenCalledWith('order-1', 'preparado');
+  });
+
+  it('lets delivered orders return to prepared from the detail panel', async () => {
+    const deliveredDetail = {
+      ...orderDetail,
+      ...finalizedOrderListItem,
+      items: orderDetail.items,
+      addons: orderDetail.addons,
+    };
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([orderListItem, finalizedOrderListItem]),
+    );
+    vi.mocked(getOrder).mockResolvedValue(deliveredDetail);
+    vi.mocked(updateOrderStatus).mockResolvedValue({
+      ...deliveredDetail,
+      status: 'preparado',
+    });
+
+    renderOrdersPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /finalizados/i }));
+    const orderCard = within(await screen.findByLabelText(/pedido mauro altamirano/i));
+    await userEvent.click(orderCard.getByRole('button', { name: /ver detalle/i }));
+    const detail = within(await screen.findByRole('dialog', { name: /detalle del pedido/i }));
+
+    const backToPreparedButton = detail.getByRole('button', { name: /volver a preparado/i });
+    expect(backToPreparedButton).toBeEnabled();
+    expect(detail.getByRole('button', { name: /^entregado$/i })).toBeDisabled();
+
+    await userEvent.click(backToPreparedButton);
+
+    expect(updateOrderStatus).toHaveBeenCalledWith('order-2', 'preparado');
   });
 });

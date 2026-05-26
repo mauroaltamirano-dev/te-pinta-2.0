@@ -14,6 +14,7 @@ import type {
   OrderListPagination,
   OrderListStats,
   OrderRepository,
+  PendingVarietyTotal,
   PersistOrderInput,
 } from './order-service';
 
@@ -299,16 +300,64 @@ const buildPagination = (filters: OrderFilters, total: number): OrderListPaginat
   };
 };
 
+const getPendingVarietyStats = async (
+  db: DbClient,
+  filters: OrderFilters = {},
+): Promise<PendingVarietyTotal[]> => {
+  const {
+    estado: _estado,
+    visibility: _visibility,
+    page: _page,
+    pageSize: _pageSize,
+    ...rest
+  } = filters;
+  void _estado;
+  void _visibility;
+  void _page;
+  void _pageSize;
+  const baseConditions = buildFilterConditions(rest, { includeVisibility: false });
+  const conditions = [...baseConditions, eq(orders.status, 'confirmado')];
+
+  const rows = await db
+    .select({
+      menuItemId: orderItems.menuItemId,
+      menuItemName: menuItems.name,
+      quantity: orderItems.quantity,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .innerJoin(menuItems, eq(orderItems.menuItemId, menuItems.id))
+    .where(and(...conditions));
+
+  const totals = rows.reduce<Map<string, PendingVarietyTotal>>((acc, row) => {
+    const current = acc.get(row.menuItemId) ?? {
+      menuItemId: row.menuItemId,
+      menuItemName: row.menuItemName,
+      quantity: 0,
+    };
+    current.quantity += row.quantity;
+    acc.set(row.menuItemId, current);
+    return acc;
+  }, new Map());
+
+  return [...totals.values()].sort((left, right) =>
+    left.menuItemName.localeCompare(right.menuItemName, 'es-AR'),
+  );
+};
+
 const getListStats = async (db: DbClient, filters: OrderFilters = {}): Promise<OrderListStats> => {
   const baseConditions = buildFilterConditions(filters, { includeVisibility: false });
   const finalizedCondition = and(eq(orders.status, 'entregado'), eq(orders.isPaid, true))!;
 
-  const [active, finalized] = await Promise.all([
+  const [active, finalized, pending, pendingVarieties] = await Promise.all([
     countOrders(db, [...baseConditions, not(finalizedCondition)]),
     countOrders(db, [...baseConditions, finalizedCondition]),
+    countOrders(db, [...baseConditions, eq(orders.status, 'confirmado')]),
+    getPendingVarietyStats(db, filters),
   ]);
 
-  return { active, finalized };
+  return { active, finalized, pending, pendingVarieties };
 };
 
 const getOrderItems = async (db: DbClient, orderId: string): Promise<OrderItemDetail[]> => {
@@ -387,8 +436,7 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
       const items = itemsByOrderId.get(row.order.id) ?? [];
       const addons = addonsByOrderId.get(row.order.id) ?? [];
       const detail = mapOrderDetail(row.order, row.customer, items, addons);
-      const { items: _items, addons: _addons, ...listItem } = detail;
-      void _items;
+      const { addons: _addons, ...listItem } = detail;
       void _addons;
       return {
         ...listItem,
