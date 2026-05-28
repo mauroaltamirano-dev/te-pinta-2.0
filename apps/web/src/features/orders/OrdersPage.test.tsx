@@ -573,6 +573,41 @@ describe('OrdersPage', () => {
     expect(screen.queryByLabelText(/pedido ana pérez/i)).not.toBeInTheDocument();
   });
 
+  it('keeps the closest and farthest date sort options aligned with their labels', async () => {
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([
+        {
+          ...orderListItem,
+          id: 'order-4',
+          customer: { ...orderListItem.customer, id: 'customer-4', name: 'Pedido Lejano' },
+          deliveryDate: '2026-05-10',
+        },
+        orderListItem,
+      ]),
+    );
+
+    renderOrdersPage();
+
+    expect(await screen.findByLabelText(/pedido ana pérez/i)).toBeInTheDocument();
+    const closestCards = screen.getAllByRole('article', { name: /pedido /i });
+    expect(closestCards[0]).toHaveAccessibleName(/ana pérez/i);
+    expect(closestCards[1]).toHaveAccessibleName(/pedido lejano/i);
+    expect(vi.mocked(listOrders).mock.calls[0]?.[0]).toMatchObject({
+      sortBy: 'deliveryDate',
+      sortDir: 'asc',
+    });
+
+    await userEvent.selectOptions(screen.getByLabelText(/ordenar por/i), 'date_desc');
+
+    const farthestCards = screen.getAllByRole('article', { name: /pedido /i });
+    expect(farthestCards[0]).toHaveAccessibleName(/pedido lejano/i);
+    expect(farthestCards[1]).toHaveAccessibleName(/ana pérez/i);
+    expect(vi.mocked(listOrders).mock.calls.at(-1)?.[0]).toMatchObject({
+      sortBy: 'deliveryDate',
+      sortDir: 'desc',
+    });
+  });
+
   it('renders the create order dialog outside the page container so the overlay covers the whole app', async () => {
     const { container } = renderOrdersPage();
 

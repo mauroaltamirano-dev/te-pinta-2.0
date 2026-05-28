@@ -1048,7 +1048,7 @@ export const OrdersPage = () => {
   const [methodFilter, setMethodFilter] = useState<OrderMethodFilter>('todos');
   const [sortOption, setSortOption] = useState<OrderSortOption>('date_asc');
   const [tableSortCol, setTableSortCol] = useState<TableSortColumn>('date');
-  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('desc');
+  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('asc');
   const [orderPage, setOrderPage] = useState(1);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -1633,8 +1633,8 @@ export const OrdersPage = () => {
   const handleSortOptionChange = (option: OrderSortOption) => {
     setSortOption(option);
     const sortMap: Record<OrderSortOption, { col: TableSortColumn; dir: TableSortDir }> = {
-      date_asc: { col: 'date', dir: 'desc' },
-      date_desc: { col: 'date', dir: 'asc' },
+      date_asc: { col: 'date', dir: 'asc' },
+      date_desc: { col: 'date', dir: 'desc' },
       name_asc: { col: 'name', dir: 'asc' },
       name_desc: { col: 'name', dir: 'desc' },
       total_desc: { col: 'total', dir: 'desc' },
