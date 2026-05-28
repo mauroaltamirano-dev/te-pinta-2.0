@@ -3,22 +3,33 @@ import { Router, type Router as ExpressRouter } from 'express';
 import {
   createFinanceProductSchema,
   createFinancePurchaseSchema,
+  createFinanceBaseCostRuleSchema,
   createFinanceStockAdjustmentSchema,
   financeCostingPreviewOrderSchema,
   financeProductFiltersSchema,
   financeStockFiltersSchema,
+  updateFinanceBaseCostRuleSchema,
+  updateFinanceRecipeSchema,
 } from '@te-pinta/shared';
 
 import { authenticate } from '../../middlewares/authenticate';
 import { validate } from '../../middlewares/validate';
+import { idParamsSchema } from '../route-schemas';
 import type { JwtSecrets } from '../auth/jwt';
 import {
+  createFinanceBaseCostRule,
   createFinanceProduct,
   createFinancePurchase,
   createFinanceStockAdjustment,
+  deleteFinanceBaseCostRule,
+  getFinanceRecipe,
+  listFinanceBaseCostRules,
   listFinanceProducts,
+  listFinanceRecipes,
   listFinanceStock,
   previewFinanceOrderCost,
+  updateFinanceBaseCostRule,
+  updateFinanceRecipe,
   type FinanceRepository,
 } from './finance-service';
 
@@ -69,6 +80,89 @@ export const createFinanceRouter = ({
       try {
         const purchase = await createFinancePurchase(req.body, repository);
         res.status(201).json({ purchase });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get('/base-cost-rules', async (_req, res, next) => {
+    try {
+      const rules = await listFinanceBaseCostRules(repository);
+      res.json({ rules });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post(
+    '/base-cost-rules',
+    validate({ body: createFinanceBaseCostRuleSchema }),
+    async (req, res, next) => {
+      try {
+        const rule = await createFinanceBaseCostRule(req.body, repository);
+        res.status(201).json({ rule });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.put(
+    '/base-cost-rules/:id',
+    validate({ params: idParamsSchema, body: updateFinanceBaseCostRuleSchema }),
+    async (req, res, next) => {
+      try {
+        const { id } = idParamsSchema.parse(req.params);
+        const rule = await updateFinanceBaseCostRule(id, req.body, repository);
+        res.json({ rule });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.delete(
+    '/base-cost-rules/:id',
+    validate({ params: idParamsSchema }),
+    async (req, res, next) => {
+      try {
+        const { id } = idParamsSchema.parse(req.params);
+        await deleteFinanceBaseCostRule(id, repository);
+        res.status(204).send();
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get('/recipes', async (_req, res, next) => {
+    try {
+      const recipes = await listFinanceRecipes(repository);
+      res.json({ recipes });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get('/recipes/:id', validate({ params: idParamsSchema }), async (req, res, next) => {
+    try {
+      const { id } = idParamsSchema.parse(req.params);
+      const recipe = await getFinanceRecipe(id, repository);
+      res.json({ recipe });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put(
+    '/recipes/:id',
+    validate({ params: idParamsSchema, body: updateFinanceRecipeSchema }),
+    async (req, res, next) => {
+      try {
+        const { id } = idParamsSchema.parse(req.params);
+        const recipe = await updateFinanceRecipe(id, req.body, repository);
+        res.json({ recipe });
       } catch (error) {
         next(error);
       }

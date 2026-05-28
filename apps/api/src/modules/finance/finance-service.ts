@@ -6,11 +6,14 @@ import {
   calculateOrderCostBreakdown,
   calculatePurchaseItemCost,
   calculateRecipeCostPerUnit,
+  type CreateFinanceBaseCostRuleInput,
   type CreateFinanceProductInput,
   type CreateFinancePurchaseInput,
   type CreateFinanceStockAdjustmentInput,
   type FinanceBaseUnit,
+  type FinanceCostComponentType,
   type FinanceCostRule,
+  type FinanceCostRuleAppliesTo,
   type FinanceCostWarning,
   type FinanceCostingPreviewOrderInput,
   type FinanceOrderCostBreakdown,
@@ -18,8 +21,11 @@ import {
   type FinanceProductFilters,
   type FinanceProductCostHistoryItem,
   type FinanceRecipeCostItem,
+  type FinanceRoundingMode,
   type FinanceStockFilters,
   type FinanceStockMovementType,
+  type UpdateFinanceBaseCostRuleInput,
+  type UpdateFinanceRecipeInput,
 } from '@te-pinta/shared';
 
 import { ApiError } from '../../middlewares/error-handler';
@@ -108,6 +114,62 @@ export type FinanceCostingData = {
   menuItemsById: Map<string, { id: string; name: string }>;
 };
 
+export type FinanceBaseCostRuleDetail = {
+  id: string;
+  productId: string;
+  productName?: string;
+  name: string;
+  componentType: FinanceCostComponentType;
+  appliesTo: FinanceCostRuleAppliesTo;
+  quantity: number;
+  groupSizeUnits: number;
+  roundingMode: FinanceRoundingMode;
+  latestCostCents: number | null;
+  isActive: boolean;
+};
+
+export type PersistFinanceBaseCostRuleInput = {
+  id: string;
+  productId: string;
+  name: string;
+  componentType: FinanceCostComponentType;
+  appliesTo: FinanceCostRuleAppliesTo;
+  quantity: number;
+  groupSizeUnits: number;
+  roundingMode: FinanceRoundingMode;
+  isActive: boolean;
+};
+
+export type FinanceRecipeItemDetail = FinanceRecipeCostItem & {
+  id: string;
+  menuItemId: string;
+  quantityPerDozen: number;
+  unit: FinanceBaseUnit;
+  notes: string | null;
+};
+
+export type FinanceRecipeDetail = {
+  menuItemId: string;
+  menuItemName: string;
+  items: FinanceRecipeItemDetail[];
+  totalCostPerDozenCents: number;
+  totalCostPerUnitCents: number;
+  warnings: FinanceCostWarning[];
+};
+
+export type PersistFinanceRecipeInput = {
+  menuItemId: string;
+  items: Array<{
+    id: string;
+    menuItemId: string;
+    productId: string;
+    quantityPerDozen: number;
+    unit: FinanceBaseUnit;
+    quantityBase: number;
+    notes: string | null;
+  }>;
+};
+
 export type FinanceRepository = {
   listProducts(filters?: FinanceProductFilters): Promise<FinanceProductRecord[]>;
   createProduct(product: FinanceProduct): Promise<FinanceProduct>;
@@ -116,6 +178,16 @@ export type FinanceRepository = {
   listStock(filters?: FinanceStockFilters): Promise<FinanceStockItem[]>;
   createStockMovement(input: PersistFinanceStockMovement): Promise<FinanceStockMovement>;
   getCostingData(input: FinanceCostingPreviewOrderInput): Promise<FinanceCostingData>;
+  listBaseCostRules(): Promise<FinanceBaseCostRuleDetail[]>;
+  createBaseCostRule(input: PersistFinanceBaseCostRuleInput): Promise<FinanceBaseCostRuleDetail>;
+  updateBaseCostRule(
+    id: string,
+    updates: UpdateFinanceBaseCostRuleInput,
+  ): Promise<FinanceBaseCostRuleDetail | null>;
+  deleteBaseCostRule(id: string): Promise<boolean>;
+  listRecipes(): Promise<FinanceRecipeDetail[]>;
+  getRecipe(menuItemId: string): Promise<FinanceRecipeDetail | null>;
+  replaceRecipe(input: PersistFinanceRecipeInput): Promise<FinanceRecipeDetail | null>;
 };
 
 const normalizeOptionalText = (value: string | undefined): string | null => value?.trim() || null;
@@ -244,6 +316,107 @@ export const listFinanceStock = (
   filters?: FinanceStockFilters,
 ): Promise<FinanceStockItem[]> => repository.listStock(filters);
 
+export const listFinanceBaseCostRules = (
+  repository: FinanceRepository,
+): Promise<FinanceBaseCostRuleDetail[]> => repository.listBaseCostRules();
+
+export const createFinanceBaseCostRule = async (
+  input: CreateFinanceBaseCostRuleInput,
+  repository: FinanceRepository,
+): Promise<FinanceBaseCostRuleDetail> => {
+  await ensureFinanceProductExists(repository, input.productId);
+
+  return repository.createBaseCostRule({
+    id: randomUUID(),
+    productId: input.productId,
+    name: input.name,
+    componentType: input.componentType,
+    appliesTo: input.appliesTo,
+    quantity: input.quantity,
+    groupSizeUnits: input.groupSizeUnits,
+    roundingMode: input.roundingMode,
+    isActive: input.isActive,
+  });
+};
+
+export const updateFinanceBaseCostRule = async (
+  id: string,
+  input: UpdateFinanceBaseCostRuleInput,
+  repository: FinanceRepository,
+): Promise<FinanceBaseCostRuleDetail> => {
+  if (input.productId) {
+    await ensureFinanceProductExists(repository, input.productId);
+  }
+
+  const updated = await repository.updateBaseCostRule(id, input);
+  if (!updated) {
+    throw new ApiError(404, 'Finance base cost rule not found', 'FINANCE_BASE_COST_RULE_NOT_FOUND');
+  }
+
+  return updated;
+};
+
+export const deleteFinanceBaseCostRule = async (
+  id: string,
+  repository: FinanceRepository,
+): Promise<void> => {
+  const deleted = await repository.deleteBaseCostRule(id);
+  if (!deleted) {
+    throw new ApiError(404, 'Finance base cost rule not found', 'FINANCE_BASE_COST_RULE_NOT_FOUND');
+  }
+};
+
+export const listFinanceRecipes = async (
+  repository: FinanceRepository,
+): Promise<FinanceRecipeDetail[]> => repository.listRecipes();
+
+export const getFinanceRecipe = async (
+  menuItemId: string,
+  repository: FinanceRepository,
+): Promise<FinanceRecipeDetail> => {
+  const recipe = await repository.getRecipe(menuItemId);
+  if (!recipe) {
+    throw new ApiError(404, 'Menu item not found', 'MENU_ITEM_NOT_FOUND');
+  }
+
+  return recipe;
+};
+
+export const updateFinanceRecipe = async (
+  menuItemId: string,
+  input: UpdateFinanceRecipeInput,
+  repository: FinanceRepository,
+): Promise<FinanceRecipeDetail> => {
+  if (input.menuItemId !== menuItemId) {
+    throw new ApiError(400, 'Recipe menu item mismatch', 'FINANCE_RECIPE_MENU_ITEM_MISMATCH');
+  }
+
+  const productsById = await getProductsById(
+    repository,
+    input.items.map((item) => item.productId),
+  );
+  for (const item of input.items) {
+    if (!productsById.has(item.productId)) {
+      throw new ApiError(404, 'Finance product not found', 'FINANCE_PRODUCT_NOT_FOUND');
+    }
+  }
+
+  const recipe = await repository.replaceRecipe({
+    menuItemId,
+    items: input.items.map((item) => ({
+      ...item,
+      id: randomUUID(),
+      menuItemId,
+      notes: normalizeOptionalText(item.notes),
+    })),
+  });
+  if (!recipe) {
+    throw new ApiError(404, 'Menu item not found', 'MENU_ITEM_NOT_FOUND');
+  }
+
+  return recipe;
+};
+
 export const createFinanceStockAdjustment = async (
   input: CreateFinanceStockAdjustmentInput,
   repository: FinanceRepository,
@@ -322,4 +495,14 @@ const getProductsById = async (
   const uniqueProductIds = [...new Set(productIds)];
   const products = await repository.getProductsByIds(uniqueProductIds);
   return new Map(products.map((product) => [product.id, product]));
+};
+
+const ensureFinanceProductExists = async (
+  repository: FinanceRepository,
+  productId: string,
+): Promise<void> => {
+  const products = await getProductsById(repository, [productId]);
+  if (!products.has(productId)) {
+    throw new ApiError(404, 'Finance product not found', 'FINANCE_PRODUCT_NOT_FOUND');
+  }
 };

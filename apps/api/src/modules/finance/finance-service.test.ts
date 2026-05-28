@@ -8,10 +8,12 @@ import type {
   FinanceStockMovement,
 } from './finance-service';
 import {
+  createFinanceBaseCostRule,
   createFinancePurchase,
   createFinanceStockAdjustment,
   listFinanceProducts,
   previewFinanceOrderCost,
+  updateFinanceRecipe,
 } from './finance-service';
 
 const product = (overrides: Partial<FinanceProduct> = {}): FinanceProduct => ({
@@ -53,6 +55,28 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   createPurchaseWithItems: async (input) => purchaseDetail({ id: input.id, items: input.items }),
   listStock: async () => [],
   createStockMovement: async (input) => movement(input),
+  listBaseCostRules: async () => [],
+  createBaseCostRule: async (input) => ({
+    ...input,
+    productName: 'Tapas de empanadas',
+    latestCostCents: 13_333,
+  }),
+  updateBaseCostRule: async () => null,
+  deleteBaseCostRule: async () => false,
+  listRecipes: async () => [],
+  getRecipe: async () => null,
+  replaceRecipe: async (input) => ({
+    menuItemId: input.menuItemId,
+    menuItemName: 'Humita',
+    items: input.items.map((item) => ({
+      ...item,
+      name: 'Cebolla',
+      latestCostCents: 1_000,
+    })),
+    totalCostPerDozenCents: 1_000,
+    totalCostPerUnitCents: 83,
+    warnings: [],
+  }),
   getCostingData: async () => ({
     baseRawMaterialRules: [],
     packagingRules: [],
@@ -175,8 +199,8 @@ describe('finance service', () => {
   });
 
   it('records waste stock adjustments as negative auditable ledger movements', async () => {
-    const createStockMovement = vi.fn<FinanceRepository['createStockMovement']>(
-      async (input) => movement({ ...input, createdAt: new Date('2026-05-28T10:00:00.000Z') }),
+    const createStockMovement = vi.fn<FinanceRepository['createStockMovement']>(async (input) =>
+      movement({ ...input, createdAt: new Date('2026-05-28T10:00:00.000Z') }),
     );
     const repository = createRepository({
       getProductsByIds: async () => [product({ id: 'product-tapa', stockTracking: true })],
@@ -267,5 +291,113 @@ describe('finance service', () => {
       'missing_packaging_rules',
       'missing_recipe_cost',
     ]);
+  });
+
+  it('creates base cost rules only for existing finance products', async () => {
+    const createBaseCostRule = vi.fn<FinanceRepository['createBaseCostRule']>(async (input) => ({
+      ...input,
+      productName: 'Tapas de empanadas',
+      latestCostCents: 13_333,
+    }));
+    const repository = createRepository({
+      getProductsByIds: async () => [product({ id: 'product-tapa' })],
+      createBaseCostRule,
+    });
+
+    const rule = await createFinanceBaseCostRule(
+      {
+        productId: 'product-tapa',
+        name: 'Tapa por empanada',
+        componentType: 'base_raw_material',
+        appliesTo: 'per_empanada',
+        quantity: 1,
+        groupSizeUnits: 12,
+        roundingMode: 'exact',
+        isActive: true,
+      },
+      repository,
+    );
+
+    expect(createBaseCostRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-tapa',
+        quantity: 1,
+        roundingMode: 'exact',
+      }),
+    );
+    expect(rule.latestCostCents).toBe(13_333);
+
+    await expect(
+      createFinanceBaseCostRule(
+        {
+          productId: 'missing-product',
+          name: 'Missing',
+          componentType: 'packaging',
+          appliesTo: 'per_started_dozen',
+          quantity: 1,
+          groupSizeUnits: 12,
+          roundingMode: 'ceil',
+          isActive: true,
+        },
+        createRepository({ getProductsByIds: async () => [] }),
+      ),
+    ).rejects.toMatchObject(
+      new ApiError(404, 'Finance product not found', 'FINANCE_PRODUCT_NOT_FOUND'),
+    );
+  });
+
+  it('replaces recipe rows after validating menu/product boundaries', async () => {
+    const replaceRecipe = vi.fn<FinanceRepository['replaceRecipe']>(async (input) => ({
+      menuItemId: input.menuItemId,
+      menuItemName: 'Humita',
+      items: input.items.map((item) => ({
+        ...item,
+        name: 'Cebolla',
+        latestCostCents: 1_000,
+      })),
+      totalCostPerDozenCents: 250,
+      totalCostPerUnitCents: 21,
+      warnings: [],
+    }));
+    const repository = createRepository({
+      getProductsByIds: async () => [product({ id: 'product-cebolla', baseUnit: 'kg' })],
+      replaceRecipe,
+    });
+
+    const recipe = await updateFinanceRecipe(
+      'menu-humita',
+      {
+        menuItemId: 'menu-humita',
+        items: [
+          {
+            productId: 'product-cebolla',
+            quantityPerDozen: 0.25,
+            unit: 'kg',
+            quantityBase: 0.25,
+          },
+        ],
+      },
+      repository,
+    );
+
+    expect(replaceRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        menuItemId: 'menu-humita',
+        items: [
+          expect.objectContaining({
+            productId: 'product-cebolla',
+            quantityBase: 0.25,
+            notes: null,
+          }),
+        ],
+      }),
+    );
+    expect(recipe.totalCostPerUnitCents).toBe(21);
+
+    await expect(
+      updateFinanceRecipe('menu-humita', { menuItemId: 'menu-salteña', items: [] }, repository),
+    ).rejects.toMatchObject(
+      new ApiError(400, 'Recipe menu item mismatch', 'FINANCE_RECIPE_MENU_ITEM_MISMATCH'),
+    );
   });
 });

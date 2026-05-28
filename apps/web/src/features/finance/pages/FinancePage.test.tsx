@@ -7,22 +7,37 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '@/lib/query-client';
 
 import {
+  createFinanceBaseCostRule,
   createFinancePurchase,
   createFinanceStockAdjustment,
+  listFinanceBaseCostRules,
   listFinanceProducts,
+  listFinanceRecipes,
   listFinanceStock,
   previewFinanceOrderCost,
+  updateFinanceRecipe,
 } from '../api';
 import { FinancePage } from './FinancePage';
 import type { FinanceProductWithMetrics } from '../types';
+import { listMenuItems } from '../../menu/menu-api';
 
 vi.mock('../api', () => ({
+  createFinanceBaseCostRule: vi.fn(),
   createFinanceProduct: vi.fn(),
   createFinancePurchase: vi.fn(),
   createFinanceStockAdjustment: vi.fn(),
+  deleteFinanceBaseCostRule: vi.fn(),
+  listFinanceBaseCostRules: vi.fn(),
   listFinanceProducts: vi.fn(),
+  listFinanceRecipes: vi.fn(),
   listFinanceStock: vi.fn(),
   previewFinanceOrderCost: vi.fn(),
+  updateFinanceBaseCostRule: vi.fn(),
+  updateFinanceRecipe: vi.fn(),
+}));
+
+vi.mock('../../menu/menu-api', () => ({
+  listMenuItems: vi.fn(),
 }));
 
 const renderFinancePage = () => {
@@ -63,6 +78,42 @@ describe('FinancePage', () => {
         quantityBase: 30,
       },
     ]);
+    vi.mocked(listFinanceBaseCostRules).mockResolvedValue([
+      {
+        id: 'rule-1',
+        productId: trackedProduct.id,
+        productName: trackedProduct.name,
+        name: 'Harina base',
+        componentType: 'base_raw_material',
+        appliesTo: 'per_empanada',
+        quantity: 0.05,
+        groupSizeUnits: 12,
+        roundingMode: 'exact',
+        latestCostCents: trackedProduct.latestCostPerBaseUnitCents,
+        isActive: true,
+      },
+    ]);
+    vi.mocked(listFinanceRecipes).mockResolvedValue([
+      {
+        menuItemId: 'menu-1',
+        menuItemName: 'Humita',
+        items: [],
+        totalCostPerDozenCents: 0,
+        totalCostPerUnitCents: 0,
+        warnings: [],
+      },
+    ]);
+    vi.mocked(listMenuItems).mockResolvedValue([
+      {
+        id: 'menu-1',
+        name: 'Humita',
+        priceUnit: 1200,
+        priceHalfDozen: 6500,
+        priceDozen: 12000,
+        costPerDozen: 0,
+        isActive: true,
+      },
+    ]);
     vi.mocked(createFinancePurchase).mockResolvedValue({
       id: 'purchase-1',
       purchaseDate: '2026-05-27',
@@ -79,6 +130,39 @@ describe('FinancePage', () => {
       sourcePurchaseItemId: null,
       notes: 'corrección por compra duplicada',
       createdAt: '2026-05-28T12:00:00.000Z',
+    });
+    vi.mocked(createFinanceBaseCostRule).mockResolvedValue({
+      id: 'rule-2',
+      productId: trackedProduct.id,
+      productName: trackedProduct.name,
+      name: 'Harina por empanada',
+      componentType: 'base_raw_material',
+      appliesTo: 'per_empanada',
+      quantity: 0.05,
+      groupSizeUnits: 12,
+      roundingMode: 'exact',
+      latestCostCents: trackedProduct.latestCostPerBaseUnitCents,
+      isActive: true,
+    });
+    vi.mocked(updateFinanceRecipe).mockResolvedValue({
+      menuItemId: 'menu-1',
+      menuItemName: 'Humita',
+      items: [
+        {
+          id: 'recipe-item-1',
+          menuItemId: 'menu-1',
+          productId: trackedProduct.id,
+          name: trackedProduct.name,
+          quantityPerDozen: 0.25,
+          unit: 'kg',
+          quantityBase: 0.25,
+          latestCostCents: trackedProduct.latestCostPerBaseUnitCents,
+          notes: null,
+        },
+      ],
+      totalCostPerDozenCents: 30000,
+      totalCostPerUnitCents: 2500,
+      warnings: [],
     });
     vi.mocked(previewFinanceOrderCost).mockResolvedValue({
       totalEmpanadas: 12,
@@ -126,6 +210,9 @@ describe('FinancePage', () => {
   it('shows empty states when finance data is incomplete', async () => {
     vi.mocked(listFinanceProducts).mockResolvedValue([]);
     vi.mocked(listFinanceStock).mockResolvedValue([]);
+    vi.mocked(listFinanceBaseCostRules).mockResolvedValue([]);
+    vi.mocked(listFinanceRecipes).mockResolvedValue([]);
+    vi.mocked(listMenuItems).mockResolvedValue([]);
 
     renderFinancePage();
 
@@ -138,7 +225,10 @@ describe('FinancePage', () => {
     expect(screen.getByText(/sin movimientos de stock/i)).toBeInTheDocument();
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /costos base/i }));
-    expect(screen.getByText(/se configura desde el backend/i)).toBeInTheDocument();
+    expect(screen.getByText(/sin reglas de costo base/i)).toBeInTheDocument();
+
+    await userEvent.click(within(tabs).getByRole('tab', { name: /recetas/i }));
+    expect(screen.getByText(/sin variedades de menú/i)).toBeInTheDocument();
   });
 
   it('displays calculator warnings returned by the finance preview endpoint', async () => {
@@ -170,8 +260,6 @@ describe('FinancePage', () => {
     await userEvent.click(within(tabs).getByRole('tab', { name: /calculadora/i }));
     await userEvent.clear(screen.getByLabelText(/total de venta/i));
     await userEvent.type(screen.getByLabelText(/total de venta/i), '24000');
-    await userEvent.clear(screen.getByLabelText(/id de variedad/i));
-    await userEvent.type(screen.getByLabelText(/id de variedad/i), 'menu-1');
     await userEvent.clear(screen.getByLabelText(/cantidad de empanadas/i));
     await userEvent.type(screen.getByLabelText(/cantidad de empanadas/i), '12');
     await userEvent.click(screen.getByRole('button', { name: /calcular costo/i }));
@@ -181,6 +269,61 @@ describe('FinancePage', () => {
       saleTotalCents: 2400000,
       items: [{ menuItemId: 'menu-1', quantity: 12 }],
     });
+  });
+
+  it('creates base cost rules from the finance workspace', async () => {
+    renderFinancePage();
+
+    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    await userEvent.click(within(tabs).getByRole('tab', { name: /costos base/i }));
+
+    expect(screen.getByText(/base 12 emp/i)).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(/nombre de regla/i));
+    await userEvent.type(screen.getByLabelText(/nombre de regla/i), 'Harina por empanada');
+    await userEvent.clear(screen.getByLabelText(/^cantidad$/i));
+    await userEvent.type(screen.getByLabelText(/^cantidad$/i), '0.05');
+    await userEvent.click(screen.getByRole('button', { name: /guardar regla/i }));
+
+    await waitFor(() => expect(createFinanceBaseCostRule).toHaveBeenCalled());
+    expect(vi.mocked(createFinanceBaseCostRule).mock.calls[0]?.[0]).toEqual({
+      productId: trackedProduct.id,
+      name: 'Harina por empanada',
+      componentType: 'base_raw_material',
+      appliesTo: 'per_empanada',
+      quantity: 0.05,
+      groupSizeUnits: 12,
+      roundingMode: 'exact',
+      isActive: true,
+    });
+    expect(await screen.findByText(/regla guardada/i)).toBeInTheDocument();
+  });
+
+  it('saves recipe ingredients by menu variety and product base unit', async () => {
+    renderFinancePage();
+
+    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    await userEvent.click(within(tabs).getByRole('tab', { name: /recetas/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /agregar ingrediente/i }));
+    await userEvent.clear(screen.getByLabelText(/cantidad\/kg/i));
+    await userEvent.type(screen.getByLabelText(/cantidad\/kg/i), '0.25');
+    await userEvent.click(screen.getByRole('button', { name: /guardar receta/i }));
+
+    await waitFor(() => expect(updateFinanceRecipe).toHaveBeenCalled());
+    expect(vi.mocked(updateFinanceRecipe).mock.calls[0]?.[0]).toEqual('menu-1');
+    expect(vi.mocked(updateFinanceRecipe).mock.calls[0]?.[1]).toEqual({
+      menuItemId: 'menu-1',
+      items: [
+        {
+          productId: trackedProduct.id,
+          quantityPerDozen: 0.25,
+          unit: 'kg',
+          quantityBase: 0.25,
+          notes: undefined,
+        },
+      ],
+    });
+    expect(await screen.findByText(/receta guardada/i)).toBeInTheDocument();
   });
 
   it('registers weighted purchases using the product base unit instead of pack language', async () => {

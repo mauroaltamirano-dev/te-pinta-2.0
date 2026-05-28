@@ -9,27 +9,42 @@ import {
   PieChart,
   Plus,
   ReceiptText,
+  Save,
   Soup,
+  Trash2,
   Warehouse,
 } from 'lucide-react';
 
 import { PageHero } from '@/components/layout/PageHero';
 
 import {
+  useCreateFinanceBaseCostRule,
   useCreateFinanceProduct,
   useCreateFinancePurchase,
   useCreateFinanceStockAdjustment,
+  useDeleteFinanceBaseCostRule,
+  useFinanceBaseCostRules,
   useFinanceProducts,
+  useFinanceRecipes,
   useFinanceStock,
   usePreviewFinanceOrderCost,
+  useUpdateFinanceBaseCostRule,
+  useUpdateFinanceRecipe,
 } from '../hooks';
 import type {
   CreateFinanceStockAdjustmentInput,
+  FinanceBaseCostRule,
   FinanceBaseUnit,
+  FinanceCostComponentType,
+  FinanceCostRuleAppliesTo,
   FinanceProductCategory,
   FinanceProductWithMetrics,
+  FinanceRecipe,
+  FinanceRoundingMode,
   FinanceStockItem,
 } from '../types';
+import type { MenuItem } from '../../menu/menu-api';
+import { useMenuItems } from '../../menu/menu-hooks';
 
 type FinanceTab =
   | 'dashboard'
@@ -76,6 +91,23 @@ type StockTargetFormState = {
   notes: string;
 };
 
+type BaseCostRuleFormState = {
+  productId: string;
+  name: string;
+  componentType: FinanceCostComponentType;
+  appliesTo: FinanceCostRuleAppliesTo;
+  quantity: string;
+  groupSizeUnits: string;
+  roundingMode: FinanceRoundingMode;
+  isActive: boolean;
+};
+
+type RecipeDraftItem = {
+  productId: string;
+  quantity: string;
+  notes: string;
+};
+
 type FinanceFeedback = {
   tone: 'success' | 'error';
   title: string;
@@ -111,8 +143,26 @@ const baseUnitLabels: Record<FinanceBaseUnit, string> = {
   pack: 'pack',
 };
 
+const componentTypeLabels: Record<FinanceCostComponentType, string> = {
+  base_raw_material: 'Materia prima base',
+  packaging: 'Packaging',
+};
+
+const appliesToLabels: Record<FinanceCostRuleAppliesTo, string> = {
+  per_empanada: 'Por empanada',
+  per_started_dozen: 'Por docena iniciada',
+};
+
+const roundingModeLabels: Record<FinanceRoundingMode, string> = {
+  exact: 'Exacto',
+  ceil: 'Redondear hacia arriba',
+};
+
 const productCategoryOptions = Object.keys(categoryLabels) as FinanceProductCategory[];
 const baseUnitOptions = Object.keys(baseUnitLabels) as FinanceBaseUnit[];
+const componentTypeOptions = Object.keys(componentTypeLabels) as FinanceCostComponentType[];
+const appliesToOptions = Object.keys(appliesToLabels) as FinanceCostRuleAppliesTo[];
+const roundingModeOptions = Object.keys(roundingModeLabels) as FinanceRoundingMode[];
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -146,6 +196,17 @@ const initialStockTargetForm: StockTargetFormState = {
   notes: '',
 };
 
+const initialBaseCostRuleForm: BaseCostRuleFormState = {
+  productId: '',
+  name: '',
+  componentType: 'base_raw_material',
+  appliesTo: 'per_empanada',
+  quantity: '1',
+  groupSizeUnits: '12',
+  roundingMode: 'exact',
+  isActive: true,
+};
+
 const moneyFormatter = new Intl.NumberFormat('es-AR', {
   style: 'currency',
   currency: 'ARS',
@@ -160,6 +221,19 @@ const formatQuantity = (quantity: number, unit: FinanceBaseUnit): string =>
 
 const toCents = (value: string): number => Math.round(Number(value || 0) * 100);
 const toPositiveNumber = (value: string): number => Math.max(Number(value || 0), 0);
+
+const estimateBaseCostFromRules = (rules: FinanceBaseCostRule[], empanadaCount: number): number =>
+  rules
+    .filter((rule) => rule.isActive && rule.latestCostCents !== null)
+    .reduce((total, rule) => {
+      const unitCost = rule.latestCostCents ?? 0;
+      const groups =
+        rule.appliesTo === 'per_started_dozen'
+          ? Math.ceil(empanadaCount / Math.max(rule.groupSizeUnits, 1))
+          : empanadaCount;
+
+      return total + Math.round(unitCost * rule.quantity * groups);
+    }, 0);
 
 const getErrorDescription = (error: unknown): string =>
   error instanceof Error ? error.message : 'No se pudo completar la operación.';
@@ -715,6 +789,484 @@ const StockTargetForm = ({
   );
 };
 
+const BaseCostRulesWorkspace = ({
+  rules,
+  products,
+  onCreate,
+  onUpdate,
+  onDelete,
+  isPending,
+}: {
+  rules: FinanceBaseCostRule[];
+  products: FinanceProductWithMetrics[];
+  onCreate: (form: BaseCostRuleFormState) => void;
+  onUpdate: (id: string, updates: Partial<BaseCostRuleFormState> & { isActive?: boolean }) => void;
+  onDelete: (id: string) => void;
+  isPending: boolean;
+}) => {
+  const [form, setForm] = useState<BaseCostRuleFormState>(initialBaseCostRuleForm);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const selectedProductId = form.productId || products[0]?.id || '';
+  const activeRules = rules.filter((rule) => rule.isActive);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextForm = { ...form, productId: selectedProductId };
+    if (editingRuleId) {
+      onUpdate(editingRuleId, nextForm);
+      setEditingRuleId(null);
+    } else {
+      onCreate(nextForm);
+    }
+    setForm((current) => ({ ...initialBaseCostRuleForm, productId: current.productId }));
+  };
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-3">
+          {[12, 18, 24].map((quantity) => (
+            <KpiCard
+              description="Estimación con reglas activas y último costo cargado."
+              icon={Layers3}
+              key={quantity}
+              label={`Base ${quantity} emp.`}
+              value={formatMoneyFromCents(estimateBaseCostFromRules(activeRules, quantity))}
+            />
+          ))}
+        </div>
+
+        {rules.length ? (
+          rules.map((rule) => (
+            <article
+              className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card"
+              key={rule.id}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-primary">
+                    {componentTypeLabels[rule.componentType]} · {appliesToLabels[rule.appliesTo]}
+                  </p>
+                  <h3 className="mt-1 text-lg font-black text-foreground">{rule.name}</h3>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">
+                    Producto: {rule.productName ?? rule.productId} · Cantidad {rule.quantity}{' '}
+                    {rule.appliesTo === 'per_started_dozen'
+                      ? `cada ${rule.groupSizeUnits} empanadas`
+                      : 'por empanada'}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${
+                    rule.isActive
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+                      : 'bg-amber-50 text-amber-700 ring-amber-100'
+                  }`}
+                >
+                  {rule.isActive ? 'Activa' : 'Pausada'}
+                </span>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-background px-3 py-2 ring-1 ring-border/60">
+                <p className="text-sm font-black text-foreground">
+                  Último costo: {formatMoneyFromCents(rule.latestCostCents)}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="rounded-full bg-muted px-3 py-2 text-xs font-black text-foreground transition hover:bg-muted/80 disabled:opacity-60"
+                    disabled={isPending}
+                    onClick={() => {
+                      setEditingRuleId(rule.id);
+                      setForm({
+                        productId: rule.productId,
+                        name: rule.name,
+                        componentType: rule.componentType,
+                        appliesTo: rule.appliesTo,
+                        quantity: String(rule.quantity),
+                        groupSizeUnits: String(rule.groupSizeUnits),
+                        roundingMode: rule.roundingMode,
+                        isActive: rule.isActive,
+                      });
+                    }}
+                    type="button"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className="rounded-full bg-muted px-3 py-2 text-xs font-black text-foreground transition hover:bg-muted/80 disabled:opacity-60"
+                    disabled={isPending}
+                    onClick={() => onUpdate(rule.id, { isActive: !rule.isActive })}
+                    type="button"
+                  >
+                    {rule.isActive ? 'Pausar' : 'Reactivar'}
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-2 text-xs font-black text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 disabled:opacity-60"
+                    disabled={isPending}
+                    onClick={() => onDelete(rule.id)}
+                    type="button"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden={true} />
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))
+        ) : (
+          <EmptyState
+            title="Sin reglas de costo base"
+            description="Configurá tapas por empanada y packaging por docena iniciada para que la calculadora deje de trabajar a ciegas."
+          />
+        )}
+      </div>
+
+      <form
+        className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card"
+        onSubmit={handleSubmit}
+      >
+        <div className="flex items-center gap-2 text-primary">
+          <Layers3 className="h-4 w-4" aria-hidden={true} />
+          <h3 className="text-sm font-black uppercase tracking-wide">
+            {editingRuleId ? 'Editar regla base' : 'Nueva regla base'}
+          </h3>
+        </div>
+        <label className="mt-4 block text-sm font-bold text-foreground">
+          Producto
+          <select
+            className={selectClassName}
+            disabled={!products.length}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, productId: event.target.value }))
+            }
+            value={selectedProductId}
+          >
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="mt-3 block text-sm font-bold text-foreground">
+          Nombre de regla
+          <input
+            className={inputClassName}
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            placeholder="Ej: Tapa por empanada"
+            required
+            value={form.name}
+          />
+        </label>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm font-bold text-foreground">
+            Tipo
+            <select
+              className={selectClassName}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  componentType: event.target.value as FinanceCostComponentType,
+                }))
+              }
+              value={form.componentType}
+            >
+              {componentTypeOptions.map((type) => (
+                <option key={type} value={type}>
+                  {componentTypeLabels[type]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-bold text-foreground">
+            Aplica
+            <select
+              className={selectClassName}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  appliesTo: event.target.value as FinanceCostRuleAppliesTo,
+                  roundingMode:
+                    event.target.value === 'per_started_dozen' ? 'ceil' : current.roundingMode,
+                }))
+              }
+              value={form.appliesTo}
+            >
+              {appliesToOptions.map((appliesTo) => (
+                <option key={appliesTo} value={appliesTo}>
+                  {appliesToLabels[appliesTo]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-bold text-foreground">
+            Cantidad
+            <input
+              className={inputClassName}
+              min="0"
+              onChange={(event) =>
+                setForm((current) => ({ ...current, quantity: event.target.value }))
+              }
+              step="0.001"
+              type="number"
+              value={form.quantity}
+            />
+          </label>
+          <label className="text-sm font-bold text-foreground">
+            Grupo
+            <input
+              className={inputClassName}
+              min="1"
+              onChange={(event) =>
+                setForm((current) => ({ ...current, groupSizeUnits: event.target.value }))
+              }
+              type="number"
+              value={form.groupSizeUnits}
+            />
+          </label>
+          <label className="text-sm font-bold text-foreground sm:col-span-2">
+            Redondeo
+            <select
+              className={selectClassName}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  roundingMode: event.target.value as FinanceRoundingMode,
+                }))
+              }
+              value={form.roundingMode}
+            >
+              {roundingModeOptions.map((mode) => (
+                <option key={mode} value={mode}>
+                  {roundingModeLabels[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <button
+          className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+          disabled={isPending || !selectedProductId || !form.name.trim()}
+          type="submit"
+        >
+          {editingRuleId ? 'Actualizar regla' : 'Guardar regla'}
+        </button>
+        {editingRuleId ? (
+          <button
+            className="mt-2 inline-flex w-full items-center justify-center rounded-full bg-muted px-4 py-2 text-sm font-black text-foreground transition hover:bg-muted/80"
+            onClick={() => {
+              setEditingRuleId(null);
+              setForm(initialBaseCostRuleForm);
+            }}
+            type="button"
+          >
+            Cancelar edición
+          </button>
+        ) : null}
+      </form>
+    </div>
+  );
+};
+
+const RecipeWorkspace = ({
+  recipes,
+  menuItems,
+  products,
+  onSave,
+  isPending,
+}: {
+  recipes: FinanceRecipe[];
+  menuItems: MenuItem[];
+  products: FinanceProductWithMetrics[];
+  onSave: (menuItemId: string, rows: RecipeDraftItem[]) => void;
+  isPending: boolean;
+}) => {
+  const recipeProducts = products.filter((product) => product.category === 'raw_material');
+  const [selectedMenuItemId, setSelectedMenuItemId] = useState('');
+  const menuItemId = selectedMenuItemId || menuItems[0]?.id || recipes[0]?.menuItemId || '';
+  const selectedRecipe = recipes.find((recipe) => recipe.menuItemId === menuItemId);
+  const [rows, setRows] = useState<RecipeDraftItem[]>([]);
+
+  useEffect(() => {
+    if (!menuItemId) {
+      setRows([]);
+      return;
+    }
+
+    setRows(
+      (selectedRecipe?.items ?? []).map((item) => ({
+        productId: item.productId,
+        quantity: String(item.quantityBase),
+        notes: item.notes ?? '',
+      })),
+    );
+  }, [menuItemId, selectedRecipe]);
+
+  const addRow = () => {
+    const firstProductId = recipeProducts[0]?.id ?? products[0]?.id ?? '';
+    setRows((current) => [...current, { productId: firstProductId, quantity: '1', notes: '' }]);
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSave(menuItemId, rows);
+  };
+
+  if (!menuItems.length) {
+    return (
+      <EmptyState
+        title="Sin variedades de menú"
+        description="Primero cargá variedades en Menú. Después Finanzas puede asociarles recetas por docena."
+      />
+    );
+  }
+
+  return (
+    <form
+      className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card"
+      onSubmit={handleSubmit}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-2 text-primary">
+          <Soup className="h-4 w-4" aria-hidden={true} />
+          <h3 className="text-sm font-black uppercase tracking-wide">Receta por docena</h3>
+        </div>
+        <div className="rounded-2xl bg-background px-3 py-2 text-sm font-black text-foreground ring-1 ring-border/60">
+          Docena {formatMoneyFromCents(selectedRecipe?.totalCostPerDozenCents ?? 0)} · unidad{' '}
+          {formatMoneyFromCents(selectedRecipe?.totalCostPerUnitCents ?? 0)}
+        </div>
+      </div>
+
+      <label className="mt-4 block text-sm font-bold text-foreground">
+        Variedad
+        <select
+          className={selectClassName}
+          onChange={(event) => setSelectedMenuItemId(event.target.value)}
+          value={menuItemId}
+        >
+          {menuItems.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="mt-4 space-y-3">
+        {rows.length ? (
+          rows.map((row, index) => {
+            const product = products.find((item) => item.id === row.productId);
+
+            return (
+              <div
+                className="grid gap-3 rounded-2xl border border-border/70 bg-background p-3 md:grid-cols-[minmax(0,1fr)_10rem_minmax(0,1fr)_auto]"
+                key={`${row.productId}-${index}`}
+              >
+                <label className="text-sm font-bold text-foreground">
+                  Insumo
+                  <select
+                    className={selectClassName}
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, productId: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    value={row.productId}
+                  >
+                    {(recipeProducts.length ? recipeProducts : products).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm font-bold text-foreground">
+                  Cantidad/{baseUnitLabels[product?.baseUnit ?? 'unit']}
+                  <input
+                    className={inputClassName}
+                    min="0"
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, quantity: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    step="0.001"
+                    type="number"
+                    value={row.quantity}
+                  />
+                </label>
+                <label className="text-sm font-bold text-foreground">
+                  Nota
+                  <input
+                    className={inputClassName}
+                    onChange={(event) =>
+                      setRows((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, notes: event.target.value } : item,
+                        ),
+                      )
+                    }
+                    value={row.notes}
+                  />
+                </label>
+                <button
+                  aria-label="Quitar ingrediente"
+                  className="self-end rounded-full bg-red-50 p-3 text-red-700 ring-1 ring-red-100 transition hover:bg-red-100"
+                  onClick={() =>
+                    setRows((current) => current.filter((_item, itemIndex) => itemIndex !== index))
+                  }
+                  type="button"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden={true} />
+                </button>
+              </div>
+            );
+          })
+        ) : (
+          <EmptyState
+            title="La variedad todavía no tiene receta"
+            description="Agregá sólo el relleno específico. Tapas, cajas y papel van en Costos base para no duplicar."
+          />
+        )}
+      </div>
+
+      {selectedRecipe?.warnings.length ? (
+        <div className="mt-4 space-y-2">
+          {selectedRecipe.warnings.map((warning) => (
+            <p
+              className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900"
+              key={`${warning.code}-${warning.message}`}
+            >
+              {warning.message}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          className="inline-flex items-center justify-center rounded-full bg-muted px-4 py-2 text-sm font-black text-foreground transition hover:bg-muted/80 disabled:opacity-60"
+          disabled={!products.length}
+          onClick={addRow}
+          type="button"
+        >
+          Agregar ingrediente
+        </button>
+        <button
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+          disabled={isPending || !menuItemId}
+          type="submit"
+        >
+          <Save className="h-4 w-4" aria-hidden={true} />
+          Guardar receta
+        </button>
+      </div>
+    </form>
+  );
+};
+
 const StockList = ({ stock }: { stock: FinanceStockItem[] }) => {
   if (!stock.length) {
     return (
@@ -753,13 +1305,23 @@ export const FinancePage = () => {
   const [stockResetSignal, setStockResetSignal] = useState(0);
   const productsQuery = useFinanceProducts();
   const stockQuery = useFinanceStock();
+  const baseCostRulesQuery = useFinanceBaseCostRules();
+  const recipesQuery = useFinanceRecipes();
+  const menuItemsQuery = useMenuItems();
   const createProduct = useCreateFinanceProduct();
   const createPurchase = useCreateFinancePurchase();
   const createStockAdjustment = useCreateFinanceStockAdjustment();
+  const createBaseCostRule = useCreateFinanceBaseCostRule();
+  const updateBaseCostRule = useUpdateFinanceBaseCostRule();
+  const deleteBaseCostRule = useDeleteFinanceBaseCostRule();
+  const updateRecipe = useUpdateFinanceRecipe();
   const previewOrderCost = usePreviewFinanceOrderCost();
 
   const products = productsQuery.data ?? [];
   const stock = stockQuery.data ?? [];
+  const baseCostRules = baseCostRulesQuery.data ?? [];
+  const recipes = recipesQuery.data ?? [];
+  const menuItems = menuItemsQuery.data ?? [];
   const productsWithoutCost = products.filter(
     (product) => product.latestCostPerBaseUnitCents === null,
   );
@@ -856,13 +1418,145 @@ export const FinancePage = () => {
     });
   };
 
+  const handleCreateBaseCostRule = (form: BaseCostRuleFormState) => {
+    createBaseCostRule.mutate(
+      {
+        productId: form.productId,
+        name: form.name,
+        componentType: form.componentType,
+        appliesTo: form.appliesTo,
+        quantity: toPositiveNumber(form.quantity),
+        groupSizeUnits: Math.max(Number.parseInt(form.groupSizeUnits || '12', 10), 1),
+        roundingMode: form.roundingMode,
+        isActive: form.isActive,
+      },
+      {
+        onSuccess: (rule) =>
+          setFeedback({
+            tone: 'success',
+            title: 'Regla guardada',
+            description: `${rule.name} ya se usa para los próximos previews de costos.`,
+          }),
+        onError: (error) =>
+          setFeedback({
+            tone: 'error',
+            title: 'No se pudo guardar la regla',
+            description: getErrorDescription(error),
+          }),
+      },
+    );
+  };
+
+  const handleUpdateBaseCostRule = (
+    id: string,
+    updates: Partial<BaseCostRuleFormState> & { isActive?: boolean },
+  ) => {
+    updateBaseCostRule.mutate(
+      {
+        id,
+        updates: {
+          ...(updates.productId !== undefined ? { productId: updates.productId } : {}),
+          ...(updates.name !== undefined ? { name: updates.name } : {}),
+          ...(updates.componentType !== undefined ? { componentType: updates.componentType } : {}),
+          ...(updates.appliesTo !== undefined ? { appliesTo: updates.appliesTo } : {}),
+          ...(updates.quantity !== undefined
+            ? { quantity: toPositiveNumber(updates.quantity) }
+            : {}),
+          ...(updates.groupSizeUnits !== undefined
+            ? { groupSizeUnits: Math.max(Number.parseInt(updates.groupSizeUnits || '12', 10), 1) }
+            : {}),
+          ...(updates.roundingMode !== undefined ? { roundingMode: updates.roundingMode } : {}),
+          ...(updates.isActive !== undefined ? { isActive: updates.isActive } : {}),
+        },
+      },
+      {
+        onSuccess: () =>
+          setFeedback({
+            tone: 'success',
+            title: 'Regla actualizada',
+            description: 'La configuración de costo base quedó actualizada.',
+          }),
+        onError: (error) =>
+          setFeedback({
+            tone: 'error',
+            title: 'No se pudo actualizar la regla',
+            description: getErrorDescription(error),
+          }),
+      },
+    );
+  };
+
+  const handleDeleteBaseCostRule = (id: string) => {
+    const confirmed = window.confirm('¿Eliminar esta regla de costo base?');
+    if (!confirmed) {
+      return;
+    }
+
+    deleteBaseCostRule.mutate(id, {
+      onSuccess: () =>
+        setFeedback({
+          tone: 'success',
+          title: 'Regla eliminada',
+          description: 'La regla ya no participa de los próximos cálculos.',
+        }),
+      onError: (error) =>
+        setFeedback({
+          tone: 'error',
+          title: 'No se pudo eliminar la regla',
+          description: getErrorDescription(error),
+        }),
+    });
+  };
+
+  const handleSaveRecipe = (menuItemId: string, rows: RecipeDraftItem[]) => {
+    updateRecipe.mutate(
+      {
+        menuItemId,
+        input: {
+          menuItemId,
+          items: rows.flatMap((row) => {
+            const product = products.find((item) => item.id === row.productId);
+            const quantity = toPositiveNumber(row.quantity);
+            if (!product || quantity <= 0) {
+              return [];
+            }
+
+            return [
+              {
+                productId: row.productId,
+                quantityPerDozen: quantity,
+                unit: product.baseUnit,
+                quantityBase: quantity,
+                notes: row.notes || undefined,
+              },
+            ];
+          }),
+        },
+      },
+      {
+        onSuccess: (recipe) =>
+          setFeedback({
+            tone: 'success',
+            title: 'Receta guardada',
+            description: `${recipe.menuItemName} ya tiene costo de receta para la calculadora.`,
+          }),
+        onError: (error) =>
+          setFeedback({
+            tone: 'error',
+            title: 'No se pudo guardar la receta',
+            description: getErrorDescription(error),
+          }),
+      },
+    );
+  };
+
   const handlePreview = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     previewOrderCost.mutate({
       saleTotalCents: toCents(calculatorForm.saleTotal),
       items: [
         {
-          menuItemId: calculatorForm.menuItemId,
+          menuItemId: calculatorForm.menuItemId || menuItems[0]?.id || '',
           quantity: Math.max(Number.parseInt(calculatorForm.quantity || '0', 10), 1),
         },
       ],
@@ -997,16 +1691,27 @@ export const FinancePage = () => {
         ) : null}
 
         {activeTab === 'base-costs' ? (
-          <EmptyState
-            title="Costos base"
-            description="Se configura desde el backend/API financiero. Este MVP web deja el espacio listo sin inventar endpoints fuera de PR2."
+          <BaseCostRulesWorkspace
+            isPending={
+              createBaseCostRule.isPending ||
+              updateBaseCostRule.isPending ||
+              deleteBaseCostRule.isPending
+            }
+            onCreate={handleCreateBaseCostRule}
+            onDelete={handleDeleteBaseCostRule}
+            onUpdate={handleUpdateBaseCostRule}
+            products={products}
+            rules={baseCostRules}
           />
         ) : null}
 
         {activeTab === 'recipes' ? (
-          <EmptyState
-            title="Recetas por variedad"
-            description="Las recetas quedan visibles como módulo de trabajo; la edición completa espera endpoints específicos para no mezclar alcances."
+          <RecipeWorkspace
+            isPending={updateRecipe.isPending}
+            menuItems={menuItems}
+            onSave={handleSaveRecipe}
+            products={products}
+            recipes={recipes}
           />
         ) : null}
 
@@ -1037,16 +1742,22 @@ export const FinancePage = () => {
                 />
               </label>
               <label className="mt-3 block text-sm font-bold text-foreground">
-                ID de variedad
-                <input
-                  aria-label="ID de variedad"
-                  className={inputClassName}
+                Variedad
+                <select
+                  aria-label="Variedad"
+                  className={selectClassName}
                   onChange={(event) =>
                     setCalculatorForm((current) => ({ ...current, menuItemId: event.target.value }))
                   }
                   required
-                  value={calculatorForm.menuItemId}
-                />
+                  value={calculatorForm.menuItemId || menuItems[0]?.id || ''}
+                >
+                  {menuItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="mt-3 block text-sm font-bold text-foreground">
                 Cantidad de empanadas
@@ -1063,7 +1774,7 @@ export const FinancePage = () => {
               </label>
               <button
                 className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
-                disabled={previewOrderCost.isPending}
+                disabled={previewOrderCost.isPending || !menuItems.length}
                 type="submit"
               >
                 Calcular costo

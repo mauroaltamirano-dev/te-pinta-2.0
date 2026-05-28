@@ -2,6 +2,8 @@ import { and, asc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 
 import {
   calculateLatestProductCost,
+  calculateRecipeCostPerDozen,
+  calculateRecipeCostPerUnit,
   type FinanceProductCategory,
   type FinanceProductCostHistoryItem,
   type FinanceProductFilters,
@@ -22,14 +24,18 @@ import {
 } from '../../db/schema';
 import type {
   FinanceCostingData,
+  FinanceBaseCostRuleDetail,
   FinanceProduct,
   FinanceProductRecord,
   FinancePurchaseDetail,
+  FinanceRecipeDetail,
   FinanceRepository,
   FinanceStockItem,
   FinanceStockMovement,
+  PersistFinanceBaseCostRuleInput,
   PersistFinancePurchaseInput,
   PersistFinancePurchaseItem,
+  PersistFinanceRecipeInput,
   PersistFinanceStockMovement,
 } from './finance-service';
 
@@ -39,6 +45,8 @@ type FinancePurchaseRow = typeof financePurchases.$inferSelect;
 type FinancePurchaseItemRow = typeof financePurchaseItems.$inferSelect;
 type FinanceStockMovementRow = typeof financeStockMovements.$inferSelect;
 type FinanceBaseCostRuleRow = typeof financeBaseCostRules.$inferSelect;
+type FinanceBaseCostRuleInsert = typeof financeBaseCostRules.$inferInsert;
+type FinanceRecipeItemRow = typeof financeRecipeItems.$inferSelect;
 type MenuItemRow = typeof menuItems.$inferSelect;
 
 const requireReturnedRow = <T>(row: T | undefined): T => {
@@ -309,6 +317,141 @@ const getMenuItemsByIds = async (
   return new Map(rows.map((row) => [row.id, row]));
 };
 
+const mapBaseCostRuleDetail = (
+  row: FinanceBaseCostRuleRow,
+  latestCostByProduct: Map<string, number | null>,
+  productsById: Map<string, FinanceProductRow>,
+): FinanceBaseCostRuleDetail => ({
+  id: row.id,
+  productId: row.productId,
+  productName: productsById.get(row.productId)?.name,
+  name: row.name,
+  componentType: row.componentType,
+  appliesTo: row.appliesTo,
+  quantity: quantityFromDb(row.quantity),
+  groupSizeUnits: row.groupSizeUnits,
+  roundingMode: row.roundingMode,
+  latestCostCents: latestCostByProduct.get(row.productId) ?? null,
+  isActive: row.isActive,
+});
+
+const toBaseCostRuleValues = (
+  input: PersistFinanceBaseCostRuleInput,
+): FinanceBaseCostRuleInsert => ({
+  id: input.id,
+  productId: input.productId,
+  name: input.name,
+  componentType: input.componentType,
+  appliesTo: input.appliesTo,
+  quantity: quantityToDb(input.quantity),
+  groupSizeUnits: input.groupSizeUnits,
+  roundingMode: input.roundingMode,
+  isActive: input.isActive,
+  updatedAt: new Date(),
+});
+
+const toBaseCostRuleUpdate = (
+  updates: Parameters<FinanceRepository['updateBaseCostRule']>[1],
+): Partial<FinanceBaseCostRuleInsert> => ({
+  ...(updates.productId !== undefined ? { productId: updates.productId } : {}),
+  ...(updates.name !== undefined ? { name: updates.name } : {}),
+  ...(updates.componentType !== undefined ? { componentType: updates.componentType } : {}),
+  ...(updates.appliesTo !== undefined ? { appliesTo: updates.appliesTo } : {}),
+  ...(updates.quantity !== undefined ? { quantity: quantityToDb(updates.quantity) } : {}),
+  ...(updates.groupSizeUnits !== undefined ? { groupSizeUnits: updates.groupSizeUnits } : {}),
+  ...(updates.roundingMode !== undefined ? { roundingMode: updates.roundingMode } : {}),
+  ...(updates.isActive !== undefined ? { isActive: updates.isActive } : {}),
+  updatedAt: new Date(),
+});
+
+const getBaseCostRuleDetail = async (
+  db: DbClient,
+  id: string,
+): Promise<FinanceBaseCostRuleDetail | null> => {
+  const [row] = await db
+    .select()
+    .from(financeBaseCostRules)
+    .where(eq(financeBaseCostRules.id, id))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  const [latestCostByProduct, productRows] = await Promise.all([
+    getLatestCostByProduct(db, [row.productId]),
+    db.select().from(financeProducts).where(eq(financeProducts.id, row.productId)),
+  ]);
+
+  return mapBaseCostRuleDetail(
+    row,
+    latestCostByProduct,
+    new Map(productRows.map((item) => [item.id, item])),
+  );
+};
+
+const listRecipeItemRows = async (
+  db: DbClient,
+  menuItemIds: string[],
+): Promise<FinanceRecipeItemRow[]> => {
+  if (menuItemIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select()
+    .from(financeRecipeItems)
+    .where(inArray(financeRecipeItems.menuItemId, menuItemIds))
+    .orderBy(asc(financeRecipeItems.createdAt), asc(financeRecipeItems.id));
+};
+
+const buildRecipeDetails = async (
+  db: DbClient,
+  menuRows: MenuItemRow[],
+  recipeItemRows: FinanceRecipeItemRow[],
+): Promise<FinanceRecipeDetail[]> => {
+  const productIds = [...new Set(recipeItemRows.map((row) => row.productId))];
+  const [latestCostByProduct, productRows] = await Promise.all([
+    getLatestCostByProduct(db, productIds),
+    productIds.length
+      ? db.select().from(financeProducts).where(inArray(financeProducts.id, productIds))
+      : Promise.resolve([]),
+  ]);
+  const productsById = new Map(productRows.map((row) => [row.id, row]));
+  const itemsByMenuItem = new Map<string, FinanceRecipeItemRow[]>();
+
+  for (const row of recipeItemRows) {
+    const current = itemsByMenuItem.get(row.menuItemId) ?? [];
+    current.push(row);
+    itemsByMenuItem.set(row.menuItemId, current);
+  }
+
+  return menuRows.map((menuItem) => {
+    const items = (itemsByMenuItem.get(menuItem.id) ?? []).map((item) => ({
+      id: item.id,
+      menuItemId: item.menuItemId,
+      productId: item.productId,
+      name: productsById.get(item.productId)?.name,
+      quantityPerDozen: quantityFromDb(item.quantityPerDozen),
+      unit: item.unit,
+      quantityBase: quantityFromDb(item.quantityBase),
+      latestCostCents: latestCostByProduct.get(item.productId) ?? null,
+      notes: item.notes,
+    }));
+    const dozen = calculateRecipeCostPerDozen({ recipeItems: items });
+    const unit = calculateRecipeCostPerUnit({ recipeItems: items });
+
+    return {
+      menuItemId: menuItem.id,
+      menuItemName: menuItem.name,
+      items,
+      totalCostPerDozenCents: dozen.totalCostCents,
+      totalCostPerUnitCents: unit.totalCostCents,
+      warnings: dozen.warnings,
+    };
+  });
+};
+
 export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
   async listProducts(filters = {}): Promise<FinanceProductRecord[]> {
     const productRows = await listProductRows(db, filters);
@@ -383,6 +526,130 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
       .returning();
 
     return mapStockMovement(requireReturnedRow(row));
+  },
+
+  async listBaseCostRules(): Promise<FinanceBaseCostRuleDetail[]> {
+    const rows = await db
+      .select()
+      .from(financeBaseCostRules)
+      .orderBy(asc(financeBaseCostRules.name));
+    const productIds = [...new Set(rows.map((row) => row.productId))];
+    const [latestCostByProduct, productRows] = await Promise.all([
+      getLatestCostByProduct(db, productIds),
+      productIds.length
+        ? db.select().from(financeProducts).where(inArray(financeProducts.id, productIds))
+        : Promise.resolve([]),
+    ]);
+    const productsById = new Map(productRows.map((row) => [row.id, row]));
+
+    return rows.map((row) => mapBaseCostRuleDetail(row, latestCostByProduct, productsById));
+  },
+
+  async createBaseCostRule(input): Promise<FinanceBaseCostRuleDetail> {
+    const [row] = await db
+      .insert(financeBaseCostRules)
+      .values(toBaseCostRuleValues(input))
+      .returning({ id: financeBaseCostRules.id });
+
+    const detail = await getBaseCostRuleDetail(db, requireReturnedRow(row).id);
+    if (!detail) {
+      throw new Error('Database write did not return a finance base cost rule detail');
+    }
+
+    return detail;
+  },
+
+  async updateBaseCostRule(id, updates): Promise<FinanceBaseCostRuleDetail | null> {
+    const [row] = await db
+      .update(financeBaseCostRules)
+      .set(toBaseCostRuleUpdate(updates))
+      .where(eq(financeBaseCostRules.id, id))
+      .returning({ id: financeBaseCostRules.id });
+
+    if (!row) {
+      return null;
+    }
+
+    return getBaseCostRuleDetail(db, row.id);
+  },
+
+  async deleteBaseCostRule(id): Promise<boolean> {
+    const [row] = await db
+      .delete(financeBaseCostRules)
+      .where(eq(financeBaseCostRules.id, id))
+      .returning({ id: financeBaseCostRules.id });
+
+    return Boolean(row);
+  },
+
+  async listRecipes(): Promise<FinanceRecipeDetail[]> {
+    const rows = await db.select().from(menuItems).orderBy(asc(menuItems.name));
+    const items = await listRecipeItemRows(
+      db,
+      rows.map((row) => row.id),
+    );
+
+    return buildRecipeDetails(db, rows, items);
+  },
+
+  async getRecipe(menuItemId): Promise<FinanceRecipeDetail | null> {
+    const [menuItem] = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.id, menuItemId))
+      .limit(1);
+
+    if (!menuItem) {
+      return null;
+    }
+
+    const items = await listRecipeItemRows(db, [menuItemId]);
+    const [recipe] = await buildRecipeDetails(db, [menuItem], items);
+    return recipe ?? null;
+  },
+
+  async replaceRecipe(input: PersistFinanceRecipeInput): Promise<FinanceRecipeDetail | null> {
+    const [menuItem] = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.id, input.menuItemId))
+      .limit(1);
+
+    if (!menuItem) {
+      return null;
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(financeRecipes)
+        .values({ menuItemId: input.menuItemId, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: financeRecipes.menuItemId,
+          set: { updatedAt: new Date() },
+        });
+      await tx
+        .delete(financeRecipeItems)
+        .where(eq(financeRecipeItems.menuItemId, input.menuItemId));
+
+      if (input.items.length > 0) {
+        await tx.insert(financeRecipeItems).values(
+          input.items.map((item) => ({
+            id: item.id,
+            menuItemId: item.menuItemId,
+            productId: item.productId,
+            quantityPerDozen: quantityToDb(item.quantityPerDozen),
+            unit: item.unit,
+            quantityBase: quantityToDb(item.quantityBase),
+            notes: item.notes,
+            updatedAt: new Date(),
+          })),
+        );
+      }
+    });
+
+    const items = await listRecipeItemRows(db, [input.menuItemId]);
+    const [recipe] = await buildRecipeDetails(db, [menuItem], items);
+    return recipe ?? null;
   },
 
   async getCostingData(input): Promise<FinanceCostingData> {

@@ -1,8 +1,11 @@
 import {
+  createFinanceBaseCostRuleSchema,
   createFinanceProductSchema,
   createFinancePurchaseSchema,
   createFinanceStockAdjustmentSchema,
   financeCostingPreviewOrderSchema,
+  updateFinanceBaseCostRuleSchema,
+  updateFinanceRecipeSchema,
 } from '@te-pinta/shared';
 
 import { apiClient } from '@/lib/api-client';
@@ -11,14 +14,19 @@ import type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
+  CreateFinanceBaseCostRuleInput,
   FinanceCostingPreviewOrderInput,
+  FinanceBaseCostRule,
   FinanceOrderCostBreakdown,
   FinanceProductFilters,
   FinanceProductWithMetrics,
   FinancePurchaseDetail,
+  FinanceRecipe,
   FinanceStockFilters,
   FinanceStockItem,
   FinanceStockMovement,
+  UpdateFinanceBaseCostRuleInput,
+  UpdateFinanceRecipeInput,
 } from './types';
 
 export const listFinanceProducts = async (
@@ -54,6 +62,62 @@ export const createFinancePurchase = async (
   );
 
   return response.data.purchase;
+};
+
+export const listFinanceBaseCostRules = async (): Promise<FinanceBaseCostRule[]> => {
+  const response = await apiClient.get<{ rules: FinanceBaseCostRule[] }>(
+    '/finance/base-cost-rules',
+  );
+
+  return response.data.rules;
+};
+
+export const createFinanceBaseCostRule = async (
+  input: CreateFinanceBaseCostRuleInput,
+): Promise<FinanceBaseCostRule> => {
+  const payload = createFinanceBaseCostRuleSchema.parse(input);
+  const response = await apiClient.post<{ rule: FinanceBaseCostRule }>(
+    '/finance/base-cost-rules',
+    payload,
+  );
+
+  return response.data.rule;
+};
+
+export const updateFinanceBaseCostRule = async (
+  id: string,
+  input: UpdateFinanceBaseCostRuleInput,
+): Promise<FinanceBaseCostRule> => {
+  const payload = updateFinanceBaseCostRuleSchema.parse(input);
+  const response = await apiClient.put<{ rule: FinanceBaseCostRule }>(
+    `/finance/base-cost-rules/${id}`,
+    payload,
+  );
+
+  return response.data.rule;
+};
+
+export const deleteFinanceBaseCostRule = async (id: string): Promise<void> => {
+  await apiClient.delete(`/finance/base-cost-rules/${id}`);
+};
+
+export const listFinanceRecipes = async (): Promise<FinanceRecipe[]> => {
+  const response = await apiClient.get<{ recipes: FinanceRecipe[] }>('/finance/recipes');
+
+  return response.data.recipes;
+};
+
+export const updateFinanceRecipe = async (
+  menuItemId: string,
+  input: UpdateFinanceRecipeInput,
+): Promise<FinanceRecipe> => {
+  const payload = updateFinanceRecipeSchema.parse(input);
+  const response = await apiClient.put<{ recipe: FinanceRecipe }>(
+    `/finance/recipes/${menuItemId}`,
+    payload,
+  );
+
+  return response.data.recipe;
 };
 
 export const listFinanceStock = async (

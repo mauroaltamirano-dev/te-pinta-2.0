@@ -16,6 +16,7 @@ import {
   financeCostingPreviewOrderSchema,
   financeProductCategorySchema,
   orderStatusSchema,
+  updateFinanceBaseCostRuleSchema,
   updateFinanceRecipeSchema,
   updateSettingSchema,
 } from './index';
@@ -172,6 +173,9 @@ describe('shared domain schemas', () => {
         quantity: 1,
       }),
     ).toMatchObject({ groupSizeUnits: 12, roundingMode: 'ceil', isActive: true });
+    expect(updateFinanceBaseCostRuleSchema.parse({ isActive: false })).toEqual({
+      isActive: false,
+    });
     expect(
       updateFinanceRecipeSchema.parse({
         menuItemId: 'menu-saltena',

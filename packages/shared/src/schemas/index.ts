@@ -155,18 +155,26 @@ export const financePurchaseFiltersSchema = z.object({
   category: financeProductCategorySchema.optional(),
 });
 
-export const createFinanceBaseCostRuleSchema = z.object({
+const financeBaseCostRuleFields = {
   productId: idSchema,
   name: trimmedString,
   componentType: financeCostComponentTypeSchema,
   appliesTo: financeCostRuleAppliesToSchema,
   quantity: positiveNumberSchema,
-  groupSizeUnits: positiveIntegerSchema.default(12),
-  roundingMode: financeRoundingModeSchema.default('ceil'),
-  isActive: z.boolean().default(true),
+  groupSizeUnits: positiveIntegerSchema,
+  roundingMode: financeRoundingModeSchema,
+  isActive: z.boolean(),
+} as const;
+
+export const createFinanceBaseCostRuleSchema = z.object({
+  ...financeBaseCostRuleFields,
+  groupSizeUnits: financeBaseCostRuleFields.groupSizeUnits.default(12),
+  roundingMode: financeBaseCostRuleFields.roundingMode.default('ceil'),
+  isActive: financeBaseCostRuleFields.isActive.default(true),
 });
 
-export const updateFinanceBaseCostRuleSchema = createFinanceBaseCostRuleSchema
+export const updateFinanceBaseCostRuleSchema = z
+  .object(financeBaseCostRuleFields)
   .partial()
   .refine(
     (value) => Object.keys(value).length > 0,

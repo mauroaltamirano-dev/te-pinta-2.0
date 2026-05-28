@@ -1,29 +1,41 @@
 import type {
+  CreateFinanceBaseCostRuleInput,
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
   FinanceBaseUnit,
+  FinanceCostComponentType,
   FinanceCostingPreviewOrderInput,
+  FinanceCostRuleAppliesTo,
   FinanceCostWarning,
   FinanceOrderCostBreakdown,
   FinanceProductCategory,
   FinanceProductFilters,
+  FinanceRoundingMode,
   FinanceStockFilters,
   FinanceStockMovementType,
+  UpdateFinanceBaseCostRuleInput,
+  UpdateFinanceRecipeInput,
 } from '@te-pinta/shared';
 
 export type {
+  CreateFinanceBaseCostRuleInput,
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
   FinanceBaseUnit,
+  FinanceCostComponentType,
   FinanceCostingPreviewOrderInput,
+  FinanceCostRuleAppliesTo,
   FinanceCostWarning,
   FinanceOrderCostBreakdown,
   FinanceProductCategory,
   FinanceProductFilters,
+  FinanceRoundingMode,
   FinanceStockFilters,
   FinanceStockMovementType,
+  UpdateFinanceBaseCostRuleInput,
+  UpdateFinanceRecipeInput,
 };
 
 export type FinanceProduct = {
@@ -81,4 +93,39 @@ export type FinanceStockMovement = {
 export type FinanceStockItem = {
   product: FinanceProduct;
   quantityBase: number;
+};
+
+export type FinanceBaseCostRule = {
+  id: string;
+  productId: string;
+  productName?: string;
+  name: string;
+  componentType: FinanceCostComponentType;
+  appliesTo: FinanceCostRuleAppliesTo;
+  quantity: number;
+  groupSizeUnits: number;
+  roundingMode: FinanceRoundingMode;
+  latestCostCents: number | null;
+  isActive: boolean;
+};
+
+export type FinanceRecipeItem = {
+  id: string;
+  menuItemId: string;
+  productId: string;
+  name?: string;
+  quantityPerDozen: number;
+  unit: FinanceBaseUnit;
+  quantityBase: number;
+  latestCostCents: number | null;
+  notes: string | null;
+};
+
+export type FinanceRecipe = {
+  menuItemId: string;
+  menuItemName: string;
+  items: FinanceRecipeItem[];
+  totalCostPerDozenCents: number;
+  totalCostPerUnitCents: number;
+  warnings: FinanceCostWarning[];
 };
