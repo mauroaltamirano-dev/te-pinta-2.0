@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,7 @@ import { createQueryClient } from '@/lib/query-client';
 
 import {
   createFinancePurchase,
+  createFinanceStockAdjustment,
   listFinanceProducts,
   listFinanceStock,
   previewFinanceOrderCost,
@@ -70,6 +71,15 @@ describe('FinancePage', () => {
       notes: null,
       items: [],
     });
+    vi.mocked(createFinanceStockAdjustment).mockResolvedValue({
+      id: 'movement-1',
+      productId: trackedProduct.id,
+      movementType: 'manual_out',
+      quantityBase: -10,
+      sourcePurchaseItemId: null,
+      notes: 'corrección por compra duplicada',
+      createdAt: '2026-05-28T12:00:00.000Z',
+    });
     vi.mocked(previewFinanceOrderCost).mockResolvedValue({
       totalEmpanadas: 12,
       packagingUnits: 1,
@@ -91,9 +101,7 @@ describe('FinancePage', () => {
   it('renders the finance workspace route with dashboard, catalog, purchase, calculator, and stock tabs', async () => {
     renderFinancePage();
 
-    expect(
-      await screen.findByRole('heading', { name: /finanzas/i, level: 1 }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /finanzas/i, level: 1 })).toBeInTheDocument();
 
     const tabs = screen.getByRole('tablist', { name: /secciones de finanzas/i });
     expect(within(tabs).getByRole('tab', { name: /dashboard/i })).toHaveAttribute(
@@ -112,7 +120,7 @@ describe('FinancePage', () => {
     expect(screen.getByText(/último costo/i)).toBeInTheDocument();
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /stock/i }));
-    expect(screen.getByText(/30 kg/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/30 kg/i).length).toBeGreaterThan(0);
   });
 
   it('shows empty states when finance data is incomplete', async () => {
@@ -173,5 +181,63 @@ describe('FinancePage', () => {
       saleTotalCents: 2400000,
       items: [{ menuItemId: 'menu-1', quantity: 12 }],
     });
+  });
+
+  it('registers weighted purchases using the product base unit instead of pack language', async () => {
+    renderFinancePage();
+
+    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    await userEvent.click(within(tabs).getByRole('tab', { name: /compras/i }));
+
+    expect(screen.getByText(/para papa por kilo/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/cantidad comprada \(kg\)/i)).toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText(/cantidad comprada \(kg\)/i));
+    await userEvent.type(screen.getByLabelText(/cantidad comprada \(kg\)/i), '2.475');
+    await userEvent.clear(screen.getByLabelText(/precio por kg/i));
+    await userEvent.type(screen.getByLabelText(/precio por kg/i), '1350');
+    await userEvent.click(screen.getByRole('button', { name: /guardar compra/i }));
+
+    await waitFor(() => expect(createFinancePurchase).toHaveBeenCalled());
+    expect(vi.mocked(createFinancePurchase).mock.calls[0]?.[0]).toEqual({
+      purchaseDate: expect.any(String),
+      supplier: undefined,
+      items: [
+        {
+          productId: trackedProduct.id,
+          purchaseUnit: 'kg',
+          purchaseQuantity: 2.475,
+          unitsPerPackage: 1,
+          unitPriceCents: 135000,
+        },
+      ],
+    });
+    expect(await screen.findByText(/compra registrada/i)).toBeInTheDocument();
+  });
+
+  it('creates a manual stock-out movement from a target stock correction', async () => {
+    renderFinancePage();
+
+    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    await userEvent.click(within(tabs).getByRole('tab', { name: /stock/i }));
+
+    expect(screen.getByText(/stock actual/i)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/stock objetivo/i), '20');
+    await userEvent.type(
+      screen.getByLabelText(/nota opcional/i),
+      'corrección por compra duplicada',
+    );
+    expect(screen.getByText(/salida de 10 kg/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /aplicar ajuste/i }));
+
+    await waitFor(() => expect(createFinanceStockAdjustment).toHaveBeenCalled());
+    expect(vi.mocked(createFinanceStockAdjustment).mock.calls[0]?.[0]).toEqual({
+      productId: trackedProduct.id,
+      movementType: 'manual_out',
+      quantity: 10,
+      notes: 'corrección por compra duplicada',
+    });
+    expect(await screen.findByText(/stock corregido/i)).toBeInTheDocument();
   });
 });

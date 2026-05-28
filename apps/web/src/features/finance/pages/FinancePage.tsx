@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type ComponentType, type FormEvent } from 'react';
 import {
   AlertTriangle,
   Boxes,
@@ -18,18 +18,27 @@ import { PageHero } from '@/components/layout/PageHero';
 import {
   useCreateFinanceProduct,
   useCreateFinancePurchase,
+  useCreateFinanceStockAdjustment,
   useFinanceProducts,
   useFinanceStock,
   usePreviewFinanceOrderCost,
 } from '../hooks';
 import type {
+  CreateFinanceStockAdjustmentInput,
   FinanceBaseUnit,
   FinanceProductCategory,
   FinanceProductWithMetrics,
   FinanceStockItem,
 } from '../types';
 
-type FinanceTab = 'dashboard' | 'catalog' | 'purchases' | 'base-costs' | 'recipes' | 'calculator' | 'stock';
+type FinanceTab =
+  | 'dashboard'
+  | 'catalog'
+  | 'purchases'
+  | 'base-costs'
+  | 'recipes'
+  | 'calculator'
+  | 'stock';
 
 type TabItem = {
   id: FinanceTab;
@@ -48,15 +57,29 @@ type PurchaseFormState = {
   productId: string;
   purchaseDate: string;
   supplier: string;
+  purchaseUnit: FinanceBaseUnit | '';
   purchaseQuantity: string;
   unitsPerPackage: string;
-  unitPrice: string;
+  priceMode: 'unit' | 'total';
+  price: string;
 };
 
 type CalculatorFormState = {
   saleTotal: string;
   menuItemId: string;
   quantity: string;
+};
+
+type StockTargetFormState = {
+  productId: string;
+  targetQuantity: string;
+  notes: string;
+};
+
+type FinanceFeedback = {
+  tone: 'success' | 'error';
+  title: string;
+  description: string;
 };
 
 const tabs: TabItem[] = [
@@ -104,15 +127,23 @@ const initialPurchaseForm: PurchaseFormState = {
   productId: '',
   purchaseDate: todayIso(),
   supplier: '',
+  purchaseUnit: '',
   purchaseQuantity: '1',
   unitsPerPackage: '1',
-  unitPrice: '0',
+  priceMode: 'unit',
+  price: '0',
 };
 
 const initialCalculatorForm: CalculatorFormState = {
   saleTotal: '0',
   menuItemId: '',
   quantity: '12',
+};
+
+const initialStockTargetForm: StockTargetFormState = {
+  productId: '',
+  targetQuantity: '',
+  notes: '',
 };
 
 const moneyFormatter = new Intl.NumberFormat('es-AR', {
@@ -125,15 +156,39 @@ const formatMoneyFromCents = (cents: number | null | undefined): string =>
   cents === null || cents === undefined ? 'Sin costo' : moneyFormatter.format(cents / 100);
 
 const formatQuantity = (quantity: number, unit: FinanceBaseUnit): string =>
-  `${quantity.toLocaleString('es-AR', { maximumFractionDigits: 2 })} ${baseUnitLabels[unit]}`;
+  `${quantity.toLocaleString('es-AR', { maximumFractionDigits: 3 })} ${baseUnitLabels[unit]}`;
 
 const toCents = (value: string): number => Math.round(Number(value || 0) * 100);
 const toPositiveNumber = (value: string): number => Math.max(Number(value || 0), 0);
+
+const getErrorDescription = (error: unknown): string =>
+  error instanceof Error ? error.message : 'No se pudo completar la operación.';
 
 const inputClassName =
   'mt-2 w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20';
 
 const selectClassName = inputClassName;
+
+const FeedbackBanner = ({ feedback }: { feedback: FinanceFeedback | null }) => {
+  if (!feedback) {
+    return null;
+  }
+
+  const toneClassName =
+    feedback.tone === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : 'border-red-200 bg-red-50 text-red-900';
+
+  return (
+    <div
+      className={`rounded-[1.5rem] border px-4 py-3 text-sm shadow-card ${toneClassName}`}
+      role="status"
+    >
+      <p className="font-black">{feedback.title}</p>
+      <p className="mt-1 font-semibold leading-6">{feedback.description}</p>
+    </div>
+  );
+};
 
 const KpiCard = ({
   label,
@@ -160,13 +215,7 @@ const KpiCard = ({
   </article>
 );
 
-const EmptyState = ({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) => (
+const EmptyState = ({ title, description }: { title: string; description: string }) => (
   <div className="rounded-[1.5rem] border border-dashed border-border bg-background/70 p-5 text-sm">
     <p className="font-black text-foreground">{title}</p>
     <p className="mt-1 font-semibold leading-6 text-muted-foreground">{description}</p>
@@ -231,7 +280,10 @@ const ProductForm = ({
   };
 
   return (
-    <form className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card" onSubmit={handleSubmit}>
+    <form
+      className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card"
+      onSubmit={handleSubmit}
+    >
       <div className="flex items-center gap-2 text-primary">
         <Plus className="h-4 w-4" aria-hidden={true} />
         <h3 className="text-sm font-black uppercase tracking-wide">Alta rápida de producto</h3>
@@ -270,7 +322,10 @@ const ProductForm = ({
           <select
             className={selectClassName}
             onChange={(event) =>
-              setForm((current) => ({ ...current, baseUnit: event.target.value as FinanceBaseUnit }))
+              setForm((current) => ({
+                ...current,
+                baseUnit: event.target.value as FinanceBaseUnit,
+              }))
             }
             value={form.baseUnit}
           >
@@ -307,21 +362,58 @@ const PurchaseForm = ({
   products,
   onSubmit,
   isPending,
+  resetSignal,
 }: {
   products: FinanceProductWithMetrics[];
   onSubmit: (form: PurchaseFormState) => void;
   isPending: boolean;
+  resetSignal: number;
 }) => {
   const [form, setForm] = useState<PurchaseFormState>(initialPurchaseForm);
   const selectedProductId = form.productId || products[0]?.id || '';
+  const selectedProduct = products.find((product) => product.id === selectedProductId);
+  const purchaseUnit = form.purchaseUnit || selectedProduct?.baseUnit || 'unit';
+  const needsConversion = Boolean(selectedProduct && purchaseUnit !== selectedProduct.baseUnit);
+  const effectiveUnitsPerPackage = needsConversion ? toPositiveNumber(form.unitsPerPackage) : 1;
+  const purchaseQuantity = toPositiveNumber(form.purchaseQuantity);
+  const priceCents = toCents(form.price);
+  const previewTotalBaseUnits = purchaseQuantity * effectiveUnitsPerPackage;
+  const previewTotalPriceCents =
+    form.priceMode === 'total' ? priceCents : Math.round(priceCents * purchaseQuantity);
+  const previewCostPerBaseUnitCents =
+    previewTotalBaseUnits > 0 && previewTotalPriceCents > 0
+      ? Math.round(previewTotalPriceCents / previewTotalBaseUnits)
+      : null;
+
+  useEffect(() => {
+    if (resetSignal === 0) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...initialPurchaseForm,
+      productId: current.productId,
+      purchaseDate: todayIso(),
+      supplier: current.supplier,
+      purchaseUnit: current.purchaseUnit,
+    }));
+  }, [resetSignal]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSubmit({ ...form, productId: selectedProductId });
+    onSubmit({
+      ...form,
+      productId: selectedProductId,
+      purchaseUnit,
+      unitsPerPackage: String(effectiveUnitsPerPackage),
+    });
   };
 
   return (
-    <form className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card" onSubmit={handleSubmit}>
+    <form
+      className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card"
+      onSubmit={handleSubmit}
+    >
       <div className="flex items-center gap-2 text-primary">
         <PackagePlus className="h-4 w-4" aria-hidden={true} />
         <h3 className="text-sm font-black uppercase tracking-wide">Registrar compra</h3>
@@ -332,7 +424,15 @@ const PurchaseForm = ({
           <select
             className={selectClassName}
             disabled={!products.length}
-            onChange={(event) => setForm((current) => ({ ...current, productId: event.target.value }))}
+            onChange={(event) => {
+              const product = products.find((item) => item.id === event.target.value);
+              setForm((current) => ({
+                ...current,
+                productId: event.target.value,
+                purchaseUnit: product?.baseUnit ?? current.purchaseUnit,
+                unitsPerPackage: '1',
+              }));
+            }}
             value={selectedProductId}
           >
             {products.map((product) => (
@@ -357,54 +457,259 @@ const PurchaseForm = ({
           Proveedor
           <input
             className={inputClassName}
-            onChange={(event) => setForm((current) => ({ ...current, supplier: event.target.value }))}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, supplier: event.target.value }))
+            }
             value={form.supplier}
           />
         </label>
         <label className="text-sm font-bold text-foreground">
-          Bultos
+          Unidad de compra
+          <select
+            className={selectClassName}
+            disabled={!selectedProduct}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                purchaseUnit: event.target.value as FinanceBaseUnit,
+                unitsPerPackage:
+                  event.target.value === selectedProduct?.baseUnit ? '1' : current.unitsPerPackage,
+              }))
+            }
+            value={purchaseUnit}
+          >
+            {baseUnitOptions.map((unit) => (
+              <option key={unit} value={unit}>
+                {baseUnitLabels[unit]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-bold text-foreground">
+          {purchaseUnit === 'pack'
+            ? 'Cantidad de packs/bultos'
+            : `Cantidad comprada (${baseUnitLabels[purchaseUnit]})`}
           <input
             className={inputClassName}
             min="0"
             onChange={(event) =>
               setForm((current) => ({ ...current, purchaseQuantity: event.target.value }))
             }
-            step="0.01"
+            step="0.001"
             type="number"
             value={form.purchaseQuantity}
           />
         </label>
         <label className="text-sm font-bold text-foreground">
-          Unidades por bulto
+          {selectedProduct
+            ? `${baseUnitLabels[selectedProduct.baseUnit]} por ${baseUnitLabels[purchaseUnit]}`
+            : 'Conversión a unidad base'}
           <input
             className={inputClassName}
+            disabled={!needsConversion}
             min="0"
             onChange={(event) =>
               setForm((current) => ({ ...current, unitsPerPackage: event.target.value }))
             }
-            step="0.01"
+            step="0.001"
             type="number"
-            value={form.unitsPerPackage}
+            value={needsConversion ? form.unitsPerPackage : '1'}
           />
         </label>
         <label className="text-sm font-bold text-foreground">
-          Precio por bulto
+          Cargo precio como
+          <select
+            className={selectClassName}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                priceMode: event.target.value as PurchaseFormState['priceMode'],
+              }))
+            }
+            value={form.priceMode}
+          >
+            <option value="unit">Precio por unidad de compra</option>
+            <option value="total">Precio total pagado</option>
+          </select>
+        </label>
+        <label className="text-sm font-bold text-foreground">
+          {form.priceMode === 'total'
+            ? 'Precio total pagado'
+            : `Precio por ${baseUnitLabels[purchaseUnit]}`}
           <input
             className={inputClassName}
             min="0"
-            onChange={(event) => setForm((current) => ({ ...current, unitPrice: event.target.value }))}
+            onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
             step="0.01"
             type="number"
-            value={form.unitPrice}
+            value={form.price}
           />
         </label>
       </div>
+      <div className="mt-4 rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground">
+        <p>
+          La <strong className="text-foreground">unidad base</strong> del producto es lo que usa
+          stock, recetas y costos. Para papa por kilo: unidad de compra kg, cantidad 2,475,
+          conversión 1. Para 100 cajas: unidad, cantidad 100, conversión 1; o pack, cantidad 1,
+          conversión 100.
+        </p>
+        <p className="mt-2 font-black text-foreground">
+          Preview: {formatQuantity(previewTotalBaseUnits, selectedProduct?.baseUnit ?? 'unit')} ·
+          costo unitario base {formatMoneyFromCents(previewCostPerBaseUnitCents)}
+        </p>
+      </div>
       <button
         className="mt-4 inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
-        disabled={isPending || !selectedProductId}
+        disabled={isPending || !selectedProductId || purchaseQuantity <= 0 || priceCents <= 0}
         type="submit"
       >
-        Guardar compra
+        {isPending ? 'Guardando compra...' : 'Guardar compra'}
+      </button>
+    </form>
+  );
+};
+
+const StockTargetForm = ({
+  products,
+  stock,
+  onSubmit,
+  isPending,
+  resetSignal,
+}: {
+  products: FinanceProductWithMetrics[];
+  stock: FinanceStockItem[];
+  onSubmit: (input: {
+    productId: string;
+    movementType: CreateFinanceStockAdjustmentInput['movementType'];
+    quantity: number;
+    notes?: string;
+  }) => void;
+  isPending: boolean;
+  resetSignal: number;
+}) => {
+  const trackedProducts = products.filter((product) => product.stockTracking);
+  const [form, setForm] = useState<StockTargetFormState>(initialStockTargetForm);
+  const selectedProductId = form.productId || trackedProducts[0]?.id || '';
+  const selectedProduct = trackedProducts.find((product) => product.id === selectedProductId);
+  const currentQuantity =
+    stock.find((item) => item.product.id === selectedProductId)?.quantityBase ??
+    selectedProduct?.stockQuantityBase ??
+    0;
+  const hasTargetQuantity = form.targetQuantity.trim() !== '';
+  const targetQuantity = hasTargetQuantity
+    ? toPositiveNumber(form.targetQuantity)
+    : currentQuantity;
+  const difference = targetQuantity - currentQuantity;
+  const movementType: CreateFinanceStockAdjustmentInput['movementType'] =
+    difference >= 0 ? 'manual_in' : 'manual_out';
+  const adjustmentQuantity = Math.abs(difference);
+
+  useEffect(() => {
+    if (resetSignal === 0) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...initialStockTargetForm,
+      productId: current.productId,
+    }));
+  }, [resetSignal]);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedProduct || !hasTargetQuantity || adjustmentQuantity <= 0) {
+      return;
+    }
+
+    onSubmit({
+      productId: selectedProduct.id,
+      movementType,
+      quantity: adjustmentQuantity,
+      notes:
+        form.notes ||
+        `Manual stock correction: ${currentQuantity} -> ${targetQuantity} ${selectedProduct.baseUnit}`,
+    });
+  };
+
+  return (
+    <form
+      className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card"
+      onSubmit={handleSubmit}
+    >
+      <div className="flex items-center gap-2 text-primary">
+        <Warehouse className="h-4 w-4" aria-hidden={true} />
+        <h3 className="text-sm font-black uppercase tracking-wide">Corrección manual de stock</h3>
+      </div>
+      <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
+        Poné el stock objetivo real y el sistema crea la entrada o salida necesaria. Ejemplo: si
+        quedaron 300 cajas y deberían ser 100, cargá objetivo 100.
+      </p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <label className="text-sm font-bold text-foreground">
+          Producto
+          <select
+            className={selectClassName}
+            disabled={!trackedProducts.length}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, productId: event.target.value }))
+            }
+            value={selectedProductId}
+          >
+            {trackedProducts.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-bold text-foreground">
+          Stock objetivo {selectedProduct ? `(${baseUnitLabels[selectedProduct.baseUnit]})` : ''}
+          <input
+            className={inputClassName}
+            min="0"
+            onChange={(event) =>
+              setForm((current) => ({ ...current, targetQuantity: event.target.value }))
+            }
+            step="0.001"
+            type="number"
+            value={form.targetQuantity}
+          />
+        </label>
+        <label className="text-sm font-bold text-foreground md:col-span-2">
+          Nota opcional
+          <input
+            className={inputClassName}
+            onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+            placeholder="Ej: corrección por compra duplicada"
+            value={form.notes}
+          />
+        </label>
+      </div>
+      <div className="mt-4 rounded-2xl bg-background px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground ring-1 ring-border/60">
+        <p>
+          Stock actual:{' '}
+          <strong className="text-foreground">
+            {formatQuantity(currentQuantity, selectedProduct?.baseUnit ?? 'unit')}
+          </strong>
+        </p>
+        <p>
+          Movimiento a crear:{' '}
+          <strong className="text-foreground">
+            {adjustmentQuantity > 0 && selectedProduct
+              ? `${difference > 0 ? 'Entrada' : 'Salida'} de ${formatQuantity(
+                  adjustmentQuantity,
+                  selectedProduct.baseUnit,
+                )}`
+              : 'sin cambios'}
+          </strong>
+        </p>
+      </div>
+      <button
+        className="mt-4 inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+        disabled={isPending || !selectedProduct || !hasTargetQuantity || adjustmentQuantity <= 0}
+        type="submit"
+      >
+        {isPending ? 'Aplicando ajuste...' : 'Aplicar ajuste'}
       </button>
     </form>
   );
@@ -443,15 +748,21 @@ const StockList = ({ stock }: { stock: FinanceStockItem[] }) => {
 export const FinancePage = () => {
   const [activeTab, setActiveTab] = useState<FinanceTab>('dashboard');
   const [calculatorForm, setCalculatorForm] = useState<CalculatorFormState>(initialCalculatorForm);
+  const [feedback, setFeedback] = useState<FinanceFeedback | null>(null);
+  const [purchaseResetSignal, setPurchaseResetSignal] = useState(0);
+  const [stockResetSignal, setStockResetSignal] = useState(0);
   const productsQuery = useFinanceProducts();
   const stockQuery = useFinanceStock();
   const createProduct = useCreateFinanceProduct();
   const createPurchase = useCreateFinancePurchase();
+  const createStockAdjustment = useCreateFinanceStockAdjustment();
   const previewOrderCost = usePreviewFinanceOrderCost();
 
   const products = productsQuery.data ?? [];
   const stock = stockQuery.data ?? [];
-  const productsWithoutCost = products.filter((product) => product.latestCostPerBaseUnitCents === null);
+  const productsWithoutCost = products.filter(
+    (product) => product.latestCostPerBaseUnitCents === null,
+  );
   const trackedProducts = products.filter((product) => product.stockTracking);
 
   const dashboardMetrics = useMemo(
@@ -465,22 +776,83 @@ export const FinancePage = () => {
   );
 
   const handleCreateProduct = (form: ProductFormState) => {
-    createProduct.mutate({ ...form, isActive: true });
+    createProduct.mutate(
+      { ...form, isActive: true },
+      {
+        onSuccess: (product) =>
+          setFeedback({
+            tone: 'success',
+            title: 'Producto creado',
+            description: `${product.name} ya está disponible para compras, costos y stock.`,
+          }),
+        onError: (error) =>
+          setFeedback({
+            tone: 'error',
+            title: 'No se pudo crear el producto',
+            description: getErrorDescription(error),
+          }),
+      },
+    );
   };
 
   const handleCreatePurchase = (form: PurchaseFormState) => {
-    createPurchase.mutate({
-      purchaseDate: form.purchaseDate,
-      supplier: form.supplier || undefined,
-      items: [
-        {
-          productId: form.productId,
-          purchaseUnit: 'pack',
-          purchaseQuantity: toPositiveNumber(form.purchaseQuantity),
-          unitsPerPackage: toPositiveNumber(form.unitsPerPackage),
-          unitPriceCents: toCents(form.unitPrice),
+    const priceCents = toCents(form.price);
+    createPurchase.mutate(
+      {
+        purchaseDate: form.purchaseDate,
+        supplier: form.supplier || undefined,
+        items: [
+          {
+            productId: form.productId,
+            purchaseUnit: form.purchaseUnit || 'unit',
+            purchaseQuantity: toPositiveNumber(form.purchaseQuantity),
+            unitsPerPackage: toPositiveNumber(form.unitsPerPackage),
+            ...(form.priceMode === 'total'
+              ? { totalPriceCents: priceCents }
+              : { unitPriceCents: priceCents }),
+          },
+        ],
+      },
+      {
+        onSuccess: (purchase) => {
+          setPurchaseResetSignal((current) => current + 1);
+          setFeedback({
+            tone: 'success',
+            title: 'Compra registrada',
+            description: `Se guardó la compra del ${purchase.purchaseDate}. El stock y los costos ya fueron actualizados.`,
+          });
         },
-      ],
+        onError: (error) =>
+          setFeedback({
+            tone: 'error',
+            title: 'No se pudo registrar la compra',
+            description: getErrorDescription(error),
+          }),
+      },
+    );
+  };
+
+  const handleStockTargetAdjustment = (input: {
+    productId: string;
+    movementType: CreateFinanceStockAdjustmentInput['movementType'];
+    quantity: number;
+    notes?: string;
+  }) => {
+    createStockAdjustment.mutate(input, {
+      onSuccess: () => {
+        setStockResetSignal((current) => current + 1);
+        setFeedback({
+          tone: 'success',
+          title: 'Stock corregido',
+          description: 'Se creó el movimiento manual y el stock quedó listo para recalcular.',
+        });
+      },
+      onError: (error) =>
+        setFeedback({
+          tone: 'error',
+          title: 'No se pudo corregir el stock',
+          description: getErrorDescription(error),
+        }),
     });
   };
 
@@ -509,6 +881,8 @@ export const FinancePage = () => {
           MVP financiero
         </span>
       </PageHero>
+
+      <FeedbackBanner feedback={feedback} />
 
       <div
         aria-label="Secciones de finanzas"
@@ -590,7 +964,10 @@ export const FinancePage = () => {
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
             <div className="space-y-3">
               {productsQuery.isLoading ? (
-                <EmptyState title="Cargando catálogo" description="Buscando productos financieros..." />
+                <EmptyState
+                  title="Cargando catálogo"
+                  description="Buscando productos financieros..."
+                />
               ) : products.length ? (
                 products.map((product) => <ProductCard key={product.id} product={product} />)
               ) : (
@@ -610,6 +987,7 @@ export const FinancePage = () => {
               isPending={createPurchase.isPending}
               onSubmit={handleCreatePurchase}
               products={products}
+              resetSignal={purchaseResetSignal}
             />
             <EmptyState
               title="Historial de compras"
@@ -634,10 +1012,15 @@ export const FinancePage = () => {
 
         {activeTab === 'calculator' ? (
           <div className="grid gap-5 xl:grid-cols-[24rem_minmax(0,1fr)]">
-            <form className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card" onSubmit={handlePreview}>
+            <form
+              className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card"
+              onSubmit={handlePreview}
+            >
               <div className="flex items-center gap-2 text-primary">
                 <Calculator className="h-4 w-4" aria-hidden={true} />
-                <h3 className="text-sm font-black uppercase tracking-wide">Preview de rentabilidad</h3>
+                <h3 className="text-sm font-black uppercase tracking-wide">
+                  Preview de rentabilidad
+                </h3>
               </div>
               <label className="mt-4 block text-sm font-bold text-foreground">
                 Total de venta
@@ -748,12 +1131,19 @@ export const FinancePage = () => {
         ) : null}
 
         {activeTab === 'stock' ? (
-          <div className="space-y-3">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
             {stockQuery.isLoading ? (
               <EmptyState title="Cargando stock" description="Buscando saldos actuales..." />
             ) : (
               <StockList stock={stock} />
             )}
+            <StockTargetForm
+              isPending={createStockAdjustment.isPending}
+              onSubmit={handleStockTargetAdjustment}
+              products={products}
+              resetSignal={stockResetSignal}
+              stock={stock}
+            />
           </div>
         ) : null}
       </section>
