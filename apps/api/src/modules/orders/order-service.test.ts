@@ -48,6 +48,10 @@ const orderDetail = (overrides: Partial<OrderDetail> = {}): OrderDetail => ({
   cookingFee: 0,
   subtotal: 16500,
   total: 15850,
+  costTotalCents: null,
+  grossProfitCents: null,
+  profitMarginPercent: null,
+  costSnapshotJson: null,
   status: 'confirmado',
   isPaid: false,
   addons: [],
@@ -61,6 +65,24 @@ const orderDetail = (overrides: Partial<OrderDetail> = {}): OrderDetail => ({
       subtotal: 16500,
     },
   ],
+  ...overrides,
+});
+
+const financeSnapshot = (
+  overrides: Partial<{
+    costTotalCents: number | null;
+    grossProfitCents: number | null;
+    profitMarginPercent: number | null;
+    costSnapshotJson: Record<string, unknown> | null;
+  }> = {},
+) => ({
+  costTotalCents: 600000,
+  grossProfitCents: 985000,
+  profitMarginPercent: 62.15,
+  costSnapshotJson: {
+    totalCostCents: 600000,
+    warnings: [{ code: 'missing_recipe_cost', message: 'Partial recipe cost.' }],
+  },
   ...overrides,
 });
 
@@ -95,6 +117,7 @@ const createRepository = (overrides: Partial<OrderRepository> = {}): OrderReposi
     };
     return settings[key] ?? null;
   },
+  calculateCostSnapshot: async () => financeSnapshot(),
   createOrderWithItems: async (input) => orderDetail(input),
   replaceOrder: async (id, input) => orderDetail({ ...input, id }),
   updateStatus: async (id, status) => orderDetail({ id, status }),
@@ -180,6 +203,96 @@ describe('order service', () => {
       subtotal: 16500,
     });
     expect(result.total).toBe(15850);
+  });
+
+  it('creates a non-fatal finance cost snapshot when creating an order', async () => {
+    let costSnapshotInput:
+      | Parameters<NonNullable<OrderRepository['calculateCostSnapshot']>>[0]
+      | undefined;
+    let persisted: Parameters<OrderRepository['createOrderWithItems']>[0] | undefined;
+    const repository = createRepository({
+      calculateCostSnapshot: async (input) => {
+        costSnapshotInput = input;
+        return financeSnapshot();
+      },
+      createOrderWithItems: async (input) => {
+        persisted = input;
+        return orderDetail(input);
+      },
+    });
+
+    const result = await createOrder(
+      {
+        customer: { existingCustomerId: 'customer-1' },
+        deliveryDate: '2026-05-10',
+        deliveryTime: 'noche',
+        deliveryType: 'envio',
+        cooked: false,
+        discountPercent: 10,
+        deliveryFee: 0,
+        items: [{ menuItemId: 'menu-1', quantity: 13 }],
+        addons: [],
+      },
+      repository,
+    );
+
+    expect(costSnapshotInput).toEqual({
+      saleTotalCents: 1585000,
+      items: [{ menuItemId: 'menu-1', quantity: 13 }],
+    });
+    expect(persisted).toMatchObject({
+      costTotalCents: 600000,
+      grossProfitCents: 985000,
+      profitMarginPercent: 62.15,
+      costSnapshotJson: {
+        totalCostCents: 600000,
+        warnings: [{ code: 'missing_recipe_cost', message: 'Partial recipe cost.' }],
+      },
+    });
+    expect(result.costTotalCents).toBe(600000);
+  });
+
+  it('stores a warning-only snapshot instead of failing when finance costing is unavailable', async () => {
+    let persisted: Parameters<OrderRepository['createOrderWithItems']>[0] | undefined;
+    const repository = createRepository({
+      calculateCostSnapshot: async () => {
+        throw new Error('finance tables are unavailable');
+      },
+      createOrderWithItems: async (input) => {
+        persisted = input;
+        return orderDetail(input);
+      },
+    });
+
+    await expect(
+      createOrder(
+        {
+          customer: { existingCustomerId: 'customer-1' },
+          deliveryDate: '2026-05-10',
+          deliveryTime: 'noche',
+          deliveryType: 'retiro',
+          cooked: false,
+          discountPercent: 0,
+          deliveryFee: 0,
+          items: [{ menuItemId: 'menu-1', quantity: 12 }],
+          addons: [],
+        },
+        repository,
+      ),
+    ).resolves.toMatchObject({
+      costTotalCents: null,
+      grossProfitCents: null,
+      profitMarginPercent: null,
+    });
+
+    expect(persisted?.costSnapshotJson).toMatchObject({
+      warnings: [
+        {
+          code: 'finance_costing_unavailable',
+          message: 'Finance costing is unavailable; order was saved without blocking sales.',
+        },
+      ],
+    });
   });
 
   it('reuses an existing customer by phone instead of creating a duplicate', async () => {
@@ -516,6 +629,225 @@ describe('order service', () => {
       quantity: 13,
       unitPrice: 16500,
       subtotal: 16500,
+    });
+  });
+
+  it('preserves finance cost snapshots when updating an order without replacing items', async () => {
+    let persisted: Parameters<OrderRepository['replaceOrder']>[1] | undefined;
+    const current = orderDetail({
+      ...financeSnapshot({
+        costTotalCents: 500000,
+        grossProfitCents: 1150000,
+        profitMarginPercent: 69.7,
+        costSnapshotJson: { totalCostCents: 500000, warnings: [] },
+      }),
+      deliveryType: 'retiro',
+      deliveryFee: 0,
+      discountPercent: 0,
+      subtotal: 16500,
+      total: 16500,
+    });
+    const repository = createRepository({
+      getById: async () => current,
+      calculateCostSnapshot: async () => {
+        throw new Error('Finance snapshot should not be recalculated when items are unchanged');
+      },
+      replaceOrder: async (id, input) => {
+        persisted = input;
+        return orderDetail({ ...input, id });
+      },
+    });
+
+    await updateOrder('order-1', { deliveryDate: '2026-05-11', isPaid: true }, repository);
+
+    expect(persisted).toMatchObject({
+      id: 'order-1',
+      deliveryDate: '2026-05-11',
+      isPaid: true,
+      costTotalCents: 500000,
+      grossProfitCents: 1150000,
+      profitMarginPercent: 69.7,
+      costSnapshotJson: { totalCostCents: 500000, warnings: [] },
+    });
+  });
+
+  it('keeps the historical order cost snapshot when later finance costs change and items are unchanged', async () => {
+    let persisted: Parameters<OrderRepository['replaceOrder']>[1] | undefined;
+    let recalculatedSnapshot = false;
+    const originalSnapshot = financeSnapshot({
+      costTotalCents: 900000,
+      grossProfitCents: 750000,
+      profitMarginPercent: 45.45,
+      costSnapshotJson: {
+        totalCostCents: 900000,
+        purchaseDate: '2026-05-10',
+        warnings: [],
+      },
+    });
+    const futurePurchaseSnapshot = financeSnapshot({
+      costTotalCents: 300000,
+      grossProfitCents: 1350000,
+      profitMarginPercent: 81.82,
+      costSnapshotJson: {
+        totalCostCents: 300000,
+        purchaseDate: '2026-05-28',
+        warnings: [],
+      },
+    });
+    const current = orderDetail({
+      ...originalSnapshot,
+      deliveryType: 'retiro',
+      deliveryFee: 0,
+      discountPercent: 0,
+      subtotal: 16500,
+      total: 16500,
+    });
+    const repository = createRepository({
+      getById: async () => current,
+      calculateCostSnapshot: async () => {
+        recalculatedSnapshot = true;
+        return futurePurchaseSnapshot;
+      },
+      replaceOrder: async (id, input) => {
+        persisted = input;
+        return orderDetail({ ...input, id });
+      },
+    });
+
+    await updateOrder('order-1', { notes: 'Customer confirmed pickup time' }, repository);
+
+    expect(recalculatedSnapshot).toBe(false);
+    expect(persisted).toMatchObject({
+      id: 'order-1',
+      notes: 'Customer confirmed pickup time',
+      costTotalCents: 900000,
+      grossProfitCents: 750000,
+      profitMarginPercent: 45.45,
+      costSnapshotJson: {
+        totalCostCents: 900000,
+        purchaseDate: '2026-05-10',
+        warnings: [],
+      },
+    });
+  });
+
+  it('recalculates finance profit fields without recalculating costs when sale total changes', async () => {
+    let persisted: Parameters<OrderRepository['replaceOrder']>[1] | undefined;
+    const current = orderDetail({
+      ...financeSnapshot({
+        costTotalCents: 500000,
+        grossProfitCents: 1150000,
+        profitMarginPercent: 69.7,
+        costSnapshotJson: {
+          totalCostCents: 500000,
+          profitSummary: {
+            saleTotalCents: 1650000,
+            totalCostCents: 500000,
+            grossProfitCents: 1150000,
+            profitMarginPercent: 69.7,
+            costRatioPercent: 30.3,
+          },
+          warnings: [],
+        },
+      }),
+      cooked: false,
+      deliveryType: 'retiro',
+      deliveryFee: 0,
+      cookingFee: 0,
+      discountPercent: 0,
+      subtotal: 16500,
+      total: 16500,
+    });
+    const repository = createRepository({
+      getById: async () => current,
+      getSetting: async (key) => (key === 'cooked_order_fee' ? '2000' : null),
+      calculateCostSnapshot: async () => {
+        throw new Error('Finance costs should not be recalculated when items are unchanged');
+      },
+      replaceOrder: async (id, input) => {
+        persisted = input;
+        return orderDetail({ ...input, id });
+      },
+    });
+
+    await updateOrder('order-1', { cooked: true }, repository);
+
+    expect(persisted).toMatchObject({
+      cooked: true,
+      cookingFee: 2000,
+      total: 18500,
+      costTotalCents: 500000,
+      grossProfitCents: 1350000,
+      profitMarginPercent: 72.97,
+    });
+    expect(persisted?.costSnapshotJson).toMatchObject({
+      totalCostCents: 500000,
+      profitSummary: {
+        saleTotalCents: 1850000,
+        totalCostCents: 500000,
+        grossProfitCents: 1350000,
+        profitMarginPercent: 72.97,
+        costRatioPercent: 27.03,
+      },
+      warnings: [],
+    });
+  });
+
+  it('recalculates finance cost snapshots when order items change', async () => {
+    let costSnapshotInput:
+      | Parameters<NonNullable<OrderRepository['calculateCostSnapshot']>>[0]
+      | undefined;
+    let persisted: Parameters<OrderRepository['replaceOrder']>[1] | undefined;
+    const current = orderDetail({
+      ...financeSnapshot({
+        costTotalCents: 500000,
+        grossProfitCents: 1150000,
+        profitMarginPercent: 69.7,
+        costSnapshotJson: { totalCostCents: 500000, warnings: [] },
+      }),
+      deliveryType: 'retiro',
+      deliveryFee: 0,
+      discountPercent: 0,
+      subtotal: 16500,
+      total: 16500,
+    });
+    const repository = createRepository({
+      getById: async () => current,
+      getMenuItemsByIds: async () => [menuItem({ priceDozen: 15000 })],
+      calculateCostSnapshot: async (input) => {
+        costSnapshotInput = input;
+        return financeSnapshot({
+          costTotalCents: 700000,
+          grossProfitCents: 800000,
+          profitMarginPercent: 53.33,
+          costSnapshotJson: { totalCostCents: 700000, warnings: [] },
+        });
+      },
+      replaceOrder: async (id, input) => {
+        persisted = input;
+        return orderDetail({ ...input, id });
+      },
+    });
+
+    await updateOrder(
+      'order-1',
+      {
+        items: [{ menuItemId: 'menu-1', quantity: 12 }],
+        discountPercent: 0,
+        deliveryType: 'retiro',
+      },
+      repository,
+    );
+
+    expect(costSnapshotInput).toEqual({
+      saleTotalCents: 1500000,
+      items: [{ menuItemId: 'menu-1', quantity: 12 }],
+    });
+    expect(persisted).toMatchObject({
+      costTotalCents: 700000,
+      grossProfitCents: 800000,
+      profitMarginPercent: 53.33,
+      costSnapshotJson: { totalCostCents: 700000, warnings: [] },
     });
   });
 

@@ -4,9 +4,13 @@ import type { OrderFilters, OrderStatus } from '@te-pinta/shared';
 
 import type { createDbClient } from '../../db/index';
 import { customers, menuItems, orderAddons, orderItems, orders, settings } from '../../db/schema';
+import { createFinanceRepository } from '../finance/finance-repository';
+import { previewFinanceOrderCost } from '../finance/finance-service';
 import type {
   OrderAddonDetail,
   CustomerSnapshot,
+  OrderCostSnapshotFields,
+  OrderCostSnapshotInput,
   MenuItemPricing,
   OrderDetail,
   OrderItemDetail,
@@ -35,6 +39,8 @@ const requireReturnedRow = <T>(row: T | undefined): T => {
 
 const moneyToDb = (value: number): string => value.toFixed(2);
 const moneyFromDb = (value: string): number => Number(value);
+const nullableMoneyFromDb = (value: string | null): number | null =>
+  value === null ? null : moneyFromDb(value);
 
 const mapCustomer = (row: CustomerRow): CustomerSnapshot => ({
   id: row.id,
@@ -88,6 +94,10 @@ const mapOrderDetail = (
   cookingFee: moneyFromDb(order.cookingFee),
   subtotal: moneyFromDb(order.subtotal),
   total: moneyFromDb(order.total),
+  costTotalCents: order.costTotalCents,
+  grossProfitCents: order.grossProfitCents,
+  profitMarginPercent: nullableMoneyFromDb(order.profitMarginPercent),
+  costSnapshotJson: order.costSnapshotJson,
   status: order.status,
   isPaid: order.isPaid,
   items,
@@ -107,6 +117,11 @@ const toOrderValues = (input: PersistOrderInput): typeof orders.$inferInsert => 
   cookingFee: moneyToDb(input.cookingFee),
   subtotal: moneyToDb(input.subtotal),
   total: moneyToDb(input.total),
+  costTotalCents: input.costTotalCents,
+  grossProfitCents: input.grossProfitCents,
+  profitMarginPercent:
+    input.profitMarginPercent === null ? null : moneyToDb(input.profitMarginPercent),
+  costSnapshotJson: input.costSnapshotJson,
   status: input.status,
   isPaid: input.isPaid,
   updatedAt: new Date(),
@@ -398,6 +413,20 @@ const getOrderDetail = async (db: DbClient, id: string): Promise<OrderDetail | n
   return mapOrderDetail(row.order, row.customer, items, addons);
 };
 
+const buildCostSnapshotFromFinance = async (
+  db: DbClient,
+  input: OrderCostSnapshotInput,
+): Promise<OrderCostSnapshotFields> => {
+  const breakdown = await previewFinanceOrderCost(input, createFinanceRepository(db));
+
+  return {
+    costTotalCents: breakdown.totalCostCents,
+    grossProfitCents: breakdown.profitSummary.grossProfitCents,
+    profitMarginPercent: breakdown.profitSummary.profitMarginPercent,
+    costSnapshotJson: breakdown,
+  };
+};
+
 export const createOrderRepository = (db: DbClient): OrderRepository => ({
   async list(filters = {}) {
     const conditions = buildFilterConditions(filters);
@@ -483,6 +512,10 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
   async getSetting(key): Promise<string | null> {
     const [row] = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
     return row?.value ?? null;
+  },
+
+  calculateCostSnapshot(input): Promise<OrderCostSnapshotFields> {
+    return buildCostSnapshotFromFinance(db, input);
   },
 
   async createOrderWithItems(input): Promise<OrderDetail> {

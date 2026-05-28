@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import {
   calculateItemPrice,
   calculateOrderPromotion,
+  calculateProfitSummary,
   type CreateOrderInput,
   type DeliveryTime,
   type DeliveryType,
@@ -48,6 +49,23 @@ export type OrderAddonDetail = {
   subtotal: number;
 };
 
+export type OrderCostSnapshotJson = unknown;
+
+export type OrderCostSnapshotFields = {
+  costTotalCents: number | null;
+  grossProfitCents: number | null;
+  profitMarginPercent: number | null;
+  costSnapshotJson: OrderCostSnapshotJson | null;
+};
+
+export type OrderCostSnapshotInput = {
+  saleTotalCents: number;
+  items: {
+    menuItemId: string;
+    quantity: number;
+  }[];
+};
+
 export type OrderDetail = {
   id: string;
   customer: CustomerSnapshot;
@@ -61,6 +79,10 @@ export type OrderDetail = {
   cookingFee: number;
   subtotal: number;
   total: number;
+  costTotalCents: number | null;
+  grossProfitCents: number | null;
+  profitMarginPercent: number | null;
+  costSnapshotJson: OrderCostSnapshotJson | null;
   status: OrderStatus;
   isPaid: boolean;
   items: OrderItemDetail[];
@@ -120,6 +142,10 @@ export type PersistOrderInput = {
   cookingFee: number;
   subtotal: number;
   total: number;
+  costTotalCents: number | null;
+  grossProfitCents: number | null;
+  profitMarginPercent: number | null;
+  costSnapshotJson: OrderCostSnapshotJson | null;
   status: OrderStatus;
   isPaid: boolean;
   items: PersistOrderItem[];
@@ -134,6 +160,7 @@ export type OrderRepository = {
   createCustomer(customer: CustomerSnapshot): Promise<CustomerSnapshot>;
   getMenuItemsByIds(ids: string[]): Promise<MenuItemPricing[]>;
   getSetting(key: string): Promise<string | null>;
+  calculateCostSnapshot(input: OrderCostSnapshotInput): Promise<OrderCostSnapshotFields>;
   createOrderWithItems(input: PersistOrderInput): Promise<OrderDetail>;
   replaceOrder(id: string, input: PersistOrderInput): Promise<OrderDetail | null>;
   updateStatus(id: string, status: OrderStatus): Promise<OrderDetail | null>;
@@ -142,6 +169,7 @@ export type OrderRepository = {
 };
 
 const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+const moneyToCents = (value: number): number => Math.round(value * 100);
 const normalizeOptionalText = (value: string | undefined): string | null => value?.trim() || null;
 
 const parseMoneySetting = (value: string | null): number => {
@@ -255,6 +283,83 @@ const buildSnapshotAddons = async (
   );
 };
 
+const buildFinanceSnapshot = async (
+  input: { total: number; items: PersistOrderItem[] },
+  repository: OrderRepository,
+): Promise<OrderCostSnapshotFields> => {
+  try {
+    return await repository.calculateCostSnapshot({
+      saleTotalCents: moneyToCents(input.total),
+      items: input.items.map((item) => ({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+      })),
+    });
+  } catch {
+    return {
+      costTotalCents: null,
+      grossProfitCents: null,
+      profitMarginPercent: null,
+      costSnapshotJson: {
+        warnings: [
+          {
+            code: 'finance_costing_unavailable',
+            message: 'Finance costing is unavailable; order was saved without blocking sales.',
+          },
+        ],
+      },
+    };
+  }
+};
+
+const pickFinanceSnapshot = (order: OrderDetail): OrderCostSnapshotFields => ({
+  costTotalCents: order.costTotalCents,
+  grossProfitCents: order.grossProfitCents,
+  profitMarginPercent: order.profitMarginPercent,
+  costSnapshotJson: order.costSnapshotJson,
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const refreshSnapshotJsonProfit = (
+  snapshotJson: OrderCostSnapshotJson | null,
+  profitSummary: ReturnType<typeof calculateProfitSummary>,
+): OrderCostSnapshotJson | null => {
+  if (!isRecord(snapshotJson)) {
+    return snapshotJson;
+  }
+
+  return {
+    ...snapshotJson,
+    profitSummary: {
+      ...(isRecord(snapshotJson.profitSummary) ? snapshotJson.profitSummary : {}),
+      ...profitSummary,
+    },
+  };
+};
+
+const refreshFinanceSnapshotSaleTotal = (
+  snapshot: OrderCostSnapshotFields,
+  total: number,
+): OrderCostSnapshotFields => {
+  if (snapshot.costTotalCents === null) {
+    return snapshot;
+  }
+
+  const profitSummary = calculateProfitSummary({
+    saleTotalCents: moneyToCents(total),
+    totalCostCents: snapshot.costTotalCents,
+  });
+
+  return {
+    costTotalCents: snapshot.costTotalCents,
+    grossProfitCents: profitSummary.grossProfitCents,
+    profitMarginPercent: profitSummary.profitMarginPercent,
+    costSnapshotJson: refreshSnapshotJsonProfit(snapshot.costSnapshotJson, profitSummary),
+  };
+};
+
 const buildPersistInput = async (
   input: CreateOrderInput,
   repository: OrderRepository,
@@ -264,6 +369,7 @@ const buildPersistInput = async (
     isPaid?: boolean;
     existingItems?: PersistOrderItem[];
     existingAddons?: PersistOrderAddon[];
+    existingCostSnapshot?: OrderCostSnapshotFields;
   } = {},
 ): Promise<PersistOrderInput> => {
   const customer = await resolveCustomer(input.customer, repository);
@@ -299,6 +405,11 @@ const buildPersistInput = async (
       combinedDozenPrice: parseMoneySetting(combinedDozenPriceSetting) || undefined,
     },
   });
+  const total = roundMoney(pricing.total);
+  const costSnapshot =
+    options.existingCostSnapshot === undefined
+      ? await buildFinanceSnapshot({ total, items }, repository)
+      : refreshFinanceSnapshotSaleTotal(options.existingCostSnapshot, total);
 
   return {
     id: options.id ?? randomUUID(),
@@ -312,7 +423,8 @@ const buildPersistInput = async (
     deliveryFee,
     cookingFee,
     subtotal: pricing.promoSubtotal,
-    total: roundMoney(pricing.total),
+    total,
+    ...costSnapshot,
     status: options.status ?? 'confirmado',
     isPaid: options.isPaid ?? false,
     items,
@@ -423,6 +535,7 @@ export const updateOrder = async (
     isPaid: input.isPaid ?? current.isPaid,
     existingItems,
     existingAddons,
+    existingCostSnapshot: input.items ? undefined : pickFinanceSnapshot(current),
   });
   const updated = await repository.replaceOrder(id, persistInput);
 
