@@ -4,7 +4,22 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { customers, ingredients, menuItems, orderItems, orders, settings, users } from './schema';
+import {
+  customers,
+  financeBaseCostRules,
+  financeProducts,
+  financePurchaseItems,
+  financePurchases,
+  financeRecipeItems,
+  financeRecipes,
+  financeStockMovements,
+  ingredients,
+  menuItems,
+  orderItems,
+  orders,
+  settings,
+  users,
+} from './schema';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 
@@ -18,6 +33,13 @@ describe('database schema', () => {
       getTableName(orders),
       getTableName(orderItems),
       getTableName(settings),
+      getTableName(financeProducts),
+      getTableName(financePurchases),
+      getTableName(financePurchaseItems),
+      getTableName(financeStockMovements),
+      getTableName(financeBaseCostRules),
+      getTableName(financeRecipes),
+      getTableName(financeRecipeItems),
     ]).toEqual([
       'users',
       'customers',
@@ -26,6 +48,13 @@ describe('database schema', () => {
       'orders',
       'order_items',
       'settings',
+      'finance_products',
+      'finance_purchases',
+      'finance_purchase_items',
+      'finance_stock_movements',
+      'finance_base_cost_rules',
+      'finance_recipes',
+      'finance_recipe_items',
     ]);
   });
 
@@ -52,7 +81,46 @@ describe('database schema', () => {
       'utf8',
     );
 
-    expect(migration).toContain('ALTER TABLE "orders" ADD COLUMN "is_paid" boolean DEFAULT false NOT NULL');
+    expect(migration).toContain(
+      'ALTER TABLE "orders" ADD COLUMN "is_paid" boolean DEFAULT false NOT NULL',
+    );
   });
 
+  it('adds finance tables and nullable order snapshot columns in migration 0006', async () => {
+    const migration = await readFile(
+      join(currentDir, 'migrations', '0006_finance_mvp.sql'),
+      'utf8',
+    );
+
+    expect(migration).toContain('CREATE TYPE "public"."finance_product_category"');
+    expect(migration).toContain('CREATE TABLE "finance_products"');
+    expect(migration).toContain('"normalized_name" varchar(180) NOT NULL');
+    expect(migration).toContain('CREATE TABLE "finance_purchase_items"');
+    expect(migration).toContain('"total_price_cents" integer NOT NULL');
+    expect(migration).toContain('CREATE TABLE "finance_stock_movements"');
+    expect(migration).toContain('CREATE TABLE "finance_base_cost_rules"');
+    expect(migration).toContain('CREATE TABLE "finance_recipe_items"');
+    expect(migration).toContain('ALTER TABLE "orders" ADD COLUMN "cost_total_cents" integer');
+    expect(migration).toContain('ALTER TABLE "orders" ADD COLUMN "cost_snapshot_json" jsonb');
+  });
+
+  it('registers finance migration 0006 in the Drizzle journal', async () => {
+    const journal = JSON.parse(
+      await readFile(join(currentDir, 'migrations', 'meta', '_journal.json'), 'utf8'),
+    ) as {
+      entries: Array<{
+        idx: number;
+        version: string;
+        tag: string;
+        breakpoints: boolean;
+      }>;
+    };
+
+    expect(journal.entries.at(-1)).toMatchObject({
+      idx: 6,
+      version: '7',
+      tag: '0006_finance_mvp',
+      breakpoints: true,
+    });
+  });
 });

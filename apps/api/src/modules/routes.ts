@@ -4,6 +4,7 @@ import type { createDbClient } from '../db/index';
 import { createAdminUserRepository, createAuthRouter, type JwtSecrets } from './auth';
 import { createCustomerRepository, createCustomerRouter } from './customers';
 import { createDashboardRepository, createDashboardRouter } from './dashboard';
+import { createFinanceRepository, createFinanceRouter } from './finance';
 import { createIngredientRepository, createIngredientRouter } from './ingredients';
 import { createMenuItemRepository, createMenuRouter } from './menu';
 import { createOrderRepository, createOrderRouter } from './orders';
@@ -49,6 +50,7 @@ export const createApiRouter = ({
     '/dashboard',
     createDashboardRouter({ repository: createDashboardRepository(db), secrets }),
   );
+  router.use('/finance', createFinanceRouter({ repository: createFinanceRepository(db), secrets }));
 
   return router;
 };
