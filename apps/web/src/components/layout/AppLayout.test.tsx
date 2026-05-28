@@ -67,7 +67,19 @@ describe('AppLayout', () => {
       'href',
       '/orders',
     );
-    expect(within(mobileNav).getByRole('link', { name: /productos/i })).toHaveAttribute('href', '/menu');
+    expect(within(mobileNav).getByRole('link', { name: /finanzas/i })).toHaveAttribute(
+      'href',
+      '/finanzas',
+    );
+    expect(within(mobileNav).getByRole('link', { name: /productos/i })).toHaveAttribute(
+      'href',
+      '/menu',
+    );
+    expect(within(mobileNav).getByRole('link', { name: /insumos/i })).toHaveAttribute(
+      'href',
+      '/ingredients',
+    );
+    expect(within(mobileNav).queryByRole('link', { name: /clientes/i })).not.toBeInTheDocument();
     expect(within(mobileNav).queryByRole('link', { name: /settings/i })).not.toBeInTheDocument();
   });
 });

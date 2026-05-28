@@ -2,9 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 import { cn } from '@/lib/utils';
 
-import { navItems } from './nav-items';
-
-const mobileItems = navItems.slice(0, 5);
+import { mobileNavItems } from './nav-items';
 
 export const BottomNav = () => {
   return (
@@ -26,7 +24,7 @@ export const BottomNav = () => {
       />
 
       <div className="relative mx-auto grid max-w-lg grid-cols-5 gap-1.5">
-        {mobileItems.map((item) => {
+        {mobileNavItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink

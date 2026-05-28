@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { CustomersPage } from '@/features/customers/CustomersPage';
+import { FinancePage } from '@/features/finance/pages/FinancePage';
 import { IngredientsPage } from '@/features/ingredients/IngredientsPage';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 import { MenuPage } from '@/features/menu/MenuPage';
@@ -11,7 +12,7 @@ import { SettingsPage } from '@/features/settings/SettingsPage';
 import { HomePage } from '@/routes/HomePage';
 import { LoginPage } from '@/routes/LoginPage';
 
-const protectedRoutes = [
+export const protectedRoutes = [
   {
     path: 'dashboard',
     element: <DashboardPage />,
@@ -27,6 +28,10 @@ const protectedRoutes = [
   {
     path: 'customers',
     element: <CustomersPage />,
+  },
+  {
+    path: 'finanzas',
+    element: <FinancePage />,
   },
   {
     path: 'ingredients',
