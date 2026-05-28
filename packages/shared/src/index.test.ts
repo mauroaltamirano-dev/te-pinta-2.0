@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { calculateItemPrice, createOrderSchema, PACKAGE_NAME } from './index';
+import { calculateItemPrice, calculatePackagingUnits, createOrderSchema, PACKAGE_NAME } from './index';
 
 describe('shared package exports', () => {
   it('exposes the Te Pinta shared package name', () => {
@@ -20,5 +20,9 @@ describe('shared package exports', () => {
         items: [{ menuItemId: 'item-1', quantity: 1 }],
       }).deliveryFee,
     ).toBe(0);
+  });
+
+  it('exports finance costing helpers from the root package entrypoint', () => {
+    expect(calculatePackagingUnits(25)).toBe(3);
   });
 });

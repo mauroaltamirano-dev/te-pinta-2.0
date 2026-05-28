@@ -3,12 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
   adminEnvSchema,
   createCustomerSchema,
+  createFinanceBaseCostRuleSchema,
+  createFinanceProductSchema,
+  createFinancePurchaseSchema,
+  createFinanceStockAdjustmentSchema,
   createIngredientSchema,
   createMenuItemSchema,
   createOrderSchema,
   deliveryTimeSchema,
   deliveryTypeSchema,
+  financeBaseUnitSchema,
+  financeCostingPreviewOrderSchema,
+  financeProductCategorySchema,
   orderStatusSchema,
+  updateFinanceRecipeSchema,
   updateSettingSchema,
 } from './index';
 
@@ -68,5 +76,141 @@ describe('shared domain schemas', () => {
     expect(orderStatusSchema.options).toEqual(['confirmado', 'preparado', 'entregado']);
     expect(deliveryTimeSchema.options).toEqual(['mediodia', 'tarde', 'noche']);
     expect(deliveryTypeSchema.options).toEqual(['retiro', 'envio']);
+  });
+
+  it('validates finance product catalog and purchase contracts', () => {
+    expect(
+      createFinanceProductSchema.parse({
+        name: ' Tapas de empanadas ',
+        category: 'raw_material',
+        baseUnit: 'unit',
+        stockTracking: true,
+      }),
+    ).toMatchObject({
+      name: 'Tapas de empanadas',
+      category: 'raw_material',
+      baseUnit: 'unit',
+      stockTracking: true,
+      isActive: true,
+    });
+
+    const purchase = createFinancePurchaseSchema.parse({
+      purchaseDate: '2026-05-27',
+      supplier: 'Mayorista Centro',
+      items: [
+        {
+          productId: 'product-tapa',
+          purchaseUnit: 'pack',
+          purchaseQuantity: 24,
+          unitsPerPackage: 12,
+          unitPriceCents: 160_000,
+        },
+      ],
+    });
+
+    expect(purchase.items[0]).toMatchObject({
+      productId: 'product-tapa',
+      purchaseQuantity: 24,
+      unitsPerPackage: 12,
+      unitPriceCents: 160_000,
+    });
+
+    expect(
+      createFinancePurchaseSchema.safeParse({
+        purchaseDate: '2026-05-27',
+        items: [
+          {
+            productId: 'product-tapa',
+            purchaseUnit: 'pack',
+            purchaseQuantity: 24,
+            unitsPerPackage: 12,
+            unitPriceCents: 160_000,
+            totalPriceCents: 3_840_000,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      createFinancePurchaseSchema.safeParse({
+        purchaseDate: '2026-05-27',
+        items: [
+          {
+            productId: 'product-tapa',
+            purchaseUnit: 'pack',
+            purchaseQuantity: 24,
+            unitsPerPackage: 12,
+            unitPriceCents: 0,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      createFinancePurchaseSchema.safeParse({
+        purchaseDate: '2026-05-27',
+        items: [
+          {
+            productId: 'product-tapa',
+            purchaseUnit: 'pack',
+            purchaseQuantity: 24,
+            unitsPerPackage: 12,
+            totalPriceCents: 0,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates finance rules, recipes, stock adjustments, and costing previews', () => {
+    expect(financeProductCategorySchema.options).toContain('investment');
+    expect(financeBaseUnitSchema.options).toEqual(['unit', 'g', 'kg', 'ml', 'l', 'pack']);
+    expect(
+      createFinanceBaseCostRuleSchema.parse({
+        productId: 'product-box',
+        name: 'Caja delivery',
+        componentType: 'packaging',
+        appliesTo: 'per_started_dozen',
+        quantity: 1,
+      }),
+    ).toMatchObject({ groupSizeUnits: 12, roundingMode: 'ceil', isActive: true });
+    expect(
+      updateFinanceRecipeSchema.parse({
+        menuItemId: 'menu-saltena',
+        items: [
+          {
+            productId: 'product-roast-beef',
+            quantityPerDozen: 1_000,
+            unit: 'g',
+            quantityBase: 1_000,
+          },
+        ],
+      }).items[0]?.quantityBase,
+    ).toBe(1_000);
+    expect(
+      createFinanceStockAdjustmentSchema.parse({
+        productId: 'product-tapa',
+        movementType: 'waste',
+        quantity: 6,
+      }).movementType,
+    ).toBe('waste');
+    expect(
+      createFinanceStockAdjustmentSchema.safeParse({
+        productId: 'product-tapa',
+        movementType: 'purchase_in',
+        quantity: 6,
+      }).success,
+    ).toBe(false);
+    expect(
+      createFinanceStockAdjustmentSchema.safeParse({
+        productId: 'product-tapa',
+        movementType: 'order_consumption',
+        quantity: 6,
+      }).success,
+    ).toBe(false);
+    expect(
+      financeCostingPreviewOrderSchema.parse({
+        saleTotalCents: 1_500_000,
+        items: [{ menuItemId: 'menu-saltena', quantity: 12 }],
+      }).items[0]?.quantity,
+    ).toBe(12);
   });
 });
