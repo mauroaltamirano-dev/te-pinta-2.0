@@ -1127,6 +1127,9 @@ const RecipeWorkspace = ({
   const [selectedMenuItemId, setSelectedMenuItemId] = useState('');
   const menuItemId = selectedMenuItemId || menuItems[0]?.id || recipes[0]?.menuItemId || '';
   const selectedRecipe = recipes.find((recipe) => recipe.menuItemId === menuItemId);
+  const recipeCostPerDozenCents = selectedRecipe?.totalCostPerDozenCents ?? 0;
+  const totalCostPerDozenCents = baseCostPerDozenCents + recipeCostPerDozenCents;
+  const totalCostPerUnitCents = Math.round(totalCostPerDozenCents / 12);
   const [rows, setRows] = useState<RecipeDraftItem[]>([]);
 
   useEffect(() => {
@@ -1180,8 +1183,8 @@ const RecipeWorkspace = ({
           <h3 className="text-sm font-black uppercase tracking-wide">Receta por docena</h3>
         </div>
         <div className="rounded-2xl bg-background px-3 py-2 text-sm font-black text-foreground ring-1 ring-border/60">
-          Docena {formatMoneyFromCents(selectedRecipe?.totalCostPerDozenCents ?? 0)} · unidad{' '}
-          {formatMoneyFromCents(selectedRecipe?.totalCostPerUnitCents ?? 0)}
+          Total docena {formatMoneyFromCents(totalCostPerDozenCents)} · unidad{' '}
+          {formatMoneyFromCents(totalCostPerUnitCents)}
         </div>
       </div>
 
@@ -1204,6 +1207,10 @@ const RecipeWorkspace = ({
         <p className="font-black text-foreground">
           Costo base aparte por docena:{' '}
           <span className="tabular-nums">{formatMoneyFromCents(baseCostPerDozenCents)}</span>
+        </p>
+        <p className="font-black text-foreground">
+          Costo receta por docena:{' '}
+          <span className="tabular-nums">{formatMoneyFromCents(recipeCostPerDozenCents)}</span>
         </p>
         <p>
           No lo cargues como ingrediente: estos productos ya se suman en la calculadora desde Costos

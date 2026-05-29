@@ -323,6 +323,7 @@ describe('FinancePage', () => {
     const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /recetas/i }));
 
+    expect(screen.getByText(/total docena/i)).toBeInTheDocument();
     expect(screen.getByText(/costo base aparte por docena/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /agregar ingrediente/i }));
     const ingredientSelect = screen.getByLabelText(/insumo/i);
