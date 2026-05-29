@@ -1517,6 +1517,7 @@ export const FinancePage = () => {
   const [activeTab, setActiveTab] = useState<FinanceTab>('dashboard');
   const [calculatorForm, setCalculatorForm] = useState<CalculatorFormState>(initialCalculatorForm);
   const [profitSimulatorPercent, setProfitSimulatorPercent] = useState('50');
+  const [overheadPercent, setOverheadPercent] = useState('20');
   const [feedback, setFeedback] = useState<FinanceFeedback | null>(null);
   const [purchaseResetSignal, setPurchaseResetSignal] = useState(0);
   const [stockResetSignal, setStockResetSignal] = useState(0);
@@ -1557,22 +1558,30 @@ export const FinancePage = () => {
     [products, trackedProducts.length],
   );
   const dashboardBaseCostPerDozenCents = estimateBaseCostFromRules(baseCostRules, 12);
-  const targetMarkupPercent = toPositiveNumber(profitSimulatorPercent);
+  const targetMarginPercent = toPositiveNumber(profitSimulatorPercent);
+  const estimatedOverheadPercent = toPositiveNumber(overheadPercent);
   const recipeProfitability = useMemo(
     () =>
       recipes.map((recipe) => {
         const menuItem = menuItems.find((item) => item.id === recipe.menuItemId);
-        const totalCostCents = dashboardBaseCostPerDozenCents + recipe.totalCostPerDozenCents;
+        const directCostCents = dashboardBaseCostPerDozenCents + recipe.totalCostPerDozenCents;
+        const overheadCostCents = Math.round(directCostCents * (estimatedOverheadPercent / 100));
+        const totalCostCents = directCostCents + overheadCostCents;
         const priceDozenCents = Math.round((menuItem?.priceDozen ?? 0) * 100);
         const grossProfitCents = priceDozenCents - totalCostCents;
         const marginPercent = priceDozenCents
           ? Math.round((grossProfitCents / priceDozenCents) * 1000) / 10
           : 0;
-        const suggestedPriceCents = Math.round(totalCostCents * (1 + targetMarkupPercent / 100));
+        const suggestedPriceCents =
+          targetMarginPercent >= 100
+            ? null
+            : Math.round(totalCostCents / (1 - targetMarginPercent / 100));
 
         return {
           id: recipe.menuItemId,
           name: recipe.menuItemName,
+          directCostCents,
+          overheadCostCents,
           totalCostCents,
           priceDozenCents,
           grossProfitCents,
@@ -1582,7 +1591,13 @@ export const FinancePage = () => {
           warnings: recipe.warnings.length,
         };
       }),
-    [dashboardBaseCostPerDozenCents, menuItems, recipes, targetMarkupPercent],
+    [
+      dashboardBaseCostPerDozenCents,
+      estimatedOverheadPercent,
+      menuItems,
+      recipes,
+      targetMarginPercent,
+    ],
   );
 
   const handleCreateProduct = (form: ProductFormState) => {
@@ -1963,19 +1978,31 @@ export const FinancePage = () => {
                     Rentabilidad por variedad
                   </p>
                   <h3 className="mt-1 text-xl font-black text-foreground">
-                    Recetas + costo base + precio final
+                    Recetas + costo base + servicios + precio final
                   </h3>
                 </div>
-                <label className="text-sm font-bold text-foreground">
-                  Simular ganancia sobre costo (%)
-                  <input
-                    className={inputClassName}
-                    min="0"
-                    onChange={(event) => setProfitSimulatorPercent(event.target.value)}
-                    type="number"
-                    value={profitSimulatorPercent}
-                  />
-                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm font-bold text-foreground">
+                    Margen objetivo sobre venta (%)
+                    <input
+                      className={inputClassName}
+                      min="0"
+                      onChange={(event) => setProfitSimulatorPercent(event.target.value)}
+                      type="number"
+                      value={profitSimulatorPercent}
+                    />
+                  </label>
+                  <label className="text-sm font-bold text-foreground">
+                    Servicios / indirectos (%)
+                    <input
+                      className={inputClassName}
+                      min="0"
+                      onChange={(event) => setOverheadPercent(event.target.value)}
+                      type="number"
+                      value={overheadPercent}
+                    />
+                  </label>
+                </div>
               </div>
 
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -1996,21 +2023,37 @@ export const FinancePage = () => {
                         <div>
                           <h4 className="font-black text-foreground">{item.name}</h4>
                           <p className="text-xs font-bold text-muted-foreground">
-                            Precio sugerido al {targetMarkupPercent.toLocaleString('es-AR')}%:{' '}
+                            Precio para margen del {targetMarginPercent.toLocaleString('es-AR')}%:{' '}
                             <span className="text-foreground">
-                              {formatMoneyFromCents(item.suggestedPriceCents)}
+                              {item.suggestedPriceCents === null
+                                ? 'Margen inválido'
+                                : formatMoneyFromCents(item.suggestedPriceCents)}
                             </span>
                           </p>
                         </div>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${tone}`}
                         >
-                          {item.marginPercent.toLocaleString('es-AR')}%
+                          Margen actual {item.marginPercent.toLocaleString('es-AR')}%
                         </span>
                       </div>
-                      <dl className="mt-3 grid gap-2 text-xs font-bold md:grid-cols-3">
+                      <dl className="mt-3 grid gap-2 text-xs font-bold sm:grid-cols-2 xl:grid-cols-5">
                         <div className="rounded-xl bg-card px-3 py-2">
-                          <dt className="text-muted-foreground">Costo</dt>
+                          <dt className="text-muted-foreground">Costo directo</dt>
+                          <dd className="text-foreground">
+                            {formatMoneyFromCents(item.directCostCents)}
+                          </dd>
+                        </div>
+                        <div className="rounded-xl bg-card px-3 py-2">
+                          <dt className="text-muted-foreground">
+                            Servicios {estimatedOverheadPercent.toLocaleString('es-AR')}%
+                          </dt>
+                          <dd className="text-foreground">
+                            {formatMoneyFromCents(item.overheadCostCents)}
+                          </dd>
+                        </div>
+                        <div className="rounded-xl bg-card px-3 py-2">
+                          <dt className="text-muted-foreground">Costo total</dt>
                           <dd className="text-foreground">
                             {formatMoneyFromCents(item.totalCostCents)}
                           </dd>

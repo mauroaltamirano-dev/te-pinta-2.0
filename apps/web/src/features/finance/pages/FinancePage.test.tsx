@@ -259,7 +259,10 @@ describe('FinancePage', () => {
     expect(within(tabs).getByRole('tab', { name: /calculadora/i })).toBeInTheDocument();
     expect(within(tabs).getByRole('tab', { name: /stock/i })).toBeInTheDocument();
     expect(await screen.findByText(/rentabilidad por variedad/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/simular ganancia sobre costo/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/margen objetivo sobre venta/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/servicios \/ indirectos/i)).toHaveValue(20);
+    expect(screen.getByText(/precio para margen del 50%/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$ 1\.728/i)).toBeInTheDocument();
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
     expect(screen.getByText('Harina 000')).toBeInTheDocument();
