@@ -3,6 +3,7 @@ import type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
+  CancelFinancePurchaseInput,
   FinanceBaseUnit,
   FinanceCostComponentType,
   FinanceCostingPreviewOrderInput,
@@ -11,6 +12,7 @@ import type {
   FinanceOrderCostBreakdown,
   FinanceProductCategory,
   FinanceProductFilters,
+  FinancePurchaseFilters,
   FinanceRoundingMode,
   FinanceStockFilters,
   FinanceStockMovementType,
@@ -23,6 +25,7 @@ export type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
+  CancelFinancePurchaseInput,
   FinanceBaseUnit,
   FinanceCostComponentType,
   FinanceCostingPreviewOrderInput,
@@ -31,6 +34,7 @@ export type {
   FinanceOrderCostBreakdown,
   FinanceProductCategory,
   FinanceProductFilters,
+  FinancePurchaseFilters,
   FinanceRoundingMode,
   FinanceStockFilters,
   FinanceStockMovementType,
@@ -77,7 +81,10 @@ export type FinancePurchaseDetail = {
   supplier: string | null;
   receiptNumber: string | null;
   notes: string | null;
+  canceledAt: string | Date | null;
+  canceledReason: string | null;
   items: FinancePurchaseItem[];
+  stockMovements?: FinanceStockMovement[];
 };
 
 export type FinanceStockMovement = {

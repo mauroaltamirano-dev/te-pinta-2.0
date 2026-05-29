@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, or, type SQL } from 'drizzle-orm';
 
 import {
   calculateLatestProductCost,
@@ -143,6 +143,8 @@ const mapPurchaseDetail = (
   supplier: purchase.supplier,
   receiptNumber: purchase.receiptNumber,
   notes: purchase.notes,
+  canceledAt: purchase.canceledAt,
+  canceledReason: purchase.canceledReason,
   items: items.map(mapPurchaseItem),
   stockMovements: stockMovements.map(mapStockMovement),
 });
@@ -204,7 +206,9 @@ const listPurchaseHistoryRows = async (
     })
     .from(financePurchaseItems)
     .innerJoin(financePurchases, eq(financePurchaseItems.purchaseId, financePurchases.id))
-    .where(inArray(financePurchaseItems.productId, productIds))
+    .where(
+      and(inArray(financePurchaseItems.productId, productIds), isNull(financePurchases.canceledAt)),
+    )
     .orderBy(
       asc(financePurchases.purchaseDate),
       asc(financePurchaseItems.createdAt),
@@ -288,6 +292,99 @@ const getPurchaseDetail = async (
     purchase,
     items,
     stockMovements.map((row) => row.finance_stock_movements),
+  );
+};
+
+const listPurchaseDetails = async (
+  db: DbClient,
+  filters: Parameters<FinanceRepository['listPurchases']>[0] = {},
+): Promise<FinancePurchaseDetail[]> => {
+  const conditions: SQL[] = [];
+
+  if (filters.from) {
+    conditions.push(gte(financePurchases.purchaseDate, filters.from));
+  }
+  if (filters.to) {
+    conditions.push(lte(financePurchases.purchaseDate, filters.to));
+  }
+  if (filters.supplier) {
+    conditions.push(ilike(financePurchases.supplier, `%${filters.supplier}%`));
+  }
+
+  const purchaseRows = await (conditions.length
+    ? db
+        .select()
+        .from(financePurchases)
+        .where(and(...conditions))
+        .orderBy(desc(financePurchases.purchaseDate), desc(financePurchases.createdAt))
+    : db
+        .select()
+        .from(financePurchases)
+        .orderBy(desc(financePurchases.purchaseDate), desc(financePurchases.createdAt)));
+  const purchaseIds = purchaseRows.map((row) => row.id);
+
+  if (purchaseIds.length === 0) {
+    return [];
+  }
+
+  let allowedPurchaseIds = new Set(purchaseIds);
+  if (filters.category) {
+    const categoryRows = await db
+      .select({ purchaseId: financePurchaseItems.purchaseId })
+      .from(financePurchaseItems)
+      .innerJoin(financeProducts, eq(financePurchaseItems.productId, financeProducts.id))
+      .where(
+        and(
+          inArray(financePurchaseItems.purchaseId, purchaseIds),
+          eq(financeProducts.category, filters.category),
+        ),
+      );
+    allowedPurchaseIds = new Set(categoryRows.map((row) => row.purchaseId));
+  }
+
+  const filteredPurchaseRows = purchaseRows.filter((row) => allowedPurchaseIds.has(row.id));
+  const filteredPurchaseIds = filteredPurchaseRows.map((row) => row.id);
+
+  if (filteredPurchaseIds.length === 0) {
+    return [];
+  }
+
+  const [itemRows, stockRows] = await Promise.all([
+    db
+      .select()
+      .from(financePurchaseItems)
+      .where(inArray(financePurchaseItems.purchaseId, filteredPurchaseIds))
+      .orderBy(asc(financePurchaseItems.id)),
+    db
+      .select()
+      .from(financeStockMovements)
+      .innerJoin(
+        financePurchaseItems,
+        eq(financeStockMovements.sourcePurchaseItemId, financePurchaseItems.id),
+      )
+      .where(inArray(financePurchaseItems.purchaseId, filteredPurchaseIds))
+      .orderBy(asc(financeStockMovements.id)),
+  ]);
+  const itemsByPurchase = new Map<string, FinancePurchaseItemRow[]>();
+  const stockByPurchase = new Map<string, FinanceStockMovementRow[]>();
+
+  for (const item of itemRows) {
+    itemsByPurchase.set(item.purchaseId, [...(itemsByPurchase.get(item.purchaseId) ?? []), item]);
+  }
+  for (const row of stockRows) {
+    const purchaseId = row.finance_purchase_items.purchaseId;
+    stockByPurchase.set(purchaseId, [
+      ...(stockByPurchase.get(purchaseId) ?? []),
+      row.finance_stock_movements,
+    ]);
+  }
+
+  return filteredPurchaseRows.map((purchase) =>
+    mapPurchaseDetail(
+      purchase,
+      itemsByPurchase.get(purchase.id) ?? [],
+      stockByPurchase.get(purchase.id) ?? [],
+    ),
   );
 };
 
@@ -506,6 +603,40 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
     }
 
     return purchase;
+  },
+
+  async listPurchases(filters = {}): Promise<FinancePurchaseDetail[]> {
+    return listPurchaseDetails(db, filters);
+  },
+
+  async getPurchase(id): Promise<FinancePurchaseDetail | null> {
+    return getPurchaseDetail(db, id);
+  },
+
+  async cancelPurchase(input): Promise<FinancePurchaseDetail | null> {
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(financePurchases)
+        .set({
+          canceledAt: input.canceledAt,
+          canceledReason: input.canceledReason,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(financePurchases.id, input.id), isNull(financePurchases.canceledAt)))
+        .returning({ id: financePurchases.id });
+
+      if (!row) {
+        return;
+      }
+
+      if (input.reversalMovements.length > 0) {
+        await tx
+          .insert(financeStockMovements)
+          .values(input.reversalMovements.map(toStockMovementValues));
+      }
+    });
+
+    return getPurchaseDetail(db, input.id);
   },
 
   async listStock(filters = {}): Promise<FinanceStockItem[]> {

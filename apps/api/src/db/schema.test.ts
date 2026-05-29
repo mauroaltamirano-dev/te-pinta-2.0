@@ -104,7 +104,7 @@ describe('database schema', () => {
     expect(migration).toContain('ALTER TABLE "orders" ADD COLUMN "cost_snapshot_json" jsonb');
   });
 
-  it('registers finance migration 0006 in the Drizzle journal', async () => {
+  it('registers finance migrations in the Drizzle journal', async () => {
     const journal = JSON.parse(
       await readFile(join(currentDir, 'migrations', 'meta', '_journal.json'), 'utf8'),
     ) as {
@@ -116,10 +116,16 @@ describe('database schema', () => {
       }>;
     };
 
-    expect(journal.entries.at(-1)).toMatchObject({
+    expect(journal.entries.at(-2)).toMatchObject({
       idx: 6,
       version: '7',
       tag: '0006_finance_mvp',
+      breakpoints: true,
+    });
+    expect(journal.entries.at(-1)).toMatchObject({
+      idx: 7,
+      version: '7',
+      tag: '0007_finance_purchase_cancellation',
       breakpoints: true,
     });
   });

@@ -191,6 +191,12 @@ export const financePurchaseFiltersSchema = z.object({
   category: financeProductCategorySchema.optional(),
 });
 
+export const cancelFinancePurchaseSchema = z
+  .object({
+    reason: z.string().trim().optional(),
+  })
+  .default({});
+
 const financeBaseCostRuleFields = {
   productId: idSchema,
   name: trimmedString,

@@ -50,6 +50,13 @@
       "when": 1779923708209,
       "tag": "0006_finance_mvp",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780068600000,
+      "tag": "0007_finance_purchase_cancellation",
+      "breakpoints": true
     }
   ]
 }

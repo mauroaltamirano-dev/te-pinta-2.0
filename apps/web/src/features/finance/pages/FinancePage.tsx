@@ -24,8 +24,10 @@ import {
   useCreateFinancePurchase,
   useCreateFinanceStockAdjustment,
   useDeleteFinanceBaseCostRule,
+  useCancelFinancePurchase,
   useFinanceBaseCostRules,
   useFinanceProducts,
+  useFinancePurchases,
   useFinanceRecipes,
   useFinanceStock,
   usePreviewFinanceOrderCost,
@@ -40,6 +42,7 @@ import type {
   FinanceCostRuleAppliesTo,
   FinanceProductCategory,
   FinanceProductWithMetrics,
+  FinancePurchaseDetail,
   FinanceRecipe,
   FinanceRoundingMode,
   FinanceStockItem,
@@ -242,6 +245,11 @@ const formatMoneyFromCents = (cents: number | null | undefined): string =>
 
 const formatQuantity = (quantity: number, unit: FinanceBaseUnit): string =>
   `${quantity.toLocaleString('es-AR', { maximumFractionDigits: 3 })} ${baseUnitLabels[unit]}`;
+
+const formatDate = (value: string): string =>
+  new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(
+    new Date(`${value}T00:00:00`),
+  );
 
 const toCents = (value: string): number => Math.round(Number(value || 0) * 100);
 const toPositiveNumber = (value: string): number => Math.max(Number(value || 0), 0);
@@ -1374,6 +1382,107 @@ const RecipeWorkspace = ({
   );
 };
 
+const PurchaseHistory = ({
+  purchases,
+  products,
+  onCancel,
+  isPending,
+}: {
+  purchases: FinancePurchaseDetail[];
+  products: FinanceProductWithMetrics[];
+  onCancel: (id: string) => void;
+  isPending: boolean;
+}) => {
+  if (!purchases.length) {
+    return (
+      <EmptyState
+        title="Sin compras registradas"
+        description="Cuando cargues compras, acá vas a ver el historial con totales y opción de anulación segura."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {purchases.map((purchase) => {
+        const totalCents = purchase.items.reduce((total, item) => total + item.totalPriceCents, 0);
+        const isCanceled = Boolean(purchase.canceledAt);
+
+        return (
+          <article
+            className={`rounded-[1.5rem] border p-4 shadow-card ${
+              isCanceled ? 'border-amber-200 bg-amber-50/70' : 'border-border/70 bg-card'
+            }`}
+            key={purchase.id}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-primary">
+                  {formatDate(purchase.purchaseDate)} · {purchase.supplier || 'Sin proveedor'}
+                </p>
+                <h3 className="mt-1 text-xl font-black text-foreground">
+                  {formatMoneyFromCents(totalCents)}
+                </h3>
+                {purchase.receiptNumber ? (
+                  <p className="text-xs font-bold text-muted-foreground">
+                    Comprobante: {purchase.receiptNumber}
+                  </p>
+                ) : null}
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${
+                  isCanceled
+                    ? 'bg-amber-100 text-amber-800 ring-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+                }`}
+              >
+                {isCanceled ? 'Anulada' : 'Activa'}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {purchase.items.map((item) => {
+                const product = products.find((candidate) => candidate.id === item.productId);
+
+                return (
+                  <div
+                    className="grid gap-2 rounded-2xl bg-background px-3 py-2 text-sm font-bold text-muted-foreground ring-1 ring-border/60 md:grid-cols-[minmax(0,1fr)_auto_auto]"
+                    key={item.id}
+                  >
+                    <span className="text-foreground">{product?.name ?? item.productId}</span>
+                    <span>{formatQuantity(item.totalBaseUnits, product?.baseUnit ?? 'unit')}</span>
+                    <span className="text-foreground">
+                      {formatMoneyFromCents(item.totalPriceCents)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold text-muted-foreground">
+                {isCanceled
+                  ? 'El stock y el último costo ya fueron revertidos para próximos cálculos.'
+                  : 'Anular crea movimientos inversos de stock y excluye esta compra del último costo.'}
+              </p>
+              {!isCanceled ? (
+                <button
+                  className="rounded-full bg-red-50 px-3 py-2 text-xs font-black text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 disabled:opacity-60"
+                  disabled={isPending}
+                  onClick={() => onCancel(purchase.id)}
+                  type="button"
+                >
+                  Anular compra
+                </button>
+              ) : null}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+};
+
 const StockList = ({ stock }: { stock: FinanceStockItem[] }) => {
   if (!stock.length) {
     return (
@@ -1407,16 +1516,19 @@ const StockList = ({ stock }: { stock: FinanceStockItem[] }) => {
 export const FinancePage = () => {
   const [activeTab, setActiveTab] = useState<FinanceTab>('dashboard');
   const [calculatorForm, setCalculatorForm] = useState<CalculatorFormState>(initialCalculatorForm);
+  const [profitSimulatorPercent, setProfitSimulatorPercent] = useState('50');
   const [feedback, setFeedback] = useState<FinanceFeedback | null>(null);
   const [purchaseResetSignal, setPurchaseResetSignal] = useState(0);
   const [stockResetSignal, setStockResetSignal] = useState(0);
   const productsQuery = useFinanceProducts();
   const stockQuery = useFinanceStock();
+  const purchasesQuery = useFinancePurchases();
   const baseCostRulesQuery = useFinanceBaseCostRules();
   const recipesQuery = useFinanceRecipes();
   const menuItemsQuery = useMenuItems();
   const createProduct = useCreateFinanceProduct();
   const createPurchase = useCreateFinancePurchase();
+  const cancelPurchase = useCancelFinancePurchase();
   const createStockAdjustment = useCreateFinanceStockAdjustment();
   const createBaseCostRule = useCreateFinanceBaseCostRule();
   const updateBaseCostRule = useUpdateFinanceBaseCostRule();
@@ -1426,6 +1538,7 @@ export const FinancePage = () => {
 
   const products = productsQuery.data ?? [];
   const stock = stockQuery.data ?? [];
+  const purchases = purchasesQuery.data ?? [];
   const baseCostRules = baseCostRulesQuery.data ?? [];
   const recipes = recipesQuery.data ?? [];
   const menuItems = menuItemsQuery.data ?? [];
@@ -1442,6 +1555,34 @@ export const FinancePage = () => {
       warnings: products.reduce((total, product) => total + product.warnings.length, 0),
     }),
     [products, trackedProducts.length],
+  );
+  const dashboardBaseCostPerDozenCents = estimateBaseCostFromRules(baseCostRules, 12);
+  const targetMarkupPercent = toPositiveNumber(profitSimulatorPercent);
+  const recipeProfitability = useMemo(
+    () =>
+      recipes.map((recipe) => {
+        const menuItem = menuItems.find((item) => item.id === recipe.menuItemId);
+        const totalCostCents = dashboardBaseCostPerDozenCents + recipe.totalCostPerDozenCents;
+        const priceDozenCents = Math.round((menuItem?.priceDozen ?? 0) * 100);
+        const grossProfitCents = priceDozenCents - totalCostCents;
+        const marginPercent = priceDozenCents
+          ? Math.round((grossProfitCents / priceDozenCents) * 1000) / 10
+          : 0;
+        const suggestedPriceCents = Math.round(totalCostCents * (1 + targetMarkupPercent / 100));
+
+        return {
+          id: recipe.menuItemId,
+          name: recipe.menuItemName,
+          totalCostCents,
+          priceDozenCents,
+          grossProfitCents,
+          marginPercent,
+          suggestedPriceCents,
+          hasRecipe: recipe.items.length > 0,
+          warnings: recipe.warnings.length,
+        };
+      }),
+    [dashboardBaseCostPerDozenCents, menuItems, recipes, targetMarkupPercent],
   );
 
   const handleCreateProduct = (form: ProductFormState) => {
@@ -1495,6 +1636,33 @@ export const FinancePage = () => {
           setFeedback({
             tone: 'error',
             title: 'No se pudo registrar la compra',
+            description: getErrorDescription(error),
+          }),
+      },
+    );
+  };
+
+  const handleCancelPurchase = (id: string) => {
+    const confirmed = window.confirm(
+      '¿Anular esta compra? Se van a crear movimientos inversos de stock y se excluirá del último costo.',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    cancelPurchase.mutate(
+      { id, input: { reason: 'Anulación manual desde Finanzas' } },
+      {
+        onSuccess: () =>
+          setFeedback({
+            tone: 'success',
+            title: 'Compra anulada',
+            description: 'El stock fue revertido y el historial de costos ya ignora esa compra.',
+          }),
+        onError: (error) =>
+          setFeedback({
+            tone: 'error',
+            title: 'No se pudo anular la compra',
             description: getErrorDescription(error),
           }),
       },
@@ -1787,6 +1955,91 @@ export const FinancePage = () => {
                 </p>
               </div>
             ) : null}
+
+            <div className="rounded-[1.5rem] border border-border/70 bg-card p-4 shadow-card">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-primary">
+                    Rentabilidad por variedad
+                  </p>
+                  <h3 className="mt-1 text-xl font-black text-foreground">
+                    Recetas + costo base + precio final
+                  </h3>
+                </div>
+                <label className="text-sm font-bold text-foreground">
+                  Simular ganancia sobre costo (%)
+                  <input
+                    className={inputClassName}
+                    min="0"
+                    onChange={(event) => setProfitSimulatorPercent(event.target.value)}
+                    type="number"
+                    value={profitSimulatorPercent}
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {recipeProfitability.map((item) => {
+                  const tone =
+                    item.marginPercent >= 45
+                      ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
+                      : item.marginPercent >= 25
+                        ? 'bg-amber-50 text-amber-800 ring-amber-100'
+                        : 'bg-red-50 text-red-800 ring-red-100';
+
+                  return (
+                    <article
+                      className="rounded-2xl border border-border/70 bg-background p-3"
+                      key={item.id}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h4 className="font-black text-foreground">{item.name}</h4>
+                          <p className="text-xs font-bold text-muted-foreground">
+                            Precio sugerido al {targetMarkupPercent.toLocaleString('es-AR')}%:{' '}
+                            <span className="text-foreground">
+                              {formatMoneyFromCents(item.suggestedPriceCents)}
+                            </span>
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${tone}`}
+                        >
+                          {item.marginPercent.toLocaleString('es-AR')}%
+                        </span>
+                      </div>
+                      <dl className="mt-3 grid gap-2 text-xs font-bold md:grid-cols-3">
+                        <div className="rounded-xl bg-card px-3 py-2">
+                          <dt className="text-muted-foreground">Costo</dt>
+                          <dd className="text-foreground">
+                            {formatMoneyFromCents(item.totalCostCents)}
+                          </dd>
+                        </div>
+                        <div className="rounded-xl bg-card px-3 py-2">
+                          <dt className="text-muted-foreground">Precio actual</dt>
+                          <dd className="text-foreground">
+                            {formatMoneyFromCents(item.priceDozenCents)}
+                          </dd>
+                        </div>
+                        <div className="rounded-xl bg-card px-3 py-2">
+                          <dt className="text-muted-foreground">Ganancia</dt>
+                          <dd className="text-foreground">
+                            {formatMoneyFromCents(item.grossProfitCents)}
+                          </dd>
+                        </div>
+                      </dl>
+                      {!item.hasRecipe || item.warnings ? (
+                        <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 ring-1 ring-amber-100">
+                          {!item.hasRecipe
+                            ? 'Falta cargar receta para que este costo sea completo.'
+                            : 'Hay ingredientes sin costo actualizado.'}
+                        </p>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
           </>
         ) : null}
 
@@ -1812,16 +2065,18 @@ export const FinancePage = () => {
         ) : null}
 
         {activeTab === 'purchases' ? (
-          <div className="space-y-4">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
+            <PurchaseHistory
+              isPending={cancelPurchase.isPending}
+              onCancel={handleCancelPurchase}
+              products={products}
+              purchases={purchases}
+            />
             <PurchaseForm
               isPending={createPurchase.isPending}
               onSubmit={handleCreatePurchase}
               products={products}
               resetSignal={purchaseResetSignal}
-            />
-            <EmptyState
-              title="Historial de compras"
-              description="PR2 expone creación de compras. El historial completo queda como refinamiento posterior para no inflar este slice."
             />
           </div>
         ) : null}

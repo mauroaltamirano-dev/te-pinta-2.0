@@ -7,9 +7,11 @@ import {
   createFinanceProduct,
   createFinancePurchase,
   createFinanceStockAdjustment,
+  cancelFinancePurchase,
   deleteFinanceBaseCostRule,
   listFinanceBaseCostRules,
   listFinanceProducts,
+  listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
   previewFinanceOrderCost,
@@ -193,6 +195,8 @@ describe('finance api client', () => {
             supplier: 'Molino norte',
             receiptNumber: null,
             notes: null,
+            canceledAt: null,
+            canceledReason: null,
             items: [],
           },
         },
@@ -301,6 +305,35 @@ describe('finance api client', () => {
     expect(apiClient.post).toHaveBeenNthCalledWith(4, '/finance/costing/preview-order', {
       saleTotalCents: 2400000,
       items: [{ menuItemId: 'menu-1', quantity: 12 }],
+    });
+  });
+
+  it('lists and cancels finance purchases through validated endpoints', async () => {
+    const purchase = {
+      id: 'purchase-1',
+      purchaseDate: '2026-05-27',
+      supplier: 'Molino norte',
+      receiptNumber: null,
+      notes: null,
+      canceledAt: null,
+      canceledReason: null,
+      items: [],
+    };
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { purchases: [purchase] } });
+    vi.mocked(apiClient.delete).mockResolvedValueOnce({
+      data: { purchase: { ...purchase, canceledAt: '2026-05-29T12:00:00.000Z' } },
+    });
+
+    await expect(listFinancePurchases()).resolves.toEqual([purchase]);
+    await expect(
+      cancelFinancePurchase('purchase-1', { reason: 'duplicada' }),
+    ).resolves.toMatchObject({
+      id: 'purchase-1',
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith('/finance/purchases', { params: {} });
+    expect(apiClient.delete).toHaveBeenCalledWith('/finance/purchases/purchase-1', {
+      data: { reason: 'duplicada' },
     });
   });
 });

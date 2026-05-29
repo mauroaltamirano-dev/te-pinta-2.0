@@ -1,12 +1,14 @@
 import { Router, type Router as ExpressRouter } from 'express';
 
 import {
+  cancelFinancePurchaseSchema,
   createFinanceProductSchema,
   createFinancePurchaseSchema,
   createFinanceBaseCostRuleSchema,
   createFinanceStockAdjustmentSchema,
   financeCostingPreviewOrderSchema,
   financeProductFiltersSchema,
+  financePurchaseFiltersSchema,
   financeStockFiltersSchema,
   updateFinanceBaseCostRuleSchema,
   updateFinanceRecipeSchema,
@@ -21,10 +23,13 @@ import {
   createFinanceProduct,
   createFinancePurchase,
   createFinanceStockAdjustment,
+  cancelFinancePurchase,
   deleteFinanceBaseCostRule,
   getFinanceRecipe,
+  getFinancePurchase,
   listFinanceBaseCostRules,
   listFinanceProducts,
+  listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
   previewFinanceOrderCost,
@@ -80,6 +85,44 @@ export const createFinanceRouter = ({
       try {
         const purchase = await createFinancePurchase(req.body, repository);
         res.status(201).json({ purchase });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/purchases',
+    validate({ query: financePurchaseFiltersSchema }),
+    async (req, res, next) => {
+      try {
+        const filters = financePurchaseFiltersSchema.parse(req.query);
+        const purchases = await listFinancePurchases(repository, filters);
+        res.json({ purchases });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get('/purchases/:id', validate({ params: idParamsSchema }), async (req, res, next) => {
+    try {
+      const { id } = idParamsSchema.parse(req.params);
+      const purchase = await getFinancePurchase(id, repository);
+      res.json({ purchase });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete(
+    '/purchases/:id',
+    validate({ params: idParamsSchema, body: cancelFinancePurchaseSchema }),
+    async (req, res, next) => {
+      try {
+        const { id } = idParamsSchema.parse(req.params);
+        const purchase = await cancelFinancePurchase(id, req.body, repository);
+        res.json({ purchase });
       } catch (error) {
         next(error);
       }

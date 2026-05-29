@@ -4,6 +4,7 @@ import type {
   adminEnvSchema,
   apiErrorSchema,
   authLoginSchema,
+  cancelFinancePurchaseSchema,
   createCustomerSchema,
   createFinanceBaseCostRuleSchema,
   createFinanceProductSchema,
@@ -81,6 +82,7 @@ export type CreateFinancePurchaseItemInput = z.infer<typeof createFinancePurchas
 export type CreateFinancePurchaseInput = z.infer<typeof createFinancePurchaseSchema>;
 export type UpdateFinancePurchaseInput = z.infer<typeof updateFinancePurchaseSchema>;
 export type FinancePurchaseFilters = z.infer<typeof financePurchaseFiltersSchema>;
+export type CancelFinancePurchaseInput = z.infer<typeof cancelFinancePurchaseSchema>;
 
 export type CreateFinanceBaseCostRuleInput = z.infer<typeof createFinanceBaseCostRuleSchema>;
 export type UpdateFinanceBaseCostRuleInput = z.infer<typeof updateFinanceBaseCostRuleSchema>;

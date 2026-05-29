@@ -189,6 +189,8 @@ export const financePurchases = pgTable(
     supplier: varchar('supplier', { length: 180 }),
     receiptNumber: varchar('receipt_number', { length: 120 }),
     notes: text('notes'),
+    canceledAt: timestamp('canceled_at', { withTimezone: true }),
+    canceledReason: text('canceled_reason'),
     ...timestamps,
   },
   (table) => [

@@ -7,11 +7,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '@/lib/query-client';
 
 import {
+  cancelFinancePurchase,
   createFinanceBaseCostRule,
   createFinancePurchase,
   createFinanceStockAdjustment,
   listFinanceBaseCostRules,
   listFinanceProducts,
+  listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
   previewFinanceOrderCost,
@@ -22,6 +24,7 @@ import type { FinanceProductWithMetrics } from '../types';
 import { listMenuItems } from '../../menu/menu-api';
 
 vi.mock('../api', () => ({
+  cancelFinancePurchase: vi.fn(),
   createFinanceBaseCostRule: vi.fn(),
   createFinanceProduct: vi.fn(),
   createFinancePurchase: vi.fn(),
@@ -29,6 +32,7 @@ vi.mock('../api', () => ({
   deleteFinanceBaseCostRule: vi.fn(),
   listFinanceBaseCostRules: vi.fn(),
   listFinanceProducts: vi.fn(),
+  listFinancePurchases: vi.fn(),
   listFinanceRecipes: vi.fn(),
   listFinanceStock: vi.fn(),
   previewFinanceOrderCost: vi.fn(),
@@ -119,6 +123,33 @@ describe('FinancePage', () => {
         warnings: [],
       },
     ]);
+    vi.mocked(listFinancePurchases).mockResolvedValue([
+      {
+        id: 'purchase-1',
+        purchaseDate: '2026-05-27',
+        supplier: 'Molino norte',
+        receiptNumber: null,
+        notes: null,
+        canceledAt: null,
+        canceledReason: null,
+        items: [
+          {
+            id: 'purchase-item-1',
+            purchaseId: 'purchase-1',
+            productId: trackedProduct.id,
+            purchaseUnit: 'kg',
+            purchaseQuantity: 2,
+            unitsPerPackage: 1,
+            totalBaseUnits: 2,
+            unitPriceCents: 120000,
+            totalPriceCents: 240000,
+            costPerBaseUnitCents: 120000,
+            notes: null,
+          },
+        ],
+        stockMovements: [],
+      },
+    ]);
     vi.mocked(listMenuItems).mockResolvedValue([
       {
         id: 'menu-1',
@@ -136,7 +167,20 @@ describe('FinancePage', () => {
       supplier: 'Molino norte',
       receiptNumber: null,
       notes: null,
+      canceledAt: null,
+      canceledReason: null,
       items: [],
+    });
+    vi.mocked(cancelFinancePurchase).mockResolvedValue({
+      id: 'purchase-1',
+      purchaseDate: '2026-05-27',
+      supplier: 'Molino norte',
+      receiptNumber: null,
+      notes: null,
+      canceledAt: '2026-05-29T12:00:00.000Z',
+      canceledReason: 'Anulación manual desde Finanzas',
+      items: [],
+      stockMovements: [],
     });
     vi.mocked(createFinanceStockAdjustment).mockResolvedValue({
       id: 'movement-1',
@@ -214,6 +258,8 @@ describe('FinancePage', () => {
     expect(within(tabs).getByRole('tab', { name: /recetas/i })).toBeInTheDocument();
     expect(within(tabs).getByRole('tab', { name: /calculadora/i })).toBeInTheDocument();
     expect(within(tabs).getByRole('tab', { name: /stock/i })).toBeInTheDocument();
+    expect(await screen.findByText(/rentabilidad por variedad/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/simular ganancia sobre costo/i)).toBeInTheDocument();
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
     expect(screen.getByText('Harina 000')).toBeInTheDocument();
@@ -392,6 +438,23 @@ describe('FinancePage', () => {
       ],
     });
     expect(await screen.findByText(/compra registrada/i)).toBeInTheDocument();
+  });
+
+  it('lists purchase history and cancels a purchase safely', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderFinancePage();
+
+    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    await userEvent.click(within(tabs).getByRole('tab', { name: /compras/i }));
+
+    expect(await screen.findByText(/molino norte/i)).toBeInTheDocument();
+    expect(screen.getByText(/anular crea movimientos inversos/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /anular compra/i }));
+
+    await waitFor(() => expect(cancelFinancePurchase).toHaveBeenCalled());
+    expect(vi.mocked(cancelFinancePurchase).mock.calls[0]?.[0]).toBe('purchase-1');
+    expect(await screen.findByText(/compra anulada/i)).toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 
   it('creates a manual stock-out movement from a target stock correction', async () => {

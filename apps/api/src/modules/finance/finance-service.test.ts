@@ -9,6 +9,7 @@ import type {
 } from './finance-service';
 import {
   createFinanceBaseCostRule,
+  cancelFinancePurchase,
   createFinancePurchase,
   createFinanceStockAdjustment,
   listFinanceProducts,
@@ -33,6 +34,8 @@ const purchaseDetail = (overrides: Partial<FinancePurchaseDetail> = {}): Finance
   supplier: 'Mayorista Centro',
   receiptNumber: null,
   notes: null,
+  canceledAt: null,
+  canceledReason: null,
   items: [],
   ...overrides,
 });
@@ -53,6 +56,9 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   createProduct: async (input) => product(input),
   getProductsByIds: async () => [product()],
   createPurchaseWithItems: async (input) => purchaseDetail({ id: input.id, items: input.items }),
+  listPurchases: async () => [],
+  getPurchase: async () => null,
+  cancelPurchase: async () => null,
   listStock: async () => [],
   createStockMovement: async (input) => movement(input),
   listBaseCostRules: async () => [],
@@ -151,6 +157,56 @@ describe('finance service', () => {
       sourcePurchaseItemId: persisted?.items[0]?.id,
     });
     expect(result.stockMovements).toHaveLength(1);
+  });
+
+  it('cancels purchases with reversing stock movements and excludes repeated cancellation', async () => {
+    const activePurchase = purchaseDetail({
+      stockMovements: [movement({ quantityBase: 100, sourcePurchaseItemId: 'purchase-item-1' })],
+    });
+    const cancelPurchase = vi.fn<FinanceRepository['cancelPurchase']>().mockResolvedValue({
+      ...activePurchase,
+      canceledAt: new Date('2026-05-29T12:00:00.000Z'),
+      canceledReason: 'duplicada',
+    });
+    const repository = createRepository({
+      getPurchase: async () => activePurchase,
+      cancelPurchase,
+    });
+
+    const canceled = await cancelFinancePurchase('purchase-1', { reason: 'duplicada' }, repository);
+
+    expect(canceled.canceledReason).toBe('duplicada');
+    expect(cancelPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'purchase-1',
+        canceledReason: 'duplicada',
+        reversalMovements: [
+          expect.objectContaining({
+            movementType: 'adjustment',
+            quantityBase: -100,
+            sourcePurchaseItemId: 'purchase-item-1',
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('does not create extra stock reversals when purchase is already canceled', async () => {
+    const canceledPurchase = purchaseDetail({
+      canceledAt: new Date('2026-05-29T12:00:00.000Z'),
+      canceledReason: 'duplicada',
+      stockMovements: [movement({ quantityBase: 100, sourcePurchaseItemId: 'purchase-item-1' })],
+    });
+    const cancelPurchase = vi.fn<FinanceRepository['cancelPurchase']>();
+    const repository = createRepository({
+      getPurchase: async () => canceledPurchase,
+      cancelPurchase,
+    });
+
+    const result = await cancelFinancePurchase('purchase-1', {}, repository);
+
+    expect(result).toBe(canceledPurchase);
+    expect(cancelPurchase).not.toHaveBeenCalled();
   });
 
   it('rejects reserved stock adjustment movement types and non-stock-tracked products', async () => {

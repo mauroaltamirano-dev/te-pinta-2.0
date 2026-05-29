@@ -1,4 +1,5 @@
 import {
+  cancelFinancePurchaseSchema,
   createFinanceBaseCostRuleSchema,
   createFinanceProductSchema,
   createFinancePurchaseSchema,
@@ -14,11 +15,13 @@ import type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
+  CancelFinancePurchaseInput,
   CreateFinanceBaseCostRuleInput,
   FinanceCostingPreviewOrderInput,
   FinanceBaseCostRule,
   FinanceOrderCostBreakdown,
   FinanceProductFilters,
+  FinancePurchaseFilters,
   FinanceProductWithMetrics,
   FinancePurchaseDetail,
   FinanceRecipe,
@@ -59,6 +62,30 @@ export const createFinancePurchase = async (
   const response = await apiClient.post<{ purchase: FinancePurchaseDetail }>(
     '/finance/purchases',
     payload,
+  );
+
+  return response.data.purchase;
+};
+
+export const listFinancePurchases = async (
+  filters: FinancePurchaseFilters = {},
+): Promise<FinancePurchaseDetail[]> => {
+  const response = await apiClient.get<{ purchases: FinancePurchaseDetail[] }>(
+    '/finance/purchases',
+    { params: filters },
+  );
+
+  return response.data.purchases;
+};
+
+export const cancelFinancePurchase = async (
+  id: string,
+  input: CancelFinancePurchaseInput = {},
+): Promise<FinancePurchaseDetail> => {
+  const payload = cancelFinancePurchaseSchema.parse(input);
+  const response = await apiClient.delete<{ purchase: FinancePurchaseDetail }>(
+    `/finance/purchases/${id}`,
+    { data: payload },
   );
 
   return response.data.purchase;

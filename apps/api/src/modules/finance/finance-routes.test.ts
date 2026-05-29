@@ -30,12 +30,17 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
     supplier: input.supplier,
     receiptNumber: input.receiptNumber,
     notes: input.notes,
+    canceledAt: null,
+    canceledReason: null,
     items: input.items,
     stockMovements: input.stockMovements.map((item) => ({
       ...item,
       createdAt: new Date('2026-05-27T12:00:00.000Z'),
     })),
   }),
+  listPurchases: async () => [],
+  getPurchase: async () => null,
+  cancelPurchase: async () => null,
   listStock: async () => [],
   createStockMovement: async (input) => ({
     id: input.id,
@@ -197,6 +202,60 @@ describe('finance routes', () => {
       { error: 'Validation error', code: 'VALIDATION_ERROR' },
     ]);
     expect(createPurchaseWithItems).not.toHaveBeenCalled();
+  });
+
+  it('lists and safely cancels purchases through finance endpoints', async () => {
+    const listPurchases = vi.fn<FinanceRepository['listPurchases']>().mockResolvedValue([
+      {
+        id: 'purchase-1',
+        purchaseDate: '2026-05-27',
+        supplier: 'Molino norte',
+        receiptNumber: null,
+        notes: null,
+        canceledAt: null,
+        canceledReason: null,
+        items: [],
+        stockMovements: [],
+      },
+    ]);
+    const getPurchase = vi.fn<FinanceRepository['getPurchase']>().mockResolvedValue({
+      id: 'purchase-1',
+      purchaseDate: '2026-05-27',
+      supplier: 'Molino norte',
+      receiptNumber: null,
+      notes: null,
+      canceledAt: null,
+      canceledReason: null,
+      items: [],
+      stockMovements: [],
+    });
+    const cancelPurchase = vi.fn<FinanceRepository['cancelPurchase']>().mockResolvedValue({
+      id: 'purchase-1',
+      purchaseDate: '2026-05-27',
+      supplier: 'Molino norte',
+      receiptNumber: null,
+      notes: null,
+      canceledAt: new Date('2026-05-29T12:00:00.000Z'),
+      canceledReason: 'duplicada',
+      items: [],
+      stockMovements: [],
+    });
+    const app = createFinanceApp(createRepository({ listPurchases, getPurchase, cancelPurchase }));
+
+    const listResponse = await request(app)
+      .get('/api/v1/finance/purchases')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.purchases[0]).toMatchObject({ id: 'purchase-1' });
+
+    const cancelResponse = await request(app)
+      .delete('/api/v1/finance/purchases/purchase-1')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ reason: 'duplicada' });
+    expect(cancelResponse.status).toBe(200);
+    expect(cancelPurchase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'purchase-1', canceledReason: 'duplicada' }),
+    );
   });
 
   it('rejects purchase-created stock movement types on manual stock adjustment routes', async () => {

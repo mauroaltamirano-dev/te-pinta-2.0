@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   CreateFinanceBaseCostRuleInput,
+  CancelFinancePurchaseInput,
   FinanceCostingPreviewOrderInput,
   FinanceProductFilters,
+  FinancePurchaseFilters,
   FinanceStockFilters,
   UpdateFinanceBaseCostRuleInput,
   UpdateFinanceRecipeInput,
@@ -13,9 +15,11 @@ import {
   createFinanceProduct,
   createFinancePurchase,
   createFinanceStockAdjustment,
+  cancelFinancePurchase,
   deleteFinanceBaseCostRule,
   listFinanceBaseCostRules,
   listFinanceProducts,
+  listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
   previewFinanceOrderCost,
@@ -31,6 +35,8 @@ export const financeQueryKeys = {
     [...financeQueryKeys.all, 'stock', filters] as const,
   baseCostRules: () => [...financeQueryKeys.all, 'base-cost-rules'] as const,
   recipes: () => [...financeQueryKeys.all, 'recipes'] as const,
+  purchases: (filters: FinancePurchaseFilters = {}) =>
+    [...financeQueryKeys.all, 'purchases', filters] as const,
 };
 
 export const useFinanceProducts = (filters: FinanceProductFilters = {}) =>
@@ -61,6 +67,13 @@ export const useFinanceRecipes = () =>
     staleTime: 20_000,
   });
 
+export const useFinancePurchases = (filters: FinancePurchaseFilters = {}) =>
+  useQuery({
+    queryKey: financeQueryKeys.purchases(filters),
+    queryFn: () => listFinancePurchases(filters),
+    staleTime: 20_000,
+  });
+
 export const useCreateFinanceProduct = () => {
   const queryClient = useQueryClient();
 
@@ -75,6 +88,16 @@ export const useCreateFinancePurchase = () => {
 
   return useMutation({
     mutationFn: createFinancePurchase,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
+  });
+};
+
+export const useCancelFinancePurchase = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input?: CancelFinancePurchaseInput }) =>
+      cancelFinancePurchase(id, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
   });
 };

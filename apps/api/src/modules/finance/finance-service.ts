@@ -6,6 +6,7 @@ import {
   calculateOrderCostBreakdown,
   calculatePurchaseItemCost,
   calculateRecipeCostPerUnit,
+  type CancelFinancePurchaseInput,
   type CreateFinanceBaseCostRuleInput,
   type CreateFinanceProductInput,
   type CreateFinancePurchaseInput,
@@ -20,6 +21,7 @@ import {
   type FinanceProductCategory,
   type FinanceProductFilters,
   type FinanceProductCostHistoryItem,
+  type FinancePurchaseFilters,
   type FinanceRecipeCostItem,
   type FinanceRoundingMode,
   type FinanceStockFilters,
@@ -94,6 +96,8 @@ export type FinancePurchaseDetail = {
   supplier: string | null;
   receiptNumber: string | null;
   notes: string | null;
+  canceledAt: Date | null;
+  canceledReason: string | null;
   items: PersistFinancePurchaseItem[];
   stockMovements?: FinanceStockMovement[];
 };
@@ -175,6 +179,14 @@ export type FinanceRepository = {
   createProduct(product: FinanceProduct): Promise<FinanceProduct>;
   getProductsByIds(ids: string[]): Promise<FinanceProduct[]>;
   createPurchaseWithItems(input: PersistFinancePurchaseInput): Promise<FinancePurchaseDetail>;
+  listPurchases(filters?: FinancePurchaseFilters): Promise<FinancePurchaseDetail[]>;
+  getPurchase(id: string): Promise<FinancePurchaseDetail | null>;
+  cancelPurchase(input: {
+    id: string;
+    canceledAt: Date;
+    canceledReason: string | null;
+    reversalMovements: PersistFinanceStockMovement[];
+  }): Promise<FinancePurchaseDetail | null>;
   listStock(filters?: FinanceStockFilters): Promise<FinanceStockItem[]>;
   createStockMovement(input: PersistFinanceStockMovement): Promise<FinanceStockMovement>;
   getCostingData(input: FinanceCostingPreviewOrderInput): Promise<FinanceCostingData>;
@@ -309,6 +321,57 @@ export const createFinancePurchase = async (
     items,
     stockMovements,
   });
+};
+
+export const listFinancePurchases = (
+  repository: FinanceRepository,
+  filters?: FinancePurchaseFilters,
+): Promise<FinancePurchaseDetail[]> => repository.listPurchases(filters);
+
+export const getFinancePurchase = async (
+  id: string,
+  repository: FinanceRepository,
+): Promise<FinancePurchaseDetail> => {
+  const purchase = await repository.getPurchase(id);
+  if (!purchase) {
+    throw new ApiError(404, 'Finance purchase not found', 'FINANCE_PURCHASE_NOT_FOUND');
+  }
+
+  return purchase;
+};
+
+export const cancelFinancePurchase = async (
+  id: string,
+  input: CancelFinancePurchaseInput,
+  repository: FinanceRepository,
+): Promise<FinancePurchaseDetail> => {
+  const purchase = await getFinancePurchase(id, repository);
+  if (purchase.canceledAt) {
+    return purchase;
+  }
+
+  const reversalMovements = (purchase.stockMovements ?? [])
+    .filter((movement) => movement.movementType === 'purchase_in' && movement.quantityBase !== 0)
+    .map<PersistFinanceStockMovement>((movement) => ({
+      id: randomUUID(),
+      productId: movement.productId,
+      movementType: 'adjustment',
+      quantityBase: -movement.quantityBase,
+      sourcePurchaseItemId: movement.sourcePurchaseItemId,
+      notes: `Purchase cancellation ${purchase.id}`,
+    }));
+
+  const canceled = await repository.cancelPurchase({
+    id,
+    canceledAt: new Date(),
+    canceledReason: normalizeOptionalText(input.reason),
+    reversalMovements,
+  });
+  if (!canceled) {
+    throw new ApiError(404, 'Finance purchase not found', 'FINANCE_PURCHASE_NOT_FOUND');
+  }
+
+  return canceled;
 };
 
 export const listFinanceStock = (
