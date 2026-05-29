@@ -714,7 +714,11 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
   },
 
   async listRecipes(): Promise<FinanceRecipeDetail[]> {
-    const rows = await db.select().from(menuItems).orderBy(asc(menuItems.name));
+    const rows = await db
+      .select()
+      .from(menuItems)
+      .where(eq(menuItems.isArchived, false))
+      .orderBy(asc(menuItems.name));
     const items = await listRecipeItemRows(
       db,
       rows.map((row) => row.id),
@@ -727,7 +731,7 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
     const [menuItem] = await db
       .select()
       .from(menuItems)
-      .where(eq(menuItems.id, menuItemId))
+      .where(and(eq(menuItems.id, menuItemId), eq(menuItems.isArchived, false)))
       .limit(1);
 
     if (!menuItem) {
@@ -743,7 +747,7 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
     const [menuItem] = await db
       .select()
       .from(menuItems)
-      .where(eq(menuItems.id, input.menuItemId))
+      .where(and(eq(menuItems.id, input.menuItemId), eq(menuItems.isArchived, false)))
       .limit(1);
 
     if (!menuItem) {

@@ -12,6 +12,7 @@ export type MenuItem = {
   priceDozen: number;
   costPerDozen: number;
   isActive: boolean;
+  isArchived: boolean;
 };
 
 export type MenuItemRepository = {
@@ -38,6 +39,7 @@ export const createMenuItem = (
     priceDozen: input.priceDozen,
     costPerDozen: input.costPerDozen ?? 0,
     isActive: input.isActive ?? true,
+    isArchived: input.isArchived ?? false,
   });
 };
 
@@ -56,7 +58,7 @@ export const updateMenuItem = async (
 };
 
 export const deleteMenuItem = async (id: string, repository: MenuItemRepository): Promise<void> => {
-  const updated = await repository.update(id, { isActive: false });
+  const updated = await repository.update(id, { isActive: false, isArchived: true });
 
   if (!updated) {
     throw new ApiError(404, 'Menu item not found', 'MENU_ITEM_NOT_FOUND');

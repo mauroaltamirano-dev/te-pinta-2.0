@@ -56,6 +56,7 @@ const mapMenuItemPricing = (row: MenuItemRow): MenuItemPricing => ({
   priceHalfDozen: moneyFromDb(row.priceHalfDozen),
   priceDozen: moneyFromDb(row.priceDozen),
   isActive: row.isActive,
+  isArchived: row.isArchived,
 });
 
 const mapOrderItem = (row: OrderItemRow, menuItemName: string): OrderItemDetail => ({

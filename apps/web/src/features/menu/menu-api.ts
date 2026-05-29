@@ -11,6 +11,7 @@ export type MenuItem = {
   priceDozen: number;
   costPerDozen: number;
   isActive: boolean;
+  isArchived: boolean;
 };
 
 export const listMenuItems = async (): Promise<MenuItem[]> => {

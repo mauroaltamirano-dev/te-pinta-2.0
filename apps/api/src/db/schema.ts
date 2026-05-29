@@ -81,6 +81,7 @@ export const menuItems = pgTable('menu_items', {
   priceDozen: numeric('price_dozen', { precision: 12, scale: 2 }).notNull(),
   costPerDozen: numeric('cost_per_dozen', { precision: 12, scale: 2 }).notNull().default('0'),
   isActive: boolean('is_active').notNull().default(true),
+  isArchived: boolean('is_archived').notNull().default(false),
   ...timestamps,
 });
 

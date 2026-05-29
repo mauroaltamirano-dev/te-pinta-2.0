@@ -142,6 +142,7 @@ describe('MenuPage', () => {
         priceDozen: 12000,
         costPerDozen: 4800,
         isActive: true,
+        isArchived: false,
       },
       {
         id: 'menu-2',
@@ -151,6 +152,7 @@ describe('MenuPage', () => {
         priceDozen: 11500,
         costPerDozen: 4300,
         isActive: false,
+        isArchived: false,
       },
     ]);
   });
@@ -185,6 +187,7 @@ describe('MenuPage', () => {
       priceDozen: 13000,
       costPerDozen: 5000,
       isActive: true,
+      isArchived: false,
     });
 
     renderMenuPage();
@@ -208,6 +211,7 @@ describe('MenuPage', () => {
       priceDozen: 13000,
       costPerDozen: 5000,
       isActive: true,
+      isArchived: false,
     });
   });
 
@@ -220,6 +224,7 @@ describe('MenuPage', () => {
       priceDozen: 11500,
       costPerDozen: 4300,
       isActive: true,
+      isArchived: false,
     });
 
     renderMenuPage();
@@ -231,6 +236,32 @@ describe('MenuPage', () => {
       'menu-2',
       { isActive: true },
     ]);
+  });
+
+  it('archives a menu item so it disappears from operational lists without deleting history', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(updateMenuItem).mockResolvedValue({
+      id: 'menu-1',
+      name: 'Carne suave',
+      priceUnit: 1200,
+      priceHalfDozen: 6500,
+      priceDozen: 12000,
+      costPerDozen: 4800,
+      isActive: false,
+      isArchived: true,
+    });
+
+    renderMenuPage();
+
+    const carneRow = within(await screen.findByLabelText(/variedad carne suave/i));
+    await userEvent.click(carneRow.getByRole('button', { name: /^deshabilitar$/i }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Deshabilitar'));
+    expect(vi.mocked(updateMenuItem).mock.calls[0]?.slice(0, 2)).toEqual([
+      'menu-1',
+      { isActive: false, isArchived: true },
+    ]);
+    confirmSpy.mockRestore();
   });
 
   it('opens the selected menu card as a full-screen detail panel on mobile', async () => {
@@ -262,6 +293,7 @@ describe('MenuPage', () => {
       priceDozen: 14000,
       costPerDozen: 5200,
       isActive: true,
+      isArchived: false,
     });
 
     renderMenuPage();
@@ -287,6 +319,7 @@ describe('MenuPage', () => {
         priceDozen: 14000,
         costPerDozen: 4800,
         isActive: true,
+        isArchived: false,
       },
     ]);
   });
@@ -332,6 +365,7 @@ describe('MenuPage', () => {
       priceDozen: 12000,
       costPerDozen: 4800,
       isActive: true,
+      isArchived: false,
     });
 
     renderMenuPage();

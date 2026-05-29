@@ -28,6 +28,7 @@ export type MenuItemPricing = {
   priceHalfDozen: number;
   priceDozen: number;
   isActive: boolean;
+  isArchived?: boolean;
 };
 
 export type OrderItemDetail = {
@@ -217,7 +218,7 @@ const resolveCustomer = async (
 };
 
 const findMenuPricing = (menuItems: MenuItemPricing[], id: string): MenuItemPricing => {
-  const menuItem = menuItems.find((item) => item.id === id && item.isActive);
+  const menuItem = menuItems.find((item) => item.id === id && item.isActive && !item.isArchived);
 
   if (!menuItem) {
     throw new ApiError(404, 'Menu item not found', 'MENU_ITEM_NOT_FOUND');

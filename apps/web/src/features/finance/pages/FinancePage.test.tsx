@@ -22,6 +22,7 @@ import {
 import { FinancePage } from './FinancePage';
 import type { FinanceProductWithMetrics } from '../types';
 import { listMenuItems } from '../../menu/menu-api';
+import { useDeliveryFee, useOrderPromotionSettings } from '../../orders/settings-hooks';
 
 vi.mock('../api', () => ({
   cancelFinancePurchase: vi.fn(),
@@ -42,6 +43,11 @@ vi.mock('../api', () => ({
 
 vi.mock('../../menu/menu-api', () => ({
   listMenuItems: vi.fn(),
+}));
+
+vi.mock('../../orders/settings-hooks', () => ({
+  useDeliveryFee: vi.fn(),
+  useOrderPromotionSettings: vi.fn(),
 }));
 
 const renderFinancePage = () => {
@@ -92,6 +98,19 @@ describe('FinancePage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(listFinanceProducts).mockResolvedValue([trackedProduct, fillingProduct]);
+    vi.mocked(useDeliveryFee).mockReturnValue({
+      data: 1500,
+    } as unknown as ReturnType<typeof useDeliveryFee>);
+    vi.mocked(useOrderPromotionSettings).mockReturnValue({
+      data: {
+        bulkDozenThreshold: 3,
+        bulkDiscountPercent: 10,
+        combinedDozenQuantity: 12,
+        combinedDozenPrice: 15000,
+        cookingFee: 2000,
+        addons: [],
+      },
+    } as unknown as ReturnType<typeof useOrderPromotionSettings>);
     vi.mocked(listFinanceStock).mockResolvedValue([
       {
         product: trackedProduct,
@@ -159,6 +178,7 @@ describe('FinancePage', () => {
         priceDozen: 12000,
         costPerDozen: 0,
         isActive: true,
+        isArchived: false,
       },
     ]);
     vi.mocked(createFinancePurchase).mockResolvedValue({
@@ -263,6 +283,11 @@ describe('FinancePage', () => {
     expect(screen.getByLabelText(/servicios \/ indirectos/i)).toHaveValue(20);
     expect(screen.getByText(/precio para margen del 50%/i)).toBeInTheDocument();
     expect(screen.getByText(/\$ 1\.728/i)).toBeInTheDocument();
+    expect(screen.getByText(/márgenes por escenario/i)).toBeInTheDocument();
+    expect(screen.getByText(/cruda retiro/i)).toBeInTheDocument();
+    expect(screen.getByText(/cocinada retiro/i)).toBeInTheDocument();
+    expect(screen.getByText(/cruda envío/i)).toBeInTheDocument();
+    expect(screen.getByText(/cocinada envío/i)).toBeInTheDocument();
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
     expect(screen.getByText('Harina 000')).toBeInTheDocument();

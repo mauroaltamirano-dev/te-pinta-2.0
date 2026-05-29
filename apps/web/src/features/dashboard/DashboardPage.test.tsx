@@ -120,6 +120,7 @@ describe('DashboardPage', () => {
         priceDozen: 12000,
         costPerDozen: 4800,
         isActive: true,
+        isArchived: false,
       },
       {
         id: 'menu-2',
@@ -129,6 +130,7 @@ describe('DashboardPage', () => {
         priceDozen: 11500,
         costPerDozen: 4300,
         isActive: false,
+        isArchived: false,
       },
     ]);
     vi.mocked(listIngredients).mockResolvedValue([
@@ -225,7 +227,12 @@ describe('DashboardPage', () => {
             averageTicket: 15200,
           },
           topClients: [
-            { customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 33600 },
+            {
+              customerId: 'customer-2',
+              name: 'Mauro Altamirano',
+              orderCount: 1,
+              totalRevenue: 33600,
+            },
           ],
           topVarieties: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 }],
           statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 2, total: 3 },
@@ -247,7 +254,12 @@ describe('DashboardPage', () => {
             averageTicket: 16800,
           },
           topClients: [
-            { customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 21600 },
+            {
+              customerId: 'customer-2',
+              name: 'Mauro Altamirano',
+              orderCount: 1,
+              totalRevenue: 21600,
+            },
           ],
           topVarieties: [{ menuItemId: 'menu-2', name: 'Humita', quantity: 12 }],
           statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 1, total: 2 },
@@ -309,7 +321,9 @@ describe('DashboardPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /últimos 7 días/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: /ventas en pesos · últimos 7 días/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: /ventas en pesos · últimos 7 días/i }),
+      ).toBeInTheDocument();
     });
     expect(screen.getAllByText('ARS 12.000').length).toBeGreaterThan(0);
     expect(screen.getByText('6 unidades')).toBeInTheDocument();

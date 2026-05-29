@@ -45,7 +45,7 @@ describe('shared domain schemas', () => {
         priceDozen: 11000,
         costPerDozen: 4500,
       }),
-    ).toMatchObject({ name: 'Carne suave', isActive: true });
+    ).toMatchObject({ name: 'Carne suave', isActive: true, isArchived: false });
   });
 
   it('validates customer, ingredient, setting, and order contracts', () => {

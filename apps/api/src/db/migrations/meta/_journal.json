@@ -57,6 +57,13 @@
       "when": 1780068600000,
       "tag": "0007_finance_purchase_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780074000000,
+      "tag": "0008_menu_item_archival",
+      "breakpoints": true
     }
   ]
 }

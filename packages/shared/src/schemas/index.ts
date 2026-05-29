@@ -107,6 +107,7 @@ export const createMenuItemSchema = z.object({
   priceDozen: moneySchema,
   costPerDozen: moneySchema.default(0),
   isActive: z.boolean().default(true),
+  isArchived: z.boolean().default(false),
 });
 
 export const updateMenuItemSchema = createMenuItemSchema

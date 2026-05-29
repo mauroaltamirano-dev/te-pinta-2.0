@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
+  Archive,
   BadgeDollarSign,
   BarChart3,
   Calculator,
@@ -60,6 +61,7 @@ const toCreateInput = (form: MenuFormState): CreateMenuItemInput => ({
   priceDozen: toNumber(form.priceDozen),
   costPerDozen: toNumber(form.costPerDozen),
   isActive: form.isActive,
+  isArchived: false,
 });
 
 const toFormState = (item: MenuItem): MenuFormState => ({
@@ -164,7 +166,8 @@ const MenuItemDetailAnalytics = ({
             {formatDozenLabel(quantitySold)}
           </p>
           <p className="mt-1 text-xs font-bold text-muted-foreground">
-            {quantitySold.toLocaleString('es-AR')} unidades en {salesPeriodLabels[salesPeriod].toLowerCase()}.
+            {quantitySold.toLocaleString('es-AR')} unidades en{' '}
+            {salesPeriodLabels[salesPeriod].toLowerCase()}.
           </p>
         </article>
 
@@ -338,6 +341,34 @@ export const MenuPage = () => {
     setForm(initialFormState);
   };
 
+  const handleArchiveItem = (item: MenuItem) => {
+    const confirmed = window.confirm(
+      `¿Deshabilitar "${item.name}"? Va a desaparecer de pedidos, finanzas y menú operativo, pero seguirá guardada para pedidos históricos.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    updateMenuItem.mutate(
+      {
+        id: item.id,
+        updates: { isActive: false, isArchived: true },
+      },
+      {
+        onSuccess: () => {
+          if (selectedItemId === item.id) {
+            setSelectedItemId(null);
+          }
+          if (editingItemId === item.id) {
+            setEditingItemId(null);
+            setForm(initialFormState);
+          }
+          setRecentlyEditedItemId(null);
+        },
+      },
+    );
+  };
+
   const handleSelectItem = (itemId: string) => {
     setSelectedItemId(itemId);
     setIsCreating(false);
@@ -376,8 +407,9 @@ export const MenuPage = () => {
   const panelItem = isDesktopPanel ? selectedItem : selectedItemId ? selectedItem : null;
   const selectedVarietySales = dashboardQuery.data?.varietySales?.[salesPeriod] ?? [];
   const panelItemQuantitySold = panelItem
-    ? (selectedVarietySales.find((variety: DashboardTopVariety) => variety.menuItemId === panelItem.id)
-        ?.quantity ?? 0)
+    ? (selectedVarietySales.find(
+        (variety: DashboardTopVariety) => variety.menuItemId === panelItem.id,
+      )?.quantity ?? 0)
     : 0;
   const hasSidePanel = Boolean(editingItem || isCreating || panelItem);
   const panelLabel =
@@ -678,6 +710,18 @@ export const MenuPage = () => {
                             )}
                             {item.isActive ? 'Pausar' : 'Activar'}
                           </button>
+                          <button
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-red-700 transition hover:bg-red-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 lg:w-auto"
+                            disabled={isSaving}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleArchiveItem(item);
+                            }}
+                            type="button"
+                          >
+                            <Archive className="h-4 w-4" aria-hidden="true" />
+                            Deshabilitar
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -877,6 +921,15 @@ export const MenuPage = () => {
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />+ Nueva variedad
                 </button>
+                <button
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-red-700 transition hover:bg-red-100 active:scale-[0.98] sm:w-auto xl:w-full"
+                  disabled={isSaving}
+                  onClick={() => handleArchiveItem(panelItem)}
+                  type="button"
+                >
+                  <Archive className="h-4 w-4" aria-hidden="true" />
+                  Deshabilitar variedad
+                </button>
               </div>
             </div>
           ) : (
@@ -1071,6 +1124,15 @@ export const MenuPage = () => {
                   >
                     <Edit3 className="h-4 w-4" aria-hidden="true" />
                     Editar variedad
+                  </button>
+                  <button
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-red-700 transition hover:bg-red-100 active:scale-[0.98]"
+                    disabled={isSaving}
+                    onClick={() => handleArchiveItem(panelItem)}
+                    type="button"
+                  >
+                    <Archive className="h-4 w-4" aria-hidden="true" />
+                    Deshabilitar variedad
                   </button>
                 </div>
               ) : null}

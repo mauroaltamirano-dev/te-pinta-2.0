@@ -255,6 +255,7 @@ describe('OrdersPage', () => {
         priceDozen: 12000,
         costPerDozen: 4800,
         isActive: true,
+        isArchived: false,
       },
       {
         id: 'menu-2',
@@ -264,6 +265,7 @@ describe('OrdersPage', () => {
         priceDozen: 11500,
         costPerDozen: 4300,
         isActive: true,
+        isArchived: false,
       },
     ]);
     vi.mocked(getDeliveryFee).mockResolvedValue(1500);

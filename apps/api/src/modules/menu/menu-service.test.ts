@@ -12,6 +12,7 @@ const menuItem = (overrides: Partial<MenuItem> = {}): MenuItem => ({
   priceDozen: 15000,
   costPerDozen: 6000,
   isActive: true,
+  isArchived: false,
   ...overrides,
 });
 
@@ -37,6 +38,7 @@ describe('menu service', () => {
         priceDozen: 15000,
         costPerDozen: 0,
         isActive: true,
+        isArchived: false,
       },
       repository,
     );
@@ -45,7 +47,7 @@ describe('menu service', () => {
     expect(result.id).toHaveLength(36);
   });
 
-  it('soft deletes menu items by marking them inactive', async () => {
+  it('soft deletes menu items by archiving them away from operational lists', async () => {
     let stored = menuItem();
     const repository: MenuItemRepository = {
       list: async () => [stored],
@@ -60,6 +62,7 @@ describe('menu service', () => {
     await deleteMenuItem('menu-1', repository);
 
     expect(stored.isActive).toBe(false);
+    expect(stored.isArchived).toBe(true);
   });
 
   it('throws 404 when updating a missing menu item', async () => {

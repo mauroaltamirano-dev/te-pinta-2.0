@@ -104,7 +104,18 @@ describe('database schema', () => {
     expect(migration).toContain('ALTER TABLE "orders" ADD COLUMN "cost_snapshot_json" jsonb');
   });
 
-  it('registers finance migrations in the Drizzle journal', async () => {
+  it('adds menu item archival in migration 0008', async () => {
+    const migration = await readFile(
+      join(currentDir, 'migrations', '0008_menu_item_archival.sql'),
+      'utf8',
+    );
+
+    expect(migration).toContain(
+      'ALTER TABLE "menu_items" ADD COLUMN "is_archived" boolean DEFAULT false NOT NULL',
+    );
+  });
+
+  it('registers latest migrations in the Drizzle journal', async () => {
     const journal = JSON.parse(
       await readFile(join(currentDir, 'migrations', 'meta', '_journal.json'), 'utf8'),
     ) as {
@@ -116,16 +127,22 @@ describe('database schema', () => {
       }>;
     };
 
-    expect(journal.entries.at(-2)).toMatchObject({
+    expect(journal.entries.at(-3)).toMatchObject({
       idx: 6,
       version: '7',
       tag: '0006_finance_mvp',
       breakpoints: true,
     });
-    expect(journal.entries.at(-1)).toMatchObject({
+    expect(journal.entries.at(-2)).toMatchObject({
       idx: 7,
       version: '7',
       tag: '0007_finance_purchase_cancellation',
+      breakpoints: true,
+    });
+    expect(journal.entries.at(-1)).toMatchObject({
+      idx: 8,
+      version: '7',
+      tag: '0008_menu_item_archival',
       breakpoints: true,
     });
   });

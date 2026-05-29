@@ -49,6 +49,7 @@ import type {
 } from '../types';
 import type { MenuItem } from '../../menu/menu-api';
 import { useMenuItems } from '../../menu/menu-hooks';
+import { useDeliveryFee, useOrderPromotionSettings } from '../../orders/settings-hooks';
 
 type FinanceTab =
   | 'dashboard'
@@ -250,6 +251,16 @@ const formatDate = (value: string): string =>
   new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(
     new Date(`${value}T00:00:00`),
   );
+
+const getMarginToneClassName = (marginPercent: number): string =>
+  marginPercent >= 45
+    ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
+    : marginPercent >= 25
+      ? 'bg-amber-50 text-amber-800 ring-amber-100'
+      : 'bg-red-50 text-red-800 ring-red-100';
+
+const calculateMarginPercent = (profitCents: number, saleCents: number): number =>
+  saleCents ? Math.round((profitCents / saleCents) * 1000) / 10 : 0;
 
 const toCents = (value: string): number => Math.round(Number(value || 0) * 100);
 const toPositiveNumber = (value: string): number => Math.max(Number(value || 0), 0);
@@ -1527,6 +1538,8 @@ export const FinancePage = () => {
   const baseCostRulesQuery = useFinanceBaseCostRules();
   const recipesQuery = useFinanceRecipes();
   const menuItemsQuery = useMenuItems();
+  const deliveryFeeQuery = useDeliveryFee();
+  const orderPromotionSettingsQuery = useOrderPromotionSettings();
   const createProduct = useCreateFinanceProduct();
   const createPurchase = useCreateFinancePurchase();
   const cancelPurchase = useCancelFinancePurchase();
@@ -1560,6 +1573,8 @@ export const FinancePage = () => {
   const dashboardBaseCostPerDozenCents = estimateBaseCostFromRules(baseCostRules, 12);
   const targetMarginPercent = toPositiveNumber(profitSimulatorPercent);
   const estimatedOverheadPercent = toPositiveNumber(overheadPercent);
+  const deliveryFeeCents = Math.round((deliveryFeeQuery.data ?? 0) * 100);
+  const cookingFeeCents = Math.round((orderPromotionSettingsQuery.data?.cookingFee ?? 0) * 100);
   const recipeProfitability = useMemo(
     () =>
       recipes.map((recipe) => {
@@ -1569,13 +1584,49 @@ export const FinancePage = () => {
         const totalCostCents = directCostCents + overheadCostCents;
         const priceDozenCents = Math.round((menuItem?.priceDozen ?? 0) * 100);
         const grossProfitCents = priceDozenCents - totalCostCents;
-        const marginPercent = priceDozenCents
-          ? Math.round((grossProfitCents / priceDozenCents) * 1000) / 10
-          : 0;
+        const marginPercent = calculateMarginPercent(grossProfitCents, priceDozenCents);
         const suggestedPriceCents =
           targetMarginPercent >= 100
             ? null
             : Math.round(totalCostCents / (1 - targetMarginPercent / 100));
+        const scenarios = [
+          {
+            key: 'raw-pickup',
+            label: 'Cruda retiro',
+            hint: 'Sin fees',
+            saleCents: priceDozenCents,
+            feeCents: 0,
+          },
+          {
+            key: 'cooked-pickup',
+            label: 'Cocinada retiro',
+            hint: 'Incluye cocción',
+            saleCents: priceDozenCents + cookingFeeCents,
+            feeCents: cookingFeeCents,
+          },
+          {
+            key: 'raw-delivery',
+            label: 'Cruda envío',
+            hint: 'Incluye envío',
+            saleCents: priceDozenCents + deliveryFeeCents,
+            feeCents: deliveryFeeCents,
+          },
+          {
+            key: 'cooked-delivery',
+            label: 'Cocinada envío',
+            hint: 'Cocción + envío',
+            saleCents: priceDozenCents + cookingFeeCents + deliveryFeeCents,
+            feeCents: cookingFeeCents + deliveryFeeCents,
+          },
+        ].map((scenario) => {
+          const profitCents = scenario.saleCents - totalCostCents;
+
+          return {
+            ...scenario,
+            profitCents,
+            marginPercent: calculateMarginPercent(profitCents, scenario.saleCents),
+          };
+        });
 
         return {
           id: recipe.menuItemId,
@@ -1587,12 +1638,15 @@ export const FinancePage = () => {
           grossProfitCents,
           marginPercent,
           suggestedPriceCents,
+          scenarios,
           hasRecipe: recipe.items.length > 0,
           warnings: recipe.warnings.length,
         };
       }),
     [
       dashboardBaseCostPerDozenCents,
+      cookingFeeCents,
+      deliveryFeeCents,
       estimatedOverheadPercent,
       menuItems,
       recipes,
@@ -2007,16 +2061,11 @@ export const FinancePage = () => {
 
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 {recipeProfitability.map((item) => {
-                  const tone =
-                    item.marginPercent >= 45
-                      ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
-                      : item.marginPercent >= 25
-                        ? 'bg-amber-50 text-amber-800 ring-amber-100'
-                        : 'bg-red-50 text-red-800 ring-red-100';
+                  const tone = getMarginToneClassName(item.marginPercent);
 
                   return (
                     <article
-                      className="rounded-2xl border border-border/70 bg-background p-3"
+                      className="rounded-2xl border border-border/70 bg-background p-3 shadow-sm"
                       key={item.id}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -2071,6 +2120,59 @@ export const FinancePage = () => {
                           </dd>
                         </div>
                       </dl>
+                      <div className="mt-3 rounded-2xl border border-border/60 bg-card/80 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-black uppercase tracking-wide text-primary">
+                            Márgenes por escenario
+                          </p>
+                          <p className="text-[0.7rem] font-bold text-muted-foreground">
+                            Base: 1 docena · servicios incluidos en costo
+                          </p>
+                        </div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {item.scenarios.map((scenario) => (
+                            <div
+                              className="rounded-2xl border border-border/60 bg-background px-3 py-2"
+                              key={scenario.key}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-black text-foreground">
+                                    {scenario.label}
+                                  </p>
+                                  <p className="text-[0.7rem] font-bold text-muted-foreground">
+                                    {scenario.hint}
+                                    {scenario.feeCents > 0
+                                      ? ` · +${formatMoneyFromCents(scenario.feeCents)}`
+                                      : ''}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-[0.7rem] font-black ring-1 ${getMarginToneClassName(
+                                    scenario.marginPercent,
+                                  )}`}
+                                >
+                                  {scenario.marginPercent.toLocaleString('es-AR')}%
+                                </span>
+                              </div>
+                              <div className="mt-2 grid grid-cols-2 gap-2 text-[0.7rem] font-bold">
+                                <div>
+                                  <p className="text-muted-foreground">Venta</p>
+                                  <p className="text-foreground">
+                                    {formatMoneyFromCents(scenario.saleCents)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">Ganancia</p>
+                                  <p className="text-foreground">
+                                    {formatMoneyFromCents(scenario.profitCents)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                       {!item.hasRecipe || item.warnings ? (
                         <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 ring-1 ring-amber-100">
                           {!item.hasRecipe

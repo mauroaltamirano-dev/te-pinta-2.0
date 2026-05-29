@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import type { UpdateMenuItemInput } from '@te-pinta/shared';
 
@@ -29,6 +29,7 @@ const mapMenuItem = (row: MenuItemRow): MenuItem => ({
   priceDozen: Number(row.priceDozen),
   costPerDozen: Number(row.costPerDozen),
   isActive: row.isActive,
+  isArchived: row.isArchived,
 });
 
 const toMenuItemUpdate = (updates: UpdateMenuItemInput): Partial<MenuItemInsert> => ({
@@ -40,17 +41,22 @@ const toMenuItemUpdate = (updates: UpdateMenuItemInput): Partial<MenuItemInsert>
   ...(updates.priceDozen !== undefined ? { priceDozen: moneyToDb(updates.priceDozen) } : {}),
   ...(updates.costPerDozen !== undefined ? { costPerDozen: moneyToDb(updates.costPerDozen) } : {}),
   ...(updates.isActive !== undefined ? { isActive: updates.isActive } : {}),
+  ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}),
   updatedAt: new Date(),
 });
 
 export const createMenuItemRepository = (db: DbClient): MenuItemRepository => ({
   async list(options = {}): Promise<MenuItem[]> {
     const rows = options.includeInactive
-      ? await db.select().from(menuItems).orderBy(asc(menuItems.name))
+      ? await db
+          .select()
+          .from(menuItems)
+          .where(eq(menuItems.isArchived, false))
+          .orderBy(asc(menuItems.name))
       : await db
           .select()
           .from(menuItems)
-          .where(eq(menuItems.isActive, true))
+          .where(and(eq(menuItems.isActive, true), eq(menuItems.isArchived, false)))
           .orderBy(asc(menuItems.name));
 
     return rows.map(mapMenuItem);
@@ -67,6 +73,7 @@ export const createMenuItemRepository = (db: DbClient): MenuItemRepository => ({
         priceDozen: moneyToDb(item.priceDozen),
         costPerDozen: moneyToDb(item.costPerDozen),
         isActive: item.isActive,
+        isArchived: item.isArchived,
       })
       .returning();
 
