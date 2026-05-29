@@ -43,6 +43,42 @@ export const financeCostComponentTypeSchema = z.enum(['base_raw_material', 'pack
 export const financeCostRuleAppliesToSchema = z.enum(['per_empanada', 'per_started_dozen']);
 export const financeRoundingModeSchema = z.enum(['exact', 'ceil']);
 
+type FinanceBaseCostRulePayload = {
+  componentType?: z.infer<typeof financeCostComponentTypeSchema>;
+  appliesTo?: z.infer<typeof financeCostRuleAppliesToSchema>;
+  groupSizeUnits?: number;
+  roundingMode?: z.infer<typeof financeRoundingModeSchema>;
+};
+
+const normalizeFinanceBaseCostRulePayload = <T extends FinanceBaseCostRulePayload>(value: T): T => {
+  if (value.componentType === 'packaging') {
+    return {
+      ...value,
+      appliesTo: 'per_started_dozen',
+      groupSizeUnits: value.groupSizeUnits ?? 12,
+      roundingMode: 'ceil',
+    };
+  }
+
+  if (value.componentType === 'base_raw_material' && value.appliesTo === 'per_empanada') {
+    return {
+      ...value,
+      groupSizeUnits: value.groupSizeUnits ?? 12,
+      roundingMode: 'exact',
+    };
+  }
+
+  if (value.componentType === 'base_raw_material' && value.appliesTo === 'per_started_dozen') {
+    return {
+      ...value,
+      groupSizeUnits: value.groupSizeUnits ?? 12,
+      roundingMode: value.roundingMode ?? 'ceil',
+    };
+  }
+
+  return value;
+};
+
 export const adminEnvSchema = z.object({
   ADMIN_EMAIL: z.email(),
   ADMIN_PASSWORD: z.string().min(8),
@@ -166,20 +202,20 @@ const financeBaseCostRuleFields = {
   isActive: z.boolean(),
 } as const;
 
-export const createFinanceBaseCostRuleSchema = z.object({
-  ...financeBaseCostRuleFields,
-  groupSizeUnits: financeBaseCostRuleFields.groupSizeUnits.default(12),
-  roundingMode: financeBaseCostRuleFields.roundingMode.default('ceil'),
-  isActive: financeBaseCostRuleFields.isActive.default(true),
-});
+export const createFinanceBaseCostRuleSchema = z
+  .object({
+    ...financeBaseCostRuleFields,
+    groupSizeUnits: financeBaseCostRuleFields.groupSizeUnits.default(12),
+    roundingMode: financeBaseCostRuleFields.roundingMode.default('ceil'),
+    isActive: financeBaseCostRuleFields.isActive.default(true),
+  })
+  .transform(normalizeFinanceBaseCostRulePayload);
 
 export const updateFinanceBaseCostRuleSchema = z
   .object(financeBaseCostRuleFields)
   .partial()
-  .refine(
-    (value) => Object.keys(value).length > 0,
-    'At least one base cost rule field is required',
-  );
+  .refine((value) => Object.keys(value).length > 0, 'At least one base cost rule field is required')
+  .transform(normalizeFinanceBaseCostRulePayload);
 
 export const financeRecipeItemInputSchema = z.object({
   productId: idSchema,

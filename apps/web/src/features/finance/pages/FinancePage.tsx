@@ -14,6 +14,7 @@ import {
   Trash2,
   Warehouse,
 } from 'lucide-react';
+import { calculateBaseRawMaterialCost, calculatePackagingCost } from '@te-pinta/shared';
 
 import { PageHero } from '@/components/layout/PageHero';
 
@@ -207,6 +208,29 @@ const initialBaseCostRuleForm: BaseCostRuleFormState = {
   isActive: true,
 };
 
+const getRuleDefaultsForComponentType = (
+  componentType: FinanceCostComponentType,
+): Pick<BaseCostRuleFormState, 'appliesTo' | 'roundingMode' | 'groupSizeUnits'> =>
+  componentType === 'packaging'
+    ? { appliesTo: 'per_started_dozen', roundingMode: 'ceil', groupSizeUnits: '12' }
+    : { appliesTo: 'per_empanada', roundingMode: 'exact', groupSizeUnits: '12' };
+
+const normalizeBaseCostRuleForm = (form: BaseCostRuleFormState): BaseCostRuleFormState => {
+  const appliesTo = form.componentType === 'packaging' ? 'per_started_dozen' : form.appliesTo;
+
+  return {
+    ...form,
+    appliesTo,
+    groupSizeUnits: form.groupSizeUnits || '12',
+    roundingMode:
+      form.componentType === 'packaging'
+        ? 'ceil'
+        : appliesTo === 'per_started_dozen'
+          ? form.roundingMode
+          : 'exact',
+  };
+};
+
 const moneyFormatter = new Intl.NumberFormat('es-AR', {
   style: 'currency',
   currency: 'ARS',
@@ -222,18 +246,19 @@ const formatQuantity = (quantity: number, unit: FinanceBaseUnit): string =>
 const toCents = (value: string): number => Math.round(Number(value || 0) * 100);
 const toPositiveNumber = (value: string): number => Math.max(Number(value || 0), 0);
 
-const estimateBaseCostFromRules = (rules: FinanceBaseCostRule[], empanadaCount: number): number =>
-  rules
-    .filter((rule) => rule.isActive && rule.latestCostCents !== null)
-    .reduce((total, rule) => {
-      const unitCost = rule.latestCostCents ?? 0;
-      const groups =
-        rule.appliesTo === 'per_started_dozen'
-          ? Math.ceil(empanadaCount / Math.max(rule.groupSizeUnits, 1))
-          : empanadaCount;
+const estimateBaseCostFromRules = (rules: FinanceBaseCostRule[], empanadaCount: number): number => {
+  const activeRules = rules.filter((rule) => rule.isActive && rule.latestCostCents !== null);
+  const baseRawMaterial = calculateBaseRawMaterialCost({
+    totalEmpanadas: empanadaCount,
+    rules: activeRules,
+  });
+  const packaging = calculatePackagingCost({
+    totalEmpanadas: empanadaCount,
+    rules: activeRules,
+  });
 
-      return total + Math.round(unitCost * rule.quantity * groups);
-    }, 0);
+  return baseRawMaterial.totalCostCents + packaging.totalCostCents;
+};
 
 const getErrorDescription = (error: unknown): string =>
   error instanceof Error ? error.message : 'No se pudo completar la operación.';
@@ -808,10 +833,12 @@ const BaseCostRulesWorkspace = ({
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const selectedProductId = form.productId || products[0]?.id || '';
   const activeRules = rules.filter((rule) => rule.isActive);
+  const availableAppliesToOptions =
+    form.componentType === 'packaging' ? (['per_started_dozen'] as const) : appliesToOptions;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const nextForm = { ...form, productId: selectedProductId };
+    const nextForm = normalizeBaseCostRuleForm({ ...form, productId: selectedProductId });
     if (editingRuleId) {
       onUpdate(editingRuleId, nextForm);
       setEditingRuleId(null);
@@ -965,6 +992,9 @@ const BaseCostRulesWorkspace = ({
                 setForm((current) => ({
                   ...current,
                   componentType: event.target.value as FinanceCostComponentType,
+                  ...getRuleDefaultsForComponentType(
+                    event.target.value as FinanceCostComponentType,
+                  ),
                 }))
               }
               value={form.componentType}
@@ -990,13 +1020,18 @@ const BaseCostRulesWorkspace = ({
               }
               value={form.appliesTo}
             >
-              {appliesToOptions.map((appliesTo) => (
+              {availableAppliesToOptions.map((appliesTo) => (
                 <option key={appliesTo} value={appliesTo}>
                   {appliesToLabels[appliesTo]}
                 </option>
               ))}
             </select>
           </label>
+          <p className="rounded-2xl bg-background px-3 py-2 text-xs font-bold leading-5 text-muted-foreground ring-1 ring-border/60 sm:col-span-2">
+            Tip contable: si el producto base es una tapa individual, usá “Por empanada”. Si el
+            producto base es un pack/bulto completo, “Por docena iniciada” consume el grupo.
+            Packaging siempre queda por docena iniciada.
+          </p>
           <label className="text-sm font-bold text-foreground">
             Cantidad
             <input
@@ -1070,16 +1105,25 @@ const RecipeWorkspace = ({
   recipes,
   menuItems,
   products,
+  baseCostRules,
   onSave,
   isPending,
 }: {
   recipes: FinanceRecipe[];
   menuItems: MenuItem[];
   products: FinanceProductWithMetrics[];
+  baseCostRules: FinanceBaseCostRule[];
   onSave: (menuItemId: string, rows: RecipeDraftItem[]) => void;
   isPending: boolean;
 }) => {
-  const recipeProducts = products.filter((product) => product.category === 'raw_material');
+  const activeBaseCostProductIds = new Set(
+    baseCostRules.filter((rule) => rule.isActive).map((rule) => rule.productId),
+  );
+  const recipeProducts = products.filter(
+    (product) => product.category === 'raw_material' && !activeBaseCostProductIds.has(product.id),
+  );
+  const activeBaseCostRules = baseCostRules.filter((rule) => rule.isActive);
+  const baseCostPerDozenCents = estimateBaseCostFromRules(activeBaseCostRules, 12);
   const [selectedMenuItemId, setSelectedMenuItemId] = useState('');
   const menuItemId = selectedMenuItemId || menuItems[0]?.id || recipes[0]?.menuItemId || '';
   const selectedRecipe = recipes.find((recipe) => recipe.menuItemId === menuItemId);
@@ -1101,13 +1145,19 @@ const RecipeWorkspace = ({
   }, [menuItemId, selectedRecipe]);
 
   const addRow = () => {
-    const firstProductId = recipeProducts[0]?.id ?? products[0]?.id ?? '';
+    const firstProductId = recipeProducts[0]?.id ?? '';
+    if (!firstProductId) {
+      return;
+    }
     setRows((current) => [...current, { productId: firstProductId, quantity: '1', notes: '' }]);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSave(menuItemId, rows);
+    onSave(
+      menuItemId,
+      rows.filter((row) => !activeBaseCostProductIds.has(row.productId)),
+    );
   };
 
   if (!menuItems.length) {
@@ -1150,10 +1200,41 @@ const RecipeWorkspace = ({
         </select>
       </label>
 
+      <div className="mt-4 rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground">
+        <p className="font-black text-foreground">
+          Costo base aparte por docena:{' '}
+          <span className="tabular-nums">{formatMoneyFromCents(baseCostPerDozenCents)}</span>
+        </p>
+        <p>
+          No lo cargues como ingrediente: estos productos ya se suman en la calculadora desde Costos
+          base.
+        </p>
+        {activeBaseCostRules.length ? (
+          <p className="mt-1 text-xs font-black uppercase tracking-wide text-primary">
+            {activeBaseCostRules.map((rule) => rule.productName ?? rule.name).join(' · ')}
+          </p>
+        ) : null}
+      </div>
+
       <div className="mt-4 space-y-3">
         {rows.length ? (
           rows.map((row, index) => {
             const product = products.find((item) => item.id === row.productId);
+            const recipeItem = selectedRecipe?.items.find(
+              (item) => item.productId === row.productId,
+            );
+            const latestCostCents =
+              recipeItem?.latestCostCents ?? product?.latestCostPerBaseUnitCents ?? null;
+            const quantity = toPositiveNumber(row.quantity);
+            const lineCostCents =
+              latestCostCents === null || latestCostCents === undefined
+                ? null
+                : Math.round(latestCostCents * quantity);
+            const isBaseCostProduct = activeBaseCostProductIds.has(row.productId);
+            const rowOptions =
+              product && !recipeProducts.some((item) => item.id === product.id)
+                ? [product, ...recipeProducts]
+                : recipeProducts;
 
             return (
               <div
@@ -1173,7 +1254,7 @@ const RecipeWorkspace = ({
                     }
                     value={row.productId}
                   >
-                    {(recipeProducts.length ? recipeProducts : products).map((item) => (
+                    {rowOptions.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
                       </option>
@@ -1221,6 +1302,25 @@ const RecipeWorkspace = ({
                 >
                   <Trash2 className="h-4 w-4" aria-hidden={true} />
                 </button>
+                <div className="rounded-2xl bg-card px-3 py-2 text-xs font-bold leading-5 text-muted-foreground ring-1 ring-border/60 md:col-span-4">
+                  <p>
+                    Último costo:{' '}
+                    <strong className="text-foreground">
+                      {formatMoneyFromCents(latestCostCents)}
+                      {product ? ` / ${baseUnitLabels[product.baseUnit]}` : ''}
+                    </strong>{' '}
+                    · Costo en esta docena:{' '}
+                    <strong className="text-foreground">
+                      {formatMoneyFromCents(lineCostCents)}
+                    </strong>
+                  </p>
+                  {isBaseCostProduct ? (
+                    <p className="mt-1 text-amber-800">
+                      Este insumo ya está en Costos base. Al guardar, no se va a incluir en la
+                      receta para evitar doble conteo.
+                    </p>
+                  ) : null}
+                </div>
               </div>
             );
           })
@@ -1248,7 +1348,7 @@ const RecipeWorkspace = ({
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           className="inline-flex items-center justify-center rounded-full bg-muted px-4 py-2 text-sm font-black text-foreground transition hover:bg-muted/80 disabled:opacity-60"
-          disabled={!products.length}
+          disabled={!recipeProducts.length}
           onClick={addRow}
           type="button"
         >
@@ -1419,16 +1519,18 @@ export const FinancePage = () => {
   };
 
   const handleCreateBaseCostRule = (form: BaseCostRuleFormState) => {
+    const normalizedForm = normalizeBaseCostRuleForm(form);
+
     createBaseCostRule.mutate(
       {
-        productId: form.productId,
-        name: form.name,
-        componentType: form.componentType,
-        appliesTo: form.appliesTo,
-        quantity: toPositiveNumber(form.quantity),
-        groupSizeUnits: Math.max(Number.parseInt(form.groupSizeUnits || '12', 10), 1),
-        roundingMode: form.roundingMode,
-        isActive: form.isActive,
+        productId: normalizedForm.productId,
+        name: normalizedForm.name,
+        componentType: normalizedForm.componentType,
+        appliesTo: normalizedForm.appliesTo,
+        quantity: toPositiveNumber(normalizedForm.quantity),
+        groupSizeUnits: Math.max(Number.parseInt(normalizedForm.groupSizeUnits || '12', 10), 1),
+        roundingMode: normalizedForm.roundingMode,
+        isActive: normalizedForm.isActive,
       },
       {
         onSuccess: (rule) =>
@@ -1451,22 +1553,49 @@ export const FinancePage = () => {
     id: string,
     updates: Partial<BaseCostRuleFormState> & { isActive?: boolean },
   ) => {
+    const normalizedUpdates =
+      updates.productId !== undefined &&
+      updates.name !== undefined &&
+      updates.componentType !== undefined &&
+      updates.appliesTo !== undefined &&
+      updates.quantity !== undefined &&
+      updates.groupSizeUnits !== undefined &&
+      updates.roundingMode !== undefined &&
+      updates.isActive !== undefined
+        ? normalizeBaseCostRuleForm(updates as BaseCostRuleFormState)
+        : updates;
+
     updateBaseCostRule.mutate(
       {
         id,
         updates: {
-          ...(updates.productId !== undefined ? { productId: updates.productId } : {}),
-          ...(updates.name !== undefined ? { name: updates.name } : {}),
-          ...(updates.componentType !== undefined ? { componentType: updates.componentType } : {}),
-          ...(updates.appliesTo !== undefined ? { appliesTo: updates.appliesTo } : {}),
-          ...(updates.quantity !== undefined
-            ? { quantity: toPositiveNumber(updates.quantity) }
+          ...(normalizedUpdates.productId !== undefined
+            ? { productId: normalizedUpdates.productId }
             : {}),
-          ...(updates.groupSizeUnits !== undefined
-            ? { groupSizeUnits: Math.max(Number.parseInt(updates.groupSizeUnits || '12', 10), 1) }
+          ...(normalizedUpdates.name !== undefined ? { name: normalizedUpdates.name } : {}),
+          ...(normalizedUpdates.componentType !== undefined
+            ? { componentType: normalizedUpdates.componentType }
             : {}),
-          ...(updates.roundingMode !== undefined ? { roundingMode: updates.roundingMode } : {}),
-          ...(updates.isActive !== undefined ? { isActive: updates.isActive } : {}),
+          ...(normalizedUpdates.appliesTo !== undefined
+            ? { appliesTo: normalizedUpdates.appliesTo }
+            : {}),
+          ...(normalizedUpdates.quantity !== undefined
+            ? { quantity: toPositiveNumber(normalizedUpdates.quantity) }
+            : {}),
+          ...(normalizedUpdates.groupSizeUnits !== undefined
+            ? {
+                groupSizeUnits: Math.max(
+                  Number.parseInt(normalizedUpdates.groupSizeUnits || '12', 10),
+                  1,
+                ),
+              }
+            : {}),
+          ...(normalizedUpdates.roundingMode !== undefined
+            ? { roundingMode: normalizedUpdates.roundingMode }
+            : {}),
+          ...(normalizedUpdates.isActive !== undefined
+            ? { isActive: normalizedUpdates.isActive }
+            : {}),
         },
       },
       {
@@ -1707,6 +1836,7 @@ export const FinancePage = () => {
 
         {activeTab === 'recipes' ? (
           <RecipeWorkspace
+            baseCostRules={baseCostRules}
             isPending={updateRecipe.isPending}
             menuItems={menuItems}
             onSave={handleSaveRecipe}
@@ -1810,6 +1940,30 @@ export const FinancePage = () => {
                       </dt>
                       <dd className="mt-1 font-black text-foreground">
                         {previewOrderCost.data.packagingUnits.toLocaleString('es-AR')} unidad(es)
+                      </dd>
+                    </div>
+                    <div className="rounded-2xl bg-background px-3 py-2 ring-1 ring-border/60">
+                      <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                        Materia prima base
+                      </dt>
+                      <dd className="mt-1 font-black text-foreground">
+                        {formatMoneyFromCents(previewOrderCost.data.baseRawMaterialCostCents)}
+                      </dd>
+                    </div>
+                    <div className="rounded-2xl bg-background px-3 py-2 ring-1 ring-border/60">
+                      <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                        Costo packaging
+                      </dt>
+                      <dd className="mt-1 font-black text-foreground">
+                        {formatMoneyFromCents(previewOrderCost.data.packagingCostCents)}
+                      </dd>
+                    </div>
+                    <div className="rounded-2xl bg-background px-3 py-2 ring-1 ring-border/60">
+                      <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                        Receta / relleno
+                      </dt>
+                      <dd className="mt-1 font-black text-foreground">
+                        {formatMoneyFromCents(previewOrderCost.data.recipeCostCents)}
                       </dd>
                     </div>
                   </dl>

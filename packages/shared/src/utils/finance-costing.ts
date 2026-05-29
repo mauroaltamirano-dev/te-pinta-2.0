@@ -284,10 +284,7 @@ export function calculateBaseRawMaterialCost(
   assertNonNegativeNumber(input.totalEmpanadas, 'totalEmpanadas');
 
   const rules = input.rules.filter(
-    (rule) =>
-      rule.isActive !== false &&
-      rule.componentType === 'base_raw_material' &&
-      rule.appliesTo === 'per_empanada',
+    (rule) => rule.isActive !== false && rule.componentType === 'base_raw_material',
   );
   const warnings: FinanceCostWarning[] = [];
 
@@ -304,7 +301,19 @@ export function calculateBaseRawMaterialCost(
       return [];
     }
 
-    const totalQuantity = input.totalEmpanadas * rule.quantity;
+    const groupSizeUnits = rule.groupSizeUnits ?? FINANCE_DEFAULT_PACKAGING_GROUP_SIZE;
+    if (rule.appliesTo === 'per_started_dozen') {
+      assertPositiveNumber(groupSizeUnits, 'groupSizeUnits');
+    }
+
+    const groups =
+      rule.appliesTo === 'per_started_dozen'
+        ? rule.roundingMode === 'exact'
+          ? input.totalEmpanadas / groupSizeUnits
+          : calculatePackagingUnits(input.totalEmpanadas, groupSizeUnits)
+        : input.totalEmpanadas;
+    const totalQuantity = groups * rule.quantity;
+
     return [
       {
         ruleId: rule.id,

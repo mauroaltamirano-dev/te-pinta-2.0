@@ -169,10 +169,31 @@ describe('shared domain schemas', () => {
         productId: 'product-box',
         name: 'Caja delivery',
         componentType: 'packaging',
-        appliesTo: 'per_started_dozen',
+        appliesTo: 'per_empanada',
         quantity: 1,
       }),
-    ).toMatchObject({ groupSizeUnits: 12, roundingMode: 'ceil', isActive: true });
+    ).toMatchObject({
+      appliesTo: 'per_started_dozen',
+      groupSizeUnits: 12,
+      roundingMode: 'ceil',
+      isActive: true,
+    });
+    expect(
+      createFinanceBaseCostRuleSchema.parse({
+        productId: 'product-tapa',
+        name: 'Tapa por empanada',
+        componentType: 'base_raw_material',
+        appliesTo: 'per_empanada',
+        quantity: 1,
+        roundingMode: 'ceil',
+      }),
+    ).toMatchObject({ appliesTo: 'per_empanada', roundingMode: 'exact' });
+    expect(
+      updateFinanceBaseCostRuleSchema.parse({
+        componentType: 'packaging',
+        appliesTo: 'per_empanada',
+      }),
+    ).toMatchObject({ componentType: 'packaging', appliesTo: 'per_started_dozen' });
     expect(updateFinanceBaseCostRuleSchema.parse({ isActive: false })).toEqual({
       isActive: false,
     });

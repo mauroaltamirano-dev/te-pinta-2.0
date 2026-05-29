@@ -68,10 +68,26 @@ const trackedProduct: FinanceProductWithMetrics = {
   warnings: [],
 };
 
+const fillingProduct: FinanceProductWithMetrics = {
+  id: 'product-2',
+  name: 'Muzzarella',
+  normalizedName: 'muzzarella',
+  category: 'raw_material',
+  baseUnit: 'kg',
+  stockTracking: true,
+  isActive: true,
+  latestCostPerBaseUnitCents: 200000,
+  averageCostPerBaseUnitCents: 195000,
+  purchasedQuantityBase: 12,
+  stockQuantityBase: 8,
+  purchaseCount: 1,
+  warnings: [],
+};
+
 describe('FinancePage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(listFinanceProducts).mockResolvedValue([trackedProduct]);
+    vi.mocked(listFinanceProducts).mockResolvedValue([trackedProduct, fillingProduct]);
     vi.mocked(listFinanceStock).mockResolvedValue([
       {
         product: trackedProduct,
@@ -151,17 +167,17 @@ describe('FinancePage', () => {
         {
           id: 'recipe-item-1',
           menuItemId: 'menu-1',
-          productId: trackedProduct.id,
-          name: trackedProduct.name,
+          productId: fillingProduct.id,
+          name: fillingProduct.name,
           quantityPerDozen: 0.25,
           unit: 'kg',
           quantityBase: 0.25,
-          latestCostCents: trackedProduct.latestCostPerBaseUnitCents,
+          latestCostCents: fillingProduct.latestCostPerBaseUnitCents,
           notes: null,
         },
       ],
-      totalCostPerDozenCents: 30000,
-      totalCostPerUnitCents: 2500,
+      totalCostPerDozenCents: 50000,
+      totalCostPerUnitCents: 4167,
       warnings: [],
     });
     vi.mocked(previewFinanceOrderCost).mockResolvedValue({
@@ -201,7 +217,7 @@ describe('FinancePage', () => {
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
     expect(screen.getByText('Harina 000')).toBeInTheDocument();
-    expect(screen.getByText(/último costo/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/último costo/i).length).toBeGreaterThan(0);
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /stock/i }));
     expect(screen.getAllByText(/30 kg/i).length).toBeGreaterThan(0);
@@ -235,16 +251,16 @@ describe('FinancePage', () => {
     vi.mocked(previewFinanceOrderCost).mockResolvedValueOnce({
       totalEmpanadas: 12,
       packagingUnits: 1,
-      baseRawMaterialCostCents: 0,
-      packagingCostCents: 0,
-      recipeCostCents: 0,
-      totalCostCents: 0,
+      baseRawMaterialCostCents: 72000,
+      packagingCostCents: 19383,
+      recipeCostCents: 50000,
+      totalCostCents: 141383,
       profitSummary: {
         saleTotalCents: 2400000,
-        totalCostCents: 0,
-        grossProfitCents: 2400000,
-        profitMarginPercent: 100,
-        costRatioPercent: 0,
+        totalCostCents: 141383,
+        grossProfitCents: 2258617,
+        profitMarginPercent: 94.11,
+        costRatioPercent: 5.89,
       },
       warnings: [
         {
@@ -265,6 +281,9 @@ describe('FinancePage', () => {
     await userEvent.click(screen.getByRole('button', { name: /calcular costo/i }));
 
     expect(await screen.findByText(/falta receta\/costo para jamón y queso/i)).toBeInTheDocument();
+    expect(screen.getByText(/materia prima base/i)).toBeInTheDocument();
+    expect(screen.getByText(/costo packaging/i)).toBeInTheDocument();
+    expect(screen.getByText(/receta \/ relleno/i)).toBeInTheDocument();
     expect(previewFinanceOrderCost).toHaveBeenCalledWith({
       saleTotalCents: 2400000,
       items: [{ menuItemId: 'menu-1', quantity: 12 }],
@@ -304,7 +323,23 @@ describe('FinancePage', () => {
     const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /recetas/i }));
 
+    expect(screen.getByText(/costo base aparte por docena/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /agregar ingrediente/i }));
+    const ingredientSelect = screen.getByLabelText(/insumo/i);
+    expect(within(ingredientSelect).queryByRole('option', { name: /harina 000/i })).toBeNull();
+    expect(
+      within(ingredientSelect).getByRole('option', { name: /muzzarella/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText((_content, element) =>
+        Boolean(
+          element?.tagName.toLowerCase() === 'p' &&
+          element.textContent?.includes('Último costo') &&
+          element.textContent.includes('Costo en esta docena') &&
+          element.textContent.includes('$'),
+        ),
+      ).length,
+    ).toBeGreaterThan(0);
     await userEvent.clear(screen.getByLabelText(/cantidad\/kg/i));
     await userEvent.type(screen.getByLabelText(/cantidad\/kg/i), '0.25');
     await userEvent.click(screen.getByRole('button', { name: /guardar receta/i }));
@@ -315,7 +350,7 @@ describe('FinancePage', () => {
       menuItemId: 'menu-1',
       items: [
         {
-          productId: trackedProduct.id,
+          productId: fillingProduct.id,
           quantityPerDozen: 0.25,
           unit: 'kg',
           quantityBase: 0.25,

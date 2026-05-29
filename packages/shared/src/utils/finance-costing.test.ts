@@ -155,6 +155,31 @@ describe('packaging and base costs', () => {
       warnings: [],
     });
   });
+
+  it('supports base raw material rules by started dozen for pack-based inputs', () => {
+    const packTapaRule = {
+      ...tapaRule,
+      appliesTo: 'per_started_dozen' as const,
+      quantity: 1,
+      groupSizeUnits: 12,
+      roundingMode: 'ceil' as const,
+      latestCostCents: 162_600,
+    };
+
+    const rawMaterial = calculateBaseRawMaterialCost({
+      totalEmpanadas: 18,
+      rules: [packTapaRule],
+    });
+
+    expect(rawMaterial).toMatchObject({
+      totalCostCents: 325_200,
+      warnings: [],
+    });
+    expect(rawMaterial.components[0]).toMatchObject({
+      totalQuantity: 2,
+      unitCostCents: 162_600,
+    });
+  });
 });
 
 describe('recipes and mixed order costing', () => {
