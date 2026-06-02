@@ -132,12 +132,24 @@ export const createFinanceProductSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-export const updateFinanceProductSchema = createFinanceProductSchema
-  .partial()
+export const updateFinanceProductSchema = z
+  .object({
+    name: trimmedString.optional(),
+    category: financeProductCategorySchema.optional(),
+    baseUnit: financeBaseUnitSchema.optional(),
+    stockTracking: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    currentStockQuantityBase: z.number().finite().nonnegative().optional(),
+  })
   .refine(
     (value) => Object.keys(value).length > 0,
     'At least one finance product field is required',
   );
+
+export const financeAssumptionsSchema = z.object({
+  servicePercent: percentSchema,
+  targetMarginPercent: percentSchema,
+});
 
 export const financeProductFiltersSchema = z.object({
   search: z.string().trim().optional(),
@@ -190,6 +202,16 @@ export const financePurchaseFiltersSchema = z.object({
   to: z.iso.date().optional(),
   supplier: z.string().trim().optional(),
   category: financeProductCategorySchema.optional(),
+});
+
+export const financePurchaseItemImpactSchema = z.object({
+  purchaseItemId: idSchema,
+  stockBeforeBase: z.number().finite().nullable(),
+  stockAfterBase: z.number().finite().nullable(),
+  previousCostPerBaseUnitCents: moneyCentsSchema.nullable(),
+  newCostPerBaseUnitCents: moneyCentsSchema,
+  priceDeltaCents: z.number().int().nullable(),
+  priceDeltaPercent: z.number().finite().nullable(),
 });
 
 export const cancelFinancePurchaseSchema = z

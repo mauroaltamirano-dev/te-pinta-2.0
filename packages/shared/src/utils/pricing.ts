@@ -103,6 +103,7 @@ export const calculateItemPrice = ({
 };
 
 const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+const DOZEN_SIZE = 12;
 
 const toSafeNonNegative = (value: number | undefined, fallback = 0): number =>
   Number.isFinite(value) && (value ?? 0) >= 0 ? (value ?? fallback) : fallback;
@@ -171,7 +172,7 @@ export const calculateOrderPromotion = ({
     }
   }
 
-  const dozens = Math.floor(totalQuantity / 12);
+  const dozens = Math.floor(totalQuantity / DOZEN_SIZE);
   const configuredBulkDiscount = toSafeNonNegative(config.bulkDiscountPercent);
   const safeManualDiscount = toSafeNonNegative(manualDiscountPercent);
   const discountPercent =
@@ -196,8 +197,10 @@ export const calculateOrderPromotion = ({
   }
 
   const safeDeliveryFee = toSafeNonNegative(deliveryFee);
-  const safeCookingFee = toSafeNonNegative(cookingFee ?? config.cookingFee);
-  const total = roundMoney(promoSubtotal - discount + safeDeliveryFee + safeCookingFee);
+  const cookingFeeRate = toSafeNonNegative(cookingFee ?? config.cookingFee);
+  const startedDozens = totalQuantity > 0 ? Math.ceil(totalQuantity / DOZEN_SIZE) : 0;
+  const appliedCookingFee = roundMoney(cookingFeeRate * startedDozens);
+  const total = roundMoney(promoSubtotal - discount + safeDeliveryFee + appliedCookingFee);
 
   return {
     subtotal,
@@ -208,7 +211,7 @@ export const calculateOrderPromotion = ({
     discountPercent,
     discount,
     deliveryFee: safeDeliveryFee,
-    cookingFee: safeCookingFee,
+    cookingFee: appliedCookingFee,
     total,
     appliedPromotions,
   };

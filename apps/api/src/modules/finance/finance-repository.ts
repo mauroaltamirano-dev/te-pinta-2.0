@@ -133,6 +133,18 @@ const toStockMovementValues = (
   notes: movement.notes,
 });
 
+const toProductUpdateValues = (
+  updates: Parameters<FinanceRepository['updateProduct']>[1],
+): Partial<typeof financeProducts.$inferInsert> => ({
+  ...(updates.name !== undefined ? { name: updates.name } : {}),
+  ...(updates.normalizedName !== undefined ? { normalizedName: updates.normalizedName } : {}),
+  ...(updates.category !== undefined ? { category: updates.category } : {}),
+  ...(updates.baseUnit !== undefined ? { baseUnit: updates.baseUnit } : {}),
+  ...(updates.stockTracking !== undefined ? { stockTracking: updates.stockTracking } : {}),
+  ...(updates.isActive !== undefined ? { isActive: updates.isActive } : {}),
+  updatedAt: new Date(),
+});
+
 const mapPurchaseDetail = (
   purchase: FinancePurchaseRow,
   items: FinancePurchaseItemRow[],
@@ -570,6 +582,16 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
     return mapProduct(requireReturnedRow(row));
   },
 
+  async updateProduct(id, updates): Promise<FinanceProduct | null> {
+    const [row] = await db
+      .update(financeProducts)
+      .set(toProductUpdateValues(updates))
+      .where(eq(financeProducts.id, id))
+      .returning();
+
+    return row ? mapProduct(row) : null;
+  },
+
   async getProductsByIds(ids): Promise<FinanceProduct[]> {
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) {
@@ -582,6 +604,27 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
       .where(inArray(financeProducts.id, uniqueIds));
 
     return rows.map(mapProduct);
+  },
+
+  async listProductPurchaseHistory(
+    productIds,
+  ): Promise<Map<string, FinanceProductCostHistoryItem[]>> {
+    return listPurchaseHistoryRows(db, productIds);
+  },
+
+  async listStockMovementsByProducts(productIds): Promise<FinanceStockMovement[]> {
+    const uniqueProductIds = [...new Set(productIds)];
+    if (uniqueProductIds.length === 0) {
+      return [];
+    }
+
+    const rows = await db
+      .select()
+      .from(financeStockMovements)
+      .where(inArray(financeStockMovements.productId, uniqueProductIds))
+      .orderBy(asc(financeStockMovements.createdAt), asc(financeStockMovements.id));
+
+    return rows.map(mapStockMovement);
   },
 
   async createPurchaseWithItems(input): Promise<FinancePurchaseDetail> {

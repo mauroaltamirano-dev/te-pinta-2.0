@@ -10,12 +10,14 @@ import {
   cancelFinancePurchase,
   deleteFinanceBaseCostRule,
   listFinanceBaseCostRules,
+  getFinanceProductHistory,
   listFinanceProducts,
   listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
+  updateFinanceProduct,
   updateFinanceRecipe,
 } from './api';
 import type {
@@ -184,6 +186,44 @@ describe('finance api client', () => {
     expect(apiClient.delete).toHaveBeenCalledWith('/finance/base-cost-rules/rule-1');
   });
 
+
+  it('updates products and loads product history through catalog endpoints', async () => {
+    vi.mocked(apiClient.put).mockResolvedValueOnce({
+      data: { product: { ...product, name: 'Harina premium', stockQuantityBase: 144 } },
+    });
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        purchaseHistory: [
+          {
+            id: 'purchase-item-1',
+            purchasedAt: '2026-05-20',
+            purchaseQuantity: 2,
+            unitsPerPackage: 1,
+            totalBaseUnits: 2,
+            totalPriceCents: 240000,
+            costPerBaseUnitCents: 120000,
+          },
+        ],
+      },
+    });
+
+    await expect(
+      updateFinanceProduct('product-1', {
+        name: 'Harina premium',
+        currentStockQuantityBase: 144,
+      }),
+    ).resolves.toMatchObject({ name: 'Harina premium', stockQuantityBase: 144 });
+    await expect(getFinanceProductHistory('product-1')).resolves.toEqual([
+      expect.objectContaining({ id: 'purchase-item-1', totalBaseUnits: 2 }),
+    ]);
+
+    expect(apiClient.put).toHaveBeenCalledWith('/finance/products/product-1', {
+      name: 'Harina premium',
+      currentStockQuantityBase: 144,
+    });
+    expect(apiClient.get).toHaveBeenCalledWith('/finance/products/product-1/history');
+  });
+
   it('creates products, purchases, and costing previews with validated payloads', async () => {
     vi.mocked(apiClient.post)
       .mockResolvedValueOnce({ data: { product } })
@@ -198,6 +238,17 @@ describe('finance api client', () => {
             canceledAt: null,
             canceledReason: null,
             items: [],
+            itemImpacts: [
+              {
+                purchaseItemId: 'purchase-item-1',
+                stockBeforeBase: 10,
+                stockAfterBase: 12,
+                previousCostPerBaseUnitCents: 100000,
+                newCostPerBaseUnitCents: 120000,
+                priceDeltaCents: 20000,
+                priceDeltaPercent: 20,
+              },
+            ],
           },
         },
       })
@@ -264,7 +315,10 @@ describe('finance api client', () => {
           },
         ],
       }),
-    ).resolves.toMatchObject({ id: 'purchase-1' });
+    ).resolves.toMatchObject({
+      id: 'purchase-1',
+      itemImpacts: [expect.objectContaining({ priceDeltaCents: 20000 })],
+    });
 
     await expect(
       createFinanceStockAdjustment({
@@ -318,13 +372,29 @@ describe('finance api client', () => {
       canceledAt: null,
       canceledReason: null,
       items: [],
+      itemImpacts: [
+        {
+          purchaseItemId: 'purchase-item-1',
+          stockBeforeBase: 10,
+          stockAfterBase: 12,
+          previousCostPerBaseUnitCents: 100000,
+          newCostPerBaseUnitCents: 120000,
+          priceDeltaCents: 20000,
+          priceDeltaPercent: 20,
+        },
+      ],
     };
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { purchases: [purchase] } });
     vi.mocked(apiClient.delete).mockResolvedValueOnce({
       data: { purchase: { ...purchase, canceledAt: '2026-05-29T12:00:00.000Z' } },
     });
 
-    await expect(listFinancePurchases()).resolves.toEqual([purchase]);
+    await expect(listFinancePurchases()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'purchase-1',
+        itemImpacts: [expect.objectContaining({ stockBeforeBase: 10, stockAfterBase: 12 })],
+      }),
+    ]);
     await expect(
       cancelFinancePurchase('purchase-1', { reason: 'duplicada' }),
     ).resolves.toMatchObject({

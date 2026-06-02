@@ -10,12 +10,10 @@ import {
   cancelFinancePurchase,
   createFinanceBaseCostRule,
   createFinancePurchase,
-  createFinanceStockAdjustment,
   listFinanceBaseCostRules,
   listFinanceProducts,
   listFinancePurchases,
   listFinanceRecipes,
-  listFinanceStock,
   previewFinanceOrderCost,
   updateFinanceRecipe,
 } from '../api';
@@ -23,6 +21,7 @@ import { FinancePage } from './FinancePage';
 import type { FinanceProductWithMetrics } from '../types';
 import { listMenuItems } from '../../menu/menu-api';
 import { useDeliveryFee, useOrderPromotionSettings } from '../../orders/settings-hooks';
+import { listSettings, updateSetting } from '../../settings/settings-api';
 
 vi.mock('../api', () => ({
   cancelFinancePurchase: vi.fn(),
@@ -48,6 +47,11 @@ vi.mock('../../menu/menu-api', () => ({
 vi.mock('../../orders/settings-hooks', () => ({
   useDeliveryFee: vi.fn(),
   useOrderPromotionSettings: vi.fn(),
+}));
+
+vi.mock('../../settings/settings-api', () => ({
+  listSettings: vi.fn(),
+  updateSetting: vi.fn(),
 }));
 
 const renderFinancePage = () => {
@@ -98,6 +102,11 @@ describe('FinancePage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(listFinanceProducts).mockResolvedValue([trackedProduct, fillingProduct]);
+    vi.mocked(listSettings).mockResolvedValue([
+      { key: 'finance_dashboard_service_percent', value: '20' },
+      { key: 'finance_dashboard_target_margin_percent', value: '50' },
+    ]);
+    vi.mocked(updateSetting).mockImplementation(async (input) => input);
     vi.mocked(useDeliveryFee).mockReturnValue({
       data: 1500,
     } as unknown as ReturnType<typeof useDeliveryFee>);
@@ -111,12 +120,6 @@ describe('FinancePage', () => {
         addons: [],
       },
     } as unknown as ReturnType<typeof useOrderPromotionSettings>);
-    vi.mocked(listFinanceStock).mockResolvedValue([
-      {
-        product: trackedProduct,
-        quantityBase: 30,
-      },
-    ]);
     vi.mocked(listFinanceBaseCostRules).mockResolvedValue([
       {
         id: 'rule-1',
@@ -202,15 +205,6 @@ describe('FinancePage', () => {
       items: [],
       stockMovements: [],
     });
-    vi.mocked(createFinanceStockAdjustment).mockResolvedValue({
-      id: 'movement-1',
-      productId: trackedProduct.id,
-      movementType: 'manual_out',
-      quantityBase: -10,
-      sourcePurchaseItemId: null,
-      notes: 'corrección por compra duplicada',
-      createdAt: '2026-05-28T12:00:00.000Z',
-    });
     vi.mocked(createFinanceBaseCostRule).mockResolvedValue({
       id: 'rule-2',
       productId: trackedProduct.id,
@@ -262,7 +256,7 @@ describe('FinancePage', () => {
     });
   });
 
-  it('renders the finance workspace route with dashboard, catalog, purchase, calculator, and stock tabs', async () => {
+  it('renders the finance workspace route without the legacy stock tab', async () => {
     renderFinancePage();
 
     expect(await screen.findByRole('heading', { name: /finanzas/i, level: 1 })).toBeInTheDocument();
@@ -277,29 +271,25 @@ describe('FinancePage', () => {
     expect(within(tabs).getByRole('tab', { name: /costos base/i })).toBeInTheDocument();
     expect(within(tabs).getByRole('tab', { name: /recetas/i })).toBeInTheDocument();
     expect(within(tabs).getByRole('tab', { name: /calculadora/i })).toBeInTheDocument();
-    expect(within(tabs).getByRole('tab', { name: /stock/i })).toBeInTheDocument();
+    expect(within(tabs).queryByRole('tab', { name: /stock/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /stock/i })).not.toBeInTheDocument();
     expect(await screen.findByText(/rentabilidad por variedad/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/margen objetivo sobre venta/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/servicios \/ indirectos/i)).toHaveValue(20);
-    expect(screen.getByText(/precio para margen del 50%/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$ 1\.728/i)).toBeInTheDocument();
-    expect(screen.getByText(/márgenes por escenario/i)).toBeInTheDocument();
-    expect(screen.getByText(/cruda retiro/i)).toBeInTheDocument();
-    expect(screen.getByText(/cocinada retiro/i)).toBeInTheDocument();
-    expect(screen.getByText(/cruda envío/i)).toBeInTheDocument();
-    expect(screen.getByText(/cocinada envío/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/margen objetivo/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/servicios/i)).toHaveValue(20);
+    expect(screen.getByText(/precio para 50%/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$\s*1\.728/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /márgenes por escenario/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
     expect(screen.getByText('Harina 000')).toBeInTheDocument();
     expect(screen.getAllByText(/último costo/i).length).toBeGreaterThan(0);
-
-    await userEvent.click(within(tabs).getByRole('tab', { name: /stock/i }));
-    expect(screen.getAllByText(/30 kg/i).length).toBeGreaterThan(0);
   });
 
   it('shows empty states when finance data is incomplete', async () => {
     vi.mocked(listFinanceProducts).mockResolvedValue([]);
-    vi.mocked(listFinanceStock).mockResolvedValue([]);
     vi.mocked(listFinanceBaseCostRules).mockResolvedValue([]);
     vi.mocked(listFinanceRecipes).mockResolvedValue([]);
     vi.mocked(listMenuItems).mockResolvedValue([]);
@@ -310,9 +300,6 @@ describe('FinancePage', () => {
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
     expect(screen.getByText(/todavía no cargaste productos financieros/i)).toBeInTheDocument();
-
-    await userEvent.click(within(tabs).getByRole('tab', { name: /stock/i }));
-    expect(screen.getByText(/sin movimientos de stock/i)).toBeInTheDocument();
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /costos base/i }));
     expect(screen.getByText(/sin reglas de costo base/i)).toBeInTheDocument();
@@ -398,25 +385,17 @@ describe('FinancePage', () => {
     await userEvent.click(within(tabs).getByRole('tab', { name: /recetas/i }));
 
     expect(screen.getByText(/total docena/i)).toBeInTheDocument();
-    expect(screen.getByText(/costo base aparte por docena/i)).toBeInTheDocument();
+    expect(screen.getByText(/base \+ receta específica/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /agregar ingrediente/i }));
     const ingredientSelect = screen.getByLabelText(/insumo/i);
     expect(within(ingredientSelect).queryByRole('option', { name: /harina 000/i })).toBeNull();
     expect(
       within(ingredientSelect).getByRole('option', { name: /muzzarella/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getAllByText((_content, element) =>
-        Boolean(
-          element?.tagName.toLowerCase() === 'p' &&
-          element.textContent?.includes('Último costo') &&
-          element.textContent.includes('Costo en esta docena') &&
-          element.textContent.includes('$'),
-        ),
-      ).length,
-    ).toBeGreaterThan(0);
-    await userEvent.clear(screen.getByLabelText(/cantidad\/kg/i));
-    await userEvent.type(screen.getByLabelText(/cantidad\/kg/i), '0.25');
+    expect(screen.getByRole('columnheader', { name: /último costo/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /costo docena/i })).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(/cantidad ingrediente 1/i));
+    await userEvent.type(screen.getByLabelText(/cantidad ingrediente 1/i), '0.25');
     await userEvent.click(screen.getByRole('button', { name: /guardar receta/i }));
 
     await waitFor(() => expect(updateFinanceRecipe).toHaveBeenCalled());
@@ -442,19 +421,23 @@ describe('FinancePage', () => {
     const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /compras/i }));
 
-    expect(screen.getByText(/para papa por kilo/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/cantidad comprada \(kg\)/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /registrar compra/i }));
+    const dialog = screen.getByRole('dialog', { name: /registrar compra/i });
+    expect(within(dialog).getByText(/costo unitario base/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i)).toBeInTheDocument();
 
-    await userEvent.clear(screen.getByLabelText(/cantidad comprada \(kg\)/i));
-    await userEvent.type(screen.getByLabelText(/cantidad comprada \(kg\)/i), '2.475');
-    await userEvent.clear(screen.getByLabelText(/precio por kg/i));
-    await userEvent.type(screen.getByLabelText(/precio por kg/i), '1350');
-    await userEvent.click(screen.getByRole('button', { name: /guardar compra/i }));
+    await userEvent.clear(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i));
+    await userEvent.type(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i), '2.475');
+    await userEvent.clear(within(dialog).getByLabelText(/precio por kg/i));
+    await userEvent.type(within(dialog).getByLabelText(/precio por kg/i), '1350');
+    await userEvent.click(within(dialog).getByRole('button', { name: /guardar compra/i }));
 
     await waitFor(() => expect(createFinancePurchase).toHaveBeenCalled());
     expect(vi.mocked(createFinancePurchase).mock.calls[0]?.[0]).toEqual({
       purchaseDate: expect.any(String),
       supplier: undefined,
+      receiptNumber: undefined,
+      notes: undefined,
       items: [
         {
           productId: trackedProduct.id,
@@ -462,6 +445,7 @@ describe('FinancePage', () => {
           purchaseQuantity: 2.475,
           unitsPerPackage: 1,
           unitPriceCents: 135000,
+          notes: undefined,
         },
       ],
     });
@@ -476,38 +460,13 @@ describe('FinancePage', () => {
     await userEvent.click(within(tabs).getByRole('tab', { name: /compras/i }));
 
     expect(await screen.findByText(/molino norte/i)).toBeInTheDocument();
-    expect(screen.getByText(/anular crea movimientos inversos/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /anular compra/i }));
+    await userEvent.click(screen.getByRole('button', { name: /ver detalle de compra molino norte/i }));
+    expect(screen.getAllByText(/stock antes/i).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole('button', { name: /anular compra molino norte/i }));
 
     await waitFor(() => expect(cancelFinancePurchase).toHaveBeenCalled());
     expect(vi.mocked(cancelFinancePurchase).mock.calls[0]?.[0]).toBe('purchase-1');
     expect(await screen.findByText(/compra anulada/i)).toBeInTheDocument();
     confirmSpy.mockRestore();
-  });
-
-  it('creates a manual stock-out movement from a target stock correction', async () => {
-    renderFinancePage();
-
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
-    await userEvent.click(within(tabs).getByRole('tab', { name: /stock/i }));
-
-    expect(screen.getByText(/stock actual/i)).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText(/stock objetivo/i), '20');
-    await userEvent.type(
-      screen.getByLabelText(/nota opcional/i),
-      'corrección por compra duplicada',
-    );
-    expect(screen.getByText(/salida de 10 kg/i)).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /aplicar ajuste/i }));
-
-    await waitFor(() => expect(createFinanceStockAdjustment).toHaveBeenCalled());
-    expect(vi.mocked(createFinanceStockAdjustment).mock.calls[0]?.[0]).toEqual({
-      productId: trackedProduct.id,
-      movementType: 'manual_out',
-      quantity: 10,
-      notes: 'corrección por compra duplicada',
-    });
-    expect(await screen.findByText(/stock corregido/i)).toBeInTheDocument();
   });
 });

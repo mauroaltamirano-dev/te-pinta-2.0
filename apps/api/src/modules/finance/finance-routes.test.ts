@@ -23,7 +23,18 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
     ...input,
     normalizedName: input.name.toLocaleLowerCase('es-AR'),
   }),
+  updateProduct: async (id, updates) => ({
+    id,
+    name: updates.name ?? 'Tapas de empanadas',
+    normalizedName: updates.normalizedName ?? 'tapas de empanadas',
+    category: updates.category ?? 'raw_material',
+    baseUnit: updates.baseUnit ?? 'unit',
+    stockTracking: updates.stockTracking ?? true,
+    isActive: updates.isActive ?? true,
+  }),
   getProductsByIds: async () => [],
+  listProductPurchaseHistory: async () => new Map(),
+  listStockMovementsByProducts: async () => [],
   createPurchaseWithItems: async (input) => ({
     id: input.id,
     purchaseDate: input.purchaseDate,
@@ -255,6 +266,157 @@ describe('finance routes', () => {
     expect(cancelResponse.status).toBe(200);
     expect(cancelPurchase).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'purchase-1', canceledReason: 'duplicada' }),
+    );
+  });
+
+  it('updates products, exposes product history, and returns purchase impact details', async () => {
+    const updateProduct = vi.fn<FinanceRepository['updateProduct']>(async (id, updates) => ({
+      id,
+      name: updates.name ?? 'Tapas de empanadas',
+      normalizedName: updates.normalizedName ?? 'tapas de empanadas',
+      category: 'raw_material',
+      baseUnit: 'unit',
+      stockTracking: true,
+      isActive: true,
+    }));
+    const createStockMovement = vi.fn<FinanceRepository['createStockMovement']>(async (input) => ({
+      ...input,
+      createdAt: new Date('2026-05-31T10:00:00.000Z'),
+    }));
+    const repository = createRepository({
+      getProductsByIds: async () => [
+        {
+          id: 'product-tapa',
+          name: 'Tapas de empanadas',
+          normalizedName: 'tapas de empanadas',
+          category: 'raw_material',
+          baseUnit: 'unit',
+          stockTracking: true,
+          isActive: true,
+        },
+      ],
+      listProductPurchaseHistory: async () =>
+        new Map([
+          [
+            'product-tapa',
+            [
+              {
+                id: 'purchase-item-1',
+                purchaseQuantity: 1,
+                unitsPerPackage: 12,
+                totalBaseUnits: 12,
+                totalPriceCents: 1_200,
+                costPerBaseUnitCents: 100,
+                purchasedAt: '2026-05-10',
+                createdAt: '2026-05-10T10:00:00.000Z',
+              },
+              {
+                id: 'purchase-item-2',
+                purchaseQuantity: 2,
+                unitsPerPackage: 12,
+                totalBaseUnits: 24,
+                totalPriceCents: 3_600,
+                costPerBaseUnitCents: 150,
+                purchasedAt: '2026-05-20',
+                createdAt: '2026-05-20T10:00:00.000Z',
+              },
+            ],
+          ],
+        ]),
+      listStockMovementsByProducts: async () => [
+        {
+          id: 'movement-previous',
+          productId: 'product-tapa',
+          movementType: 'purchase_in',
+          quantityBase: 12,
+          sourcePurchaseItemId: 'purchase-item-1',
+          notes: null,
+          createdAt: new Date('2026-05-10T10:00:00.000Z'),
+        },
+        {
+          id: 'movement-current',
+          productId: 'product-tapa',
+          movementType: 'purchase_in',
+          quantityBase: 24,
+          sourcePurchaseItemId: 'purchase-item-2',
+          notes: null,
+          createdAt: new Date('2026-05-20T10:00:00.000Z'),
+        },
+      ],
+      updateProduct,
+      createStockMovement,
+      listPurchases: async () => [
+        {
+          id: 'purchase-2',
+          purchaseDate: '2026-05-20',
+          supplier: 'Molino norte',
+          receiptNumber: null,
+          notes: null,
+          canceledAt: null,
+          canceledReason: null,
+          items: [
+            {
+              id: 'purchase-item-2',
+              purchaseId: 'purchase-2',
+              productId: 'product-tapa',
+              purchaseUnit: 'pack',
+              purchaseQuantity: 2,
+              unitsPerPackage: 12,
+              totalBaseUnits: 24,
+              unitPriceCents: 1_800,
+              totalPriceCents: 3_600,
+              costPerBaseUnitCents: 150,
+              notes: null,
+            },
+          ],
+          stockMovements: [],
+        },
+      ],
+    });
+    const app = createFinanceApp(repository);
+
+    const updateResponse = await request(app)
+      .put('/api/v1/finance/products/product-tapa')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: ' Tapas premium ', currentStockQuantityBase: 48 });
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.product).toMatchObject({
+      id: 'product-tapa',
+      name: 'Tapas premium',
+      stockQuantityBase: 48,
+    });
+    expect(createStockMovement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        movementType: 'adjustment',
+        quantityBase: 12,
+        notes: 'Stock correction to 48',
+      }),
+    );
+
+    const historyResponse = await request(app)
+      .get('/api/v1/finance/products/product-tapa/history')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(historyResponse.status).toBe(200);
+    expect(historyResponse.body.purchaseHistory).toHaveLength(2);
+
+    const purchasesResponse = await request(app)
+      .get('/api/v1/finance/purchases')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(purchasesResponse.status).toBe(200);
+    expect(purchasesResponse.body.purchases[0].itemImpacts).toEqual([
+      {
+        purchaseItemId: 'purchase-item-2',
+        stockBeforeBase: 12,
+        stockAfterBase: 36,
+        previousCostPerBaseUnitCents: 100,
+        newCostPerBaseUnitCents: 150,
+        priceDeltaCents: 50,
+        priceDeltaPercent: 50,
+      },
+    ]);
+    expect(updateProduct).toHaveBeenCalledWith(
+      'product-tapa',
+      expect.objectContaining({ normalizedName: 'tapas premium' }),
     );
   });
 

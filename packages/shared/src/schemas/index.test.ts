@@ -12,11 +12,14 @@ import {
   createOrderSchema,
   deliveryTimeSchema,
   deliveryTypeSchema,
+  financeAssumptionsSchema,
   financeBaseUnitSchema,
   financeCostingPreviewOrderSchema,
   financeProductCategorySchema,
+  financePurchaseItemImpactSchema,
   orderStatusSchema,
   updateFinanceBaseCostRuleSchema,
+  updateFinanceProductSchema,
   updateFinanceRecipeSchema,
   updateSettingSchema,
 } from './index';
@@ -159,6 +162,64 @@ describe('shared domain schemas', () => {
         ],
       }).success,
     ).toBe(false);
+  });
+
+  it('validates finance product updates, assumption settings, and purchase impacts', () => {
+    expect(
+      updateFinanceProductSchema.parse({
+        name: ' Tapas criollas ',
+        currentStockQuantityBase: 144,
+      }),
+    ).toEqual({
+      name: 'Tapas criollas',
+      currentStockQuantityBase: 144,
+    });
+    expect(updateFinanceProductSchema.safeParse({ currentStockQuantityBase: -1 }).success).toBe(
+      false,
+    );
+    expect(updateFinanceProductSchema.safeParse({}).success).toBe(false);
+
+    expect(
+      financeAssumptionsSchema.parse({
+        servicePercent: 20,
+        targetMarginPercent: 50,
+      }),
+    ).toEqual({
+      servicePercent: 20,
+      targetMarginPercent: 50,
+    });
+    expect(financeAssumptionsSchema.safeParse({ servicePercent: 120 }).success).toBe(false);
+
+    expect(
+      financePurchaseItemImpactSchema.parse({
+        purchaseItemId: 'purchase-item-1',
+        stockBeforeBase: 12,
+        stockAfterBase: 156,
+        previousCostPerBaseUnitCents: 1_250,
+        newCostPerBaseUnitCents: 1_500,
+        priceDeltaCents: 250,
+        priceDeltaPercent: 20,
+      }),
+    ).toEqual({
+      purchaseItemId: 'purchase-item-1',
+      stockBeforeBase: 12,
+      stockAfterBase: 156,
+      previousCostPerBaseUnitCents: 1_250,
+      newCostPerBaseUnitCents: 1_500,
+      priceDeltaCents: 250,
+      priceDeltaPercent: 20,
+    });
+    expect(
+      financePurchaseItemImpactSchema.parse({
+        purchaseItemId: 'purchase-item-2',
+        stockBeforeBase: null,
+        stockAfterBase: null,
+        previousCostPerBaseUnitCents: null,
+        newCostPerBaseUnitCents: 1_500,
+        priceDeltaCents: null,
+        priceDeltaPercent: null,
+      }).priceDeltaPercent,
+    ).toBeNull();
   });
 
   it('validates finance rules, recipes, stock adjustments, and costing previews', () => {

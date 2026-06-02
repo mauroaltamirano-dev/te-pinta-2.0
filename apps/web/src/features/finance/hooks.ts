@@ -2,10 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   CreateFinanceBaseCostRuleInput,
+  CreateFinanceProductInput,
+  CreateFinancePurchaseInput,
   CancelFinancePurchaseInput,
   FinanceCostingPreviewOrderInput,
   FinanceProductFilters,
   FinancePurchaseFilters,
+  UpdateFinanceProductInput,
   FinanceStockFilters,
   UpdateFinanceBaseCostRuleInput,
   UpdateFinanceRecipeInput,
@@ -14,6 +17,7 @@ import {
   createFinanceBaseCostRule,
   createFinanceProduct,
   createFinancePurchase,
+  getFinanceProductHistory,
   createFinanceStockAdjustment,
   cancelFinancePurchase,
   deleteFinanceBaseCostRule,
@@ -24,6 +28,7 @@ import {
   listFinanceStock,
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
+  updateFinanceProduct,
   updateFinanceRecipe,
 } from './api';
 
@@ -31,6 +36,7 @@ export const financeQueryKeys = {
   all: ['finance'] as const,
   products: (filters: FinanceProductFilters = {}) =>
     [...financeQueryKeys.all, 'products', filters] as const,
+  productHistory: (id: string) => [...financeQueryKeys.all, 'products', id, 'history'] as const,
   stock: (filters: FinanceStockFilters = {}) =>
     [...financeQueryKeys.all, 'stock', filters] as const,
   baseCostRules: () => [...financeQueryKeys.all, 'base-cost-rules'] as const,
@@ -43,6 +49,15 @@ export const useFinanceProducts = (filters: FinanceProductFilters = {}) =>
   useQuery({
     queryKey: financeQueryKeys.products(filters),
     queryFn: () => listFinanceProducts(filters),
+    staleTime: 20_000,
+  });
+
+
+export const useFinanceProductHistory = (id: string, enabled = true) =>
+  useQuery({
+    queryKey: financeQueryKeys.productHistory(id),
+    queryFn: () => getFinanceProductHistory(id),
+    enabled: enabled && Boolean(id),
     staleTime: 20_000,
   });
 
@@ -78,7 +93,18 @@ export const useCreateFinanceProduct = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createFinanceProduct,
+    mutationFn: (input: CreateFinanceProductInput) => createFinanceProduct(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
+  });
+};
+
+
+export const useUpdateFinanceProduct = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: UpdateFinanceProductInput }) =>
+      updateFinanceProduct(id, updates),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
   });
 };
@@ -87,7 +113,7 @@ export const useCreateFinancePurchase = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createFinancePurchase,
+    mutationFn: (input: CreateFinancePurchaseInput) => createFinancePurchase(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
   });
 };

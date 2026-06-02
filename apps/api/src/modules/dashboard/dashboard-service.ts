@@ -1,4 +1,9 @@
-import type { DashboardQuery, DeliveryTime, OrderStatus } from '@te-pinta/shared';
+import {
+  getBusinessDateIso,
+  type DashboardQuery,
+  type DeliveryTime,
+  type OrderStatus,
+} from '@te-pinta/shared';
 
 export type DashboardOrderItem = {
   menuItemId: string;
@@ -26,6 +31,26 @@ export type DashboardTopVariety = {
   menuItemId: string;
   name: string;
   quantity: number;
+};
+
+export type DashboardWeekRange = {
+  startDate: string;
+  endDate: string;
+};
+
+export type DashboardVarietyWeekComparison = {
+  menuItemId: string;
+  name: string;
+  currentWeekQuantity: number;
+  previousWeekQuantity: number;
+  difference: number;
+  changePercent: number | null;
+};
+
+export type DashboardWeeklyVarietyAnalytics = {
+  currentWeek: DashboardWeekRange;
+  previousWeek: DashboardWeekRange;
+  varieties: DashboardVarietyWeekComparison[];
 };
 
 export type DashboardTopClient = {
@@ -109,6 +134,7 @@ export type DailyDashboard = {
   totals: DashboardTotals;
   rangeTotals: Record<DashboardRange, DashboardTotals>;
   rangeAnalytics: Record<DashboardRange, DashboardRangeAnalytics>;
+  weeklyVarietyAnalytics: DashboardWeeklyVarietyAnalytics;
   varietySales: {
     all: DashboardTopVariety[];
     last30: DashboardTopVariety[];
@@ -123,7 +149,12 @@ export type DashboardRepository = {
 
 const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 
-const toIsoDate = (date: Date): string => date.toISOString().slice(0, 10);
+const toIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const parseIsoDate = (date: string): Date => {
   const [year, month, day] = date.split('-').map(Number);
@@ -134,6 +165,12 @@ const addDays = (date: Date, days: number): Date => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
+};
+
+const startOfMondayWeek = (date: Date): Date => {
+  const day = date.getDay();
+  const daysSinceMonday = (day + 6) % 7;
+  return addDays(date, -daysSinceMonday);
 };
 
 const isFinalized = (order: DashboardOrder): boolean =>
@@ -168,6 +205,76 @@ const buildTopVarieties = (orders: DashboardOrder[]): DashboardTopVariety[] => {
   }
 
   return [...varieties.values()].sort((a, b) => b.quantity - a.quantity);
+};
+
+const buildVarietyQuantityMap = (orders: DashboardOrder[]): Map<string, DashboardTopVariety> => {
+  const varieties = new Map<string, DashboardTopVariety>();
+
+  for (const order of orders) {
+    for (const item of order.items) {
+      const current = varieties.get(item.menuItemId) ?? {
+        menuItemId: item.menuItemId,
+        name: item.menuItemName,
+        quantity: 0,
+      };
+      current.quantity += item.quantity;
+      varieties.set(item.menuItemId, current);
+    }
+  }
+
+  return varieties;
+};
+
+const buildWeeklyVarietyAnalytics = (
+  orders: DashboardOrder[],
+  anchorDate: Date,
+): DashboardWeeklyVarietyAnalytics => {
+  const currentWeekStart = startOfMondayWeek(anchorDate);
+  const currentWeekEnd = addDays(currentWeekStart, 6);
+  const previousWeekStart = addDays(currentWeekStart, -7);
+  const previousWeekEnd = addDays(currentWeekStart, -1);
+  const currentWeekRange = {
+    startDate: toIsoDate(currentWeekStart),
+    endDate: toIsoDate(currentWeekEnd),
+  };
+  const previousWeekRange = {
+    startDate: toIsoDate(previousWeekStart),
+    endDate: toIsoDate(previousWeekEnd),
+  };
+  const filterByRange = ({ startDate, endDate }: DashboardWeekRange): DashboardOrder[] =>
+    orders.filter((order) => order.deliveryDate >= startDate && order.deliveryDate <= endDate);
+  const currentWeekVarieties = buildVarietyQuantityMap(filterByRange(currentWeekRange));
+  const previousWeekVarieties = buildVarietyQuantityMap(filterByRange(previousWeekRange));
+  const menuItemIds = new Set([...currentWeekVarieties.keys(), ...previousWeekVarieties.keys()]);
+
+  return {
+    currentWeek: currentWeekRange,
+    previousWeek: previousWeekRange,
+    varieties: [...menuItemIds]
+      .map((menuItemId) => {
+        const current = currentWeekVarieties.get(menuItemId);
+        const previous = previousWeekVarieties.get(menuItemId);
+        const currentWeekQuantity = current?.quantity ?? 0;
+        const previousWeekQuantity = previous?.quantity ?? 0;
+        const difference = currentWeekQuantity - previousWeekQuantity;
+
+        return {
+          menuItemId,
+          name: current?.name ?? previous?.name ?? 'Sin nombre',
+          currentWeekQuantity,
+          previousWeekQuantity,
+          difference,
+          changePercent:
+            previousWeekQuantity > 0 ? roundMoney((difference / previousWeekQuantity) * 100) : null,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.currentWeekQuantity - a.currentWeekQuantity ||
+          b.previousWeekQuantity - a.previousWeekQuantity ||
+          a.name.localeCompare(b.name, 'es-AR'),
+      ),
+  };
 };
 
 const buildTopClients = (orders: DashboardOrder[]): DashboardTopClient[] => {
@@ -245,7 +352,8 @@ export const getDailyDashboard = async (
   now: () => Date = () => new Date(),
 ): Promise<DailyDashboard> => {
   const currentDate = now();
-  const date = query.date ?? toIsoDate(currentDate);
+  const currentBusinessDate = getBusinessDateIso(currentDate);
+  const date = query.date ?? currentBusinessDate;
   const anchorDate = parseIsoDate(date);
   const allOrders = await repository.listOrders();
   const selectedDateOrders = allOrders.filter((order) => order.deliveryDate === date);
@@ -287,12 +395,14 @@ export const getDailyDashboard = async (
     };
   };
   const buildCalendarRange = (length: number): DashboardCalendarDay[] =>
-    Array.from({ length }, (_, index) => buildCalendarDay(toIsoDate(addDays(anchorDate, index - length + 1))));
+    Array.from({ length }, (_, index) =>
+      buildCalendarDay(toIsoDate(addDays(anchorDate, index - length + 1))),
+    );
   const buildHistoricalCalendar = (orders: DashboardOrder[]): DashboardCalendarDay[] =>
     [...new Set(orders.map((order) => order.deliveryDate))]
       .sort((a, b) => a.localeCompare(b))
       .map(buildCalendarDay);
-  const todayIso = toIsoDate(currentDate);
+  const todayIso = currentBusinessDate;
   const nextSevenDays = Array.from({ length: 7 }, (_, index) =>
     buildCalendarDay(toIsoDate(addDays(anchorDate, index))),
   );
@@ -362,6 +472,7 @@ export const getDailyDashboard = async (
     totals: rangeTotals.all,
     rangeTotals,
     rangeAnalytics,
+    weeklyVarietyAnalytics: buildWeeklyVarietyAnalytics(allOrders, anchorDate),
     varietySales: {
       all: buildTopVarieties(allOrders),
       last30: buildTopVarieties(last30Orders),

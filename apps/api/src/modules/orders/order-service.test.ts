@@ -551,6 +551,52 @@ describe('order service', () => {
     });
   });
 
+  it('persists the applied per-started-dozen cooking fee for new cooked delivery orders', async () => {
+    let persisted: Parameters<OrderRepository['createOrderWithItems']>[0] | undefined;
+    const repository = createRepository({
+      getSetting: async (key) => {
+        const settings: Record<string, string> = {
+          delivery_fee: '1200',
+          cooked_order_fee: '1500',
+          promo_bulk_dozen_threshold: '3',
+          promo_bulk_discount_percent: '10',
+          promo_combined_dozen_quantity: '12',
+          promo_combined_dozen_price: '15000',
+          addon_yasgua_salsa_price: '500',
+          addon_yasgua_cremosa_price: '1000',
+        };
+        return settings[key] ?? null;
+      },
+      createOrderWithItems: async (input) => {
+        persisted = input;
+        return orderDetail(input);
+      },
+    });
+
+    await createOrder(
+      {
+        customer: { existingCustomerId: 'customer-1' },
+        deliveryDate: '2026-05-10',
+        deliveryTime: 'noche',
+        deliveryType: 'envio',
+        cooked: true,
+        discountPercent: 0,
+        deliveryFee: 0,
+        items: [{ menuItemId: 'menu-1', quantity: 24 }],
+        addons: [],
+      },
+      repository,
+    );
+
+    expect(persisted).toMatchObject({
+      cooked: true,
+      subtotal: 30000,
+      deliveryFee: 1200,
+      cookingFee: 3000,
+      total: 34200,
+    });
+  });
+
   it('throws 404 when an order references a missing menu item', async () => {
     const repository = createRepository({ getMenuItemsByIds: async () => [] });
 
@@ -774,20 +820,20 @@ describe('order service', () => {
 
     expect(persisted).toMatchObject({
       cooked: true,
-      cookingFee: 2000,
-      total: 18500,
+      cookingFee: 4000,
+      total: 20500,
       costTotalCents: 500000,
-      grossProfitCents: 1350000,
-      profitMarginPercent: 72.97,
+      grossProfitCents: 1550000,
+      profitMarginPercent: 75.61,
     });
     expect(persisted?.costSnapshotJson).toMatchObject({
       totalCostCents: 500000,
       profitSummary: {
-        saleTotalCents: 1850000,
+        saleTotalCents: 2050000,
         totalCostCents: 500000,
-        grossProfitCents: 1350000,
-        profitMarginPercent: 72.97,
-        costRatioPercent: 27.03,
+        grossProfitCents: 1550000,
+        profitMarginPercent: 75.61,
+        costRatioPercent: 24.39,
       },
       warnings: [],
     });

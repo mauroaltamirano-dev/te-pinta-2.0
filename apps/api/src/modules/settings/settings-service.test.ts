@@ -12,7 +12,7 @@ const setting = (overrides: Partial<Setting> = {}): Setting => ({
 
 describe('settings service', () => {
   it('updates key-value settings', async () => {
-    let stored = setting();
+    let stored = setting({ key: 'finance_dashboard_service_percent', value: '20' });
     const repository: SettingsRepository = {
       list: async () => [stored],
       get: async (key) => (key === stored.key ? stored : null),
@@ -22,9 +22,12 @@ describe('settings service', () => {
       },
     };
 
-    const result = await updateSetting({ key: 'delivery_fee', value: '1500' }, repository);
+    const result = await updateSetting(
+      { key: 'finance_dashboard_service_percent', value: '25' },
+      repository,
+    );
 
-    expect(result).toEqual({ key: 'delivery_fee', value: '1500' });
+    expect(result).toEqual({ key: 'finance_dashboard_service_percent', value: '25' });
   });
 
   it('throws 404 when reading a missing setting', async () => {
@@ -52,5 +55,7 @@ describe('settings service', () => {
     expect(result).toContainEqual({ key: 'cooked_order_fee', value: '0' });
     expect(result).toContainEqual({ key: 'promo_bulk_discount_percent', value: '10' });
     expect(result).toContainEqual({ key: 'addon_yasgua_cremosa_price', value: '1000' });
+    expect(result).toContainEqual({ key: 'finance_dashboard_service_percent', value: '20' });
+    expect(result).toContainEqual({ key: 'finance_dashboard_target_margin_percent', value: '50' });
   });
 });

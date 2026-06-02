@@ -11,6 +11,7 @@ import {
   financePurchaseFiltersSchema,
   financeStockFiltersSchema,
   updateFinanceBaseCostRuleSchema,
+  updateFinanceProductSchema,
   updateFinanceRecipeSchema,
 } from '@te-pinta/shared';
 
@@ -25,6 +26,7 @@ import {
   createFinanceStockAdjustment,
   cancelFinancePurchase,
   deleteFinanceBaseCostRule,
+  getFinanceProductHistory,
   getFinanceRecipe,
   getFinancePurchase,
   listFinanceBaseCostRules,
@@ -34,6 +36,7 @@ import {
   listFinanceStock,
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
+  updateFinanceProduct,
   updateFinanceRecipe,
   type FinanceRepository,
 } from './finance-service';
@@ -72,6 +75,34 @@ export const createFinanceRouter = ({
       try {
         const product = await createFinanceProduct(req.body, repository);
         res.status(201).json({ product });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.put(
+    '/products/:id',
+    validate({ params: idParamsSchema, body: updateFinanceProductSchema }),
+    async (req, res, next) => {
+      try {
+        const { id } = idParamsSchema.parse(req.params);
+        const product = await updateFinanceProduct(id, req.body, repository);
+        res.json({ product });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/products/:id/history',
+    validate({ params: idParamsSchema }),
+    async (req, res, next) => {
+      try {
+        const { id } = idParamsSchema.parse(req.params);
+        const purchaseHistory = await getFinanceProductHistory(id, repository);
+        res.json({ purchaseHistory });
       } catch (error) {
         next(error);
       }

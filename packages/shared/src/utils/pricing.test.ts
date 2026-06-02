@@ -221,6 +221,36 @@ describe('calculateOrderPromotion', () => {
     });
   });
 
+  it('applies the cooking fee once per started dozen', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [{ quantity: 24, subtotal: 30000 }],
+        cookingFee: 1500,
+      }),
+    ).toMatchObject({
+      subtotal: 30000,
+      totalQuantity: 24,
+      cookingFee: 3000,
+      total: 33000,
+    });
+  });
+
+  it('applies a started-dozen cooking fee while keeping delivery flat', () => {
+    expect(
+      calculateOrderPromotion({
+        items: [{ quantity: 13, subtotal: 16500 }],
+        deliveryFee: 1200,
+        cookingFee: 1500,
+      }),
+    ).toMatchObject({
+      subtotal: 16500,
+      totalQuantity: 13,
+      deliveryFee: 1200,
+      cookingFee: 3000,
+      total: 20700,
+    });
+  });
+
   it('keeps a larger manual discount when it beats the bulk promo', () => {
     expect(
       calculateOrderPromotion({

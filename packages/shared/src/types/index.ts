@@ -17,6 +17,7 @@ import type {
   dashboardQuerySchema,
   deliveryTimeSchema,
   deliveryTypeSchema,
+  financeAssumptionsSchema,
   financeBaseUnitSchema,
   financeCostComponentTypeSchema,
   financeCostingPreviewOrderItemSchema,
@@ -25,6 +26,7 @@ import type {
   financeManualStockMovementTypeSchema,
   financeProductCategorySchema,
   financeProductFiltersSchema,
+  financePurchaseItemImpactSchema,
   financePurchaseFiltersSchema,
   financePurchaseUnitSchema,
   financeRecipeItemInputSchema,
@@ -77,11 +79,13 @@ export type UpdateIngredientInput = z.infer<typeof updateIngredientSchema>;
 export type CreateFinanceProductInput = z.infer<typeof createFinanceProductSchema>;
 export type UpdateFinanceProductInput = z.infer<typeof updateFinanceProductSchema>;
 export type FinanceProductFilters = z.infer<typeof financeProductFiltersSchema>;
+export type FinanceAssumptions = z.infer<typeof financeAssumptionsSchema>;
 
 export type CreateFinancePurchaseItemInput = z.infer<typeof createFinancePurchaseItemSchema>;
 export type CreateFinancePurchaseInput = z.infer<typeof createFinancePurchaseSchema>;
 export type UpdateFinancePurchaseInput = z.infer<typeof updateFinancePurchaseSchema>;
 export type FinancePurchaseFilters = z.infer<typeof financePurchaseFiltersSchema>;
+export type FinancePurchaseItemImpact = z.infer<typeof financePurchaseItemImpactSchema>;
 export type CancelFinancePurchaseInput = z.infer<typeof cancelFinancePurchaseSchema>;
 
 export type CreateFinanceBaseCostRuleInput = z.infer<typeof createFinanceBaseCostRuleSchema>;

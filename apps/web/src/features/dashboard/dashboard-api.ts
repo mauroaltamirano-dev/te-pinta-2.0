@@ -8,6 +8,26 @@ export type DashboardTopVariety = {
   quantity: number;
 };
 
+export type DashboardWeekRange = {
+  startDate: string;
+  endDate: string;
+};
+
+export type DashboardVarietyWeekComparison = {
+  menuItemId: string;
+  name: string;
+  currentWeekQuantity: number;
+  previousWeekQuantity: number;
+  difference: number;
+  changePercent: number | null;
+};
+
+export type DashboardWeeklyVarietyAnalytics = {
+  currentWeek: DashboardWeekRange;
+  previousWeek: DashboardWeekRange;
+  varieties: DashboardVarietyWeekComparison[];
+};
+
 export type DashboardTopClient = {
   customerId: string;
   name: string;
@@ -89,6 +109,7 @@ export type DailyDashboard = {
   totals: DashboardTotals;
   rangeTotals: Record<DashboardRange, DashboardTotals>;
   rangeAnalytics?: Record<DashboardRange, DashboardRangeAnalytics>;
+  weeklyVarietyAnalytics?: DashboardWeeklyVarietyAnalytics;
   varietySales: {
     all: DashboardTopVariety[];
     last30: DashboardTopVariety[];

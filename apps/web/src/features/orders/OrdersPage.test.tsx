@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { getBusinessDateIso } from '@te-pinta/shared';
 
 import { createQueryClient } from '@/lib/query-client';
 
@@ -209,13 +210,6 @@ const mockDesktopViewport = (isDesktop: boolean) => {
       dispatchEvent: vi.fn(),
     })),
   });
-};
-
-const toLocalIsoDate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 };
 
 const addDays = (date: Date, days: number): Date => {
@@ -481,8 +475,8 @@ describe('OrdersPage', () => {
 
   it('highlights delivery dates that are today or tomorrow in the order preview', async () => {
     const today = new Date();
-    const todayIso = toLocalIsoDate(today);
-    const tomorrowIso = toLocalIsoDate(addDays(today, 1));
+    const todayIso = getBusinessDateIso(today);
+    const tomorrowIso = getBusinessDateIso(addDays(today, 1));
 
     vi.mocked(listOrders).mockResolvedValue(
       orderListResponse([
@@ -994,10 +988,11 @@ describe('OrdersPage', () => {
     expect(message).toContain('*Productos:*');
     expect(message).toContain('• 12u. Carne suave — $ 12.000');
     expect(message).toContain('• 12u. Humita — $ 12.000');
-    expect(message).toContain('*Entrega:*');
-    expect(message).toContain('• Envío');
+    expect(message).toContain('*Resumen:*');
     expect(message).toContain('*Total: $ 23.100*');
-    expect(message).toContain('Pago: Pendiente');
+    expect(message).not.toContain('*Entrega:*');
+    expect(message).not.toContain('• Fecha:');
+    expect(message).not.toContain('Pago: Pendiente');
     expect(message).not.toContain('Hola');
     expect(await detail.findByRole('status')).toHaveTextContent(/detalle copiado/i);
   });

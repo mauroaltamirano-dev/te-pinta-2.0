@@ -422,7 +422,7 @@ const buildPersistInput = async (
     notes: input.notes || null,
     discountPercent: pricing.discountPercent,
     deliveryFee,
-    cookingFee,
+    cookingFee: pricing.cookingFee,
     subtotal: pricing.promoSubtotal,
     total,
     ...costSnapshot,

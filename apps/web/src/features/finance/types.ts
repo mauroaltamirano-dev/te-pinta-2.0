@@ -11,12 +11,15 @@ import type {
   FinanceCostWarning,
   FinanceOrderCostBreakdown,
   FinanceProductCategory,
+  FinanceProductCostHistoryItem,
   FinanceProductFilters,
   FinancePurchaseFilters,
   FinanceRoundingMode,
   FinanceStockFilters,
+  FinancePurchaseItemImpact,
   FinanceStockMovementType,
   UpdateFinanceBaseCostRuleInput,
+  UpdateFinanceProductInput,
   UpdateFinanceRecipeInput,
 } from '@te-pinta/shared';
 
@@ -33,12 +36,15 @@ export type {
   FinanceCostWarning,
   FinanceOrderCostBreakdown,
   FinanceProductCategory,
+  FinanceProductCostHistoryItem,
   FinanceProductFilters,
   FinancePurchaseFilters,
   FinanceRoundingMode,
   FinanceStockFilters,
+  FinancePurchaseItemImpact,
   FinanceStockMovementType,
   UpdateFinanceBaseCostRuleInput,
+  UpdateFinanceProductInput,
   UpdateFinanceRecipeInput,
 };
 
@@ -84,8 +90,11 @@ export type FinancePurchaseDetail = {
   canceledAt: string | Date | null;
   canceledReason: string | null;
   items: FinancePurchaseItem[];
+  itemImpacts?: FinancePurchaseItemImpact[];
   stockMovements?: FinanceStockMovement[];
 };
+
+export type FinanceProductHistoryItem = FinanceProductCostHistoryItem;
 
 export type FinanceStockMovement = {
   id: string;

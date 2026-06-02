@@ -21,12 +21,14 @@ import {
   type FinanceProductCategory,
   type FinanceProductFilters,
   type FinanceProductCostHistoryItem,
+  type FinancePurchaseItemImpact,
   type FinancePurchaseFilters,
   type FinanceRecipeCostItem,
   type FinanceRoundingMode,
   type FinanceStockFilters,
   type FinanceStockMovementType,
   type UpdateFinanceBaseCostRuleInput,
+  type UpdateFinanceProductInput,
   type UpdateFinanceRecipeInput,
 } from '@te-pinta/shared';
 
@@ -49,6 +51,11 @@ export type FinanceProductWithMetrics = FinanceProduct & {
   stockQuantityBase: number;
   purchaseCount: number;
   warnings: FinanceCostWarning[];
+};
+
+export type FinanceProductUpdateResult = FinanceProduct & {
+  stockQuantityBase: number;
+  stockMovement: FinanceStockMovement | null;
 };
 
 export type FinanceProductRecord = {
@@ -100,6 +107,7 @@ export type FinancePurchaseDetail = {
   canceledReason: string | null;
   items: PersistFinancePurchaseItem[];
   stockMovements?: FinanceStockMovement[];
+  itemImpacts?: FinancePurchaseItemImpact[];
 };
 
 export type FinanceStockMovement = PersistFinanceStockMovement & {
@@ -177,7 +185,15 @@ export type PersistFinanceRecipeInput = {
 export type FinanceRepository = {
   listProducts(filters?: FinanceProductFilters): Promise<FinanceProductRecord[]>;
   createProduct(product: FinanceProduct): Promise<FinanceProduct>;
+  updateProduct(
+    id: string,
+    updates: Partial<Omit<FinanceProduct, 'id'>>,
+  ): Promise<FinanceProduct | null>;
   getProductsByIds(ids: string[]): Promise<FinanceProduct[]>;
+  listProductPurchaseHistory(
+    productIds: string[],
+  ): Promise<Map<string, FinanceProductCostHistoryItem[]>>;
+  listStockMovementsByProducts(productIds: string[]): Promise<FinanceStockMovement[]>;
   createPurchaseWithItems(input: PersistFinancePurchaseInput): Promise<FinancePurchaseDetail>;
   listPurchases(filters?: FinancePurchaseFilters): Promise<FinancePurchaseDetail[]>;
   getPurchase(id: string): Promise<FinancePurchaseDetail | null>;
@@ -258,6 +274,57 @@ export const createFinanceProduct = (
   });
 };
 
+export const updateFinanceProduct = async (
+  id: string,
+  input: UpdateFinanceProductInput,
+  repository: FinanceRepository,
+): Promise<FinanceProductUpdateResult> => {
+  const products = await getProductsById(repository, [id]);
+  const currentProduct = products.get(id);
+  if (!currentProduct) {
+    throw new ApiError(404, 'Finance product not found', 'FINANCE_PRODUCT_NOT_FOUND');
+  }
+
+  const productUpdates = toProductUpdates(input);
+  const updatedProduct =
+    Object.keys(productUpdates).length > 0
+      ? await repository.updateProduct(id, productUpdates)
+      : currentProduct;
+  if (!updatedProduct) {
+    throw new ApiError(404, 'Finance product not found', 'FINANCE_PRODUCT_NOT_FOUND');
+  }
+
+  const currentStockQuantityBase = await getCurrentStockQuantity(repository, id);
+  const stockMovement =
+    input.currentStockQuantityBase === undefined
+      ? null
+      : await createCurrentStockCorrection(
+          input.currentStockQuantityBase,
+          currentProduct,
+          currentStockQuantityBase,
+          repository,
+        );
+
+  return {
+    ...updatedProduct,
+    stockQuantityBase:
+      input.currentStockQuantityBase === undefined
+        ? currentStockQuantityBase
+        : input.currentStockQuantityBase,
+    stockMovement,
+  };
+};
+
+export const getFinanceProductHistory = async (
+  productId: string,
+  repository: FinanceRepository,
+): Promise<FinanceProductCostHistoryItem[]> => {
+  await ensureFinanceProductExists(repository, productId);
+  const historyByProduct = await repository.listProductPurchaseHistory([productId]);
+
+  return historyByProduct.get(productId) ?? [];
+};
+
 export const createFinancePurchase = async (
   input: CreateFinancePurchaseInput,
   repository: FinanceRepository,
@@ -323,10 +390,11 @@ export const createFinancePurchase = async (
   });
 };
 
-export const listFinancePurchases = (
+export const listFinancePurchases = async (
   repository: FinanceRepository,
   filters?: FinancePurchaseFilters,
-): Promise<FinancePurchaseDetail[]> => repository.listPurchases(filters);
+): Promise<FinancePurchaseDetail[]> =>
+  enrichPurchaseDetailsWithImpacts(await repository.listPurchases(filters), repository);
 
 export const getFinancePurchase = async (
   id: string,
@@ -337,7 +405,7 @@ export const getFinancePurchase = async (
     throw new ApiError(404, 'Finance purchase not found', 'FINANCE_PURCHASE_NOT_FOUND');
   }
 
-  return purchase;
+  return enrichPurchaseDetailWithImpacts(purchase, repository);
 };
 
 export const cancelFinancePurchase = async (
@@ -345,7 +413,10 @@ export const cancelFinancePurchase = async (
   input: CancelFinancePurchaseInput,
   repository: FinanceRepository,
 ): Promise<FinancePurchaseDetail> => {
-  const purchase = await getFinancePurchase(id, repository);
+  const purchase = await repository.getPurchase(id);
+  if (!purchase) {
+    throw new ApiError(404, 'Finance purchase not found', 'FINANCE_PURCHASE_NOT_FOUND');
+  }
   if (purchase.canceledAt) {
     return purchase;
   }
@@ -549,6 +620,171 @@ export const previewFinanceOrderCost = async (
     ...breakdown,
     warnings: [...breakdown.warnings, ...recipeWarnings],
   };
+};
+
+const toProductUpdates = (
+  input: UpdateFinanceProductInput,
+): Partial<Omit<FinanceProduct, 'id'>> => ({
+  ...(input.name !== undefined
+    ? { name: input.name.trim(), normalizedName: normalizeProductName(input.name) }
+    : {}),
+  ...(input.category !== undefined ? { category: input.category } : {}),
+  ...(input.baseUnit !== undefined ? { baseUnit: input.baseUnit } : {}),
+  ...(input.stockTracking !== undefined ? { stockTracking: input.stockTracking } : {}),
+  ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+});
+
+const getCurrentStockQuantity = async (
+  repository: FinanceRepository,
+  productId: string,
+): Promise<number> => {
+  const movements = await repository.listStockMovementsByProducts([productId]);
+
+  return movements
+    .filter((movement) => movement.productId === productId)
+    .reduce((total, movement) => total + movement.quantityBase, 0);
+};
+
+const createCurrentStockCorrection = async (
+  desiredStockQuantityBase: number,
+  product: FinanceProduct,
+  currentStockQuantityBase: number,
+  repository: FinanceRepository,
+): Promise<FinanceStockMovement | null> => {
+  if (!product.stockTracking) {
+    throw new ApiError(
+      400,
+      'Finance product does not track stock',
+      'FINANCE_PRODUCT_NOT_STOCK_TRACKED',
+    );
+  }
+
+  const delta = desiredStockQuantityBase - currentStockQuantityBase;
+  if (delta === 0) {
+    return null;
+  }
+
+  return repository.createStockMovement({
+    id: randomUUID(),
+    productId: product.id,
+    movementType: 'adjustment',
+    quantityBase: delta,
+    sourcePurchaseItemId: null,
+    notes: `Stock correction to ${desiredStockQuantityBase}`,
+  });
+};
+
+const enrichPurchaseDetailWithImpacts = async (
+  purchase: FinancePurchaseDetail,
+  repository: FinanceRepository,
+): Promise<FinancePurchaseDetail> => {
+  const [enriched] = await enrichPurchaseDetailsWithImpacts([purchase], repository);
+  return enriched ?? { ...purchase, itemImpacts: [] };
+};
+
+const enrichPurchaseDetailsWithImpacts = async (
+  purchases: FinancePurchaseDetail[],
+  repository: FinanceRepository,
+): Promise<FinancePurchaseDetail[]> => {
+  const productIds = [
+    ...new Set(purchases.flatMap((purchase) => purchase.items.map((item) => item.productId))),
+  ];
+  if (productIds.length === 0) {
+    return purchases.map((purchase) => ({ ...purchase, itemImpacts: [] }));
+  }
+
+  const [historyByProduct, stockMovements] = await Promise.all([
+    repository.listProductPurchaseHistory(productIds),
+    repository.listStockMovementsByProducts(productIds),
+  ]);
+  const sortedStockMovementsByProduct = groupSortedStockMovements(stockMovements);
+
+  return purchases.map((purchase) => ({
+    ...purchase,
+    itemImpacts: purchase.items.map((item) =>
+      calculatePurchaseItemImpact(
+        item,
+        historyByProduct.get(item.productId) ?? [],
+        sortedStockMovementsByProduct.get(item.productId) ?? [],
+      ),
+    ),
+  }));
+};
+
+const calculatePurchaseItemImpact = (
+  item: PersistFinancePurchaseItem,
+  history: FinanceProductCostHistoryItem[],
+  stockMovements: FinanceStockMovement[],
+): FinancePurchaseItemImpact => {
+  const currentHistoryIndex = history.findIndex((historyItem) => historyItem.id === item.id);
+  const previousCostPerBaseUnitCents =
+    currentHistoryIndex > 0
+      ? (history[currentHistoryIndex - 1]?.costPerBaseUnitCents ?? null)
+      : null;
+  const priceDeltaCents =
+    previousCostPerBaseUnitCents === null
+      ? null
+      : item.costPerBaseUnitCents - previousCostPerBaseUnitCents;
+
+  const movementIndex = stockMovements.findIndex(
+    (movement) =>
+      movement.sourcePurchaseItemId === item.id && movement.movementType === 'purchase_in',
+  );
+  const stockBeforeBase =
+    movementIndex === -1
+      ? null
+      : stockMovements
+          .slice(0, movementIndex)
+          .reduce((total, movement) => total + movement.quantityBase, 0);
+  const stockAfterBase =
+    stockBeforeBase === null
+      ? null
+      : stockBeforeBase + (stockMovements[movementIndex]?.quantityBase ?? 0);
+
+  return {
+    purchaseItemId: item.id,
+    stockBeforeBase,
+    stockAfterBase,
+    previousCostPerBaseUnitCents,
+    newCostPerBaseUnitCents: item.costPerBaseUnitCents,
+    priceDeltaCents,
+    priceDeltaPercent: calculatePriceDeltaPercent(priceDeltaCents, previousCostPerBaseUnitCents),
+  };
+};
+
+const groupSortedStockMovements = (
+  stockMovements: FinanceStockMovement[],
+): Map<string, FinanceStockMovement[]> => {
+  const grouped = new Map<string, FinanceStockMovement[]>();
+  for (const movement of stockMovements) {
+    grouped.set(movement.productId, [...(grouped.get(movement.productId) ?? []), movement]);
+  }
+
+  for (const [productId, movements] of grouped) {
+    grouped.set(
+      productId,
+      [...movements].sort(
+        (left, right) =>
+          left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id),
+      ),
+    );
+  }
+
+  return grouped;
+};
+
+const calculatePriceDeltaPercent = (
+  priceDeltaCents: number | null,
+  previousCostPerBaseUnitCents: number | null,
+): number | null => {
+  if (priceDeltaCents === null || previousCostPerBaseUnitCents === null) {
+    return null;
+  }
+  if (previousCostPerBaseUnitCents === 0) {
+    return null;
+  }
+
+  return Math.round((priceDeltaCents / previousCostPerBaseUnitCents) * 10_000) / 100;
 };
 
 const getProductsById = async (

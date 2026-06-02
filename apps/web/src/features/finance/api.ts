@@ -3,6 +3,7 @@ import {
   createFinanceBaseCostRuleSchema,
   createFinanceProductSchema,
   createFinancePurchaseSchema,
+  updateFinanceProductSchema,
   createFinanceStockAdjustmentSchema,
   financeCostingPreviewOrderSchema,
   updateFinanceBaseCostRuleSchema,
@@ -23,12 +24,14 @@ import type {
   FinanceProductFilters,
   FinancePurchaseFilters,
   FinanceProductWithMetrics,
+  FinanceProductHistoryItem,
   FinancePurchaseDetail,
   FinanceRecipe,
   FinanceStockFilters,
   FinanceStockItem,
   FinanceStockMovement,
   UpdateFinanceBaseCostRuleInput,
+  UpdateFinanceProductInput,
   UpdateFinanceRecipeInput,
 } from './types';
 
@@ -53,6 +56,30 @@ export const createFinanceProduct = async (
   );
 
   return response.data.product;
+};
+
+
+export const updateFinanceProduct = async (
+  id: string,
+  input: UpdateFinanceProductInput,
+): Promise<FinanceProductWithMetrics> => {
+  const payload = updateFinanceProductSchema.parse(input);
+  const response = await apiClient.put<{ product: FinanceProductWithMetrics }>(
+    `/finance/products/${id}`,
+    payload,
+  );
+
+  return response.data.product;
+};
+
+export const getFinanceProductHistory = async (
+  id: string,
+): Promise<FinanceProductHistoryItem[]> => {
+  const response = await apiClient.get<{ purchaseHistory: FinanceProductHistoryItem[] }>(
+    `/finance/products/${id}/history`,
+  );
+
+  return response.data.purchaseHistory;
 };
 
 export const createFinancePurchase = async (

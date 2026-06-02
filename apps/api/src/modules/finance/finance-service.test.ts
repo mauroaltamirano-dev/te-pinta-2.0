@@ -12,8 +12,11 @@ import {
   cancelFinancePurchase,
   createFinancePurchase,
   createFinanceStockAdjustment,
+  getFinanceProductHistory,
   listFinanceProducts,
+  listFinancePurchases,
   previewFinanceOrderCost,
+  updateFinanceProduct,
   updateFinanceRecipe,
 } from './finance-service';
 
@@ -54,7 +57,10 @@ const movement = (overrides: Partial<FinanceStockMovement> = {}): FinanceStockMo
 const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRepository => ({
   listProducts: async () => [],
   createProduct: async (input) => product(input),
+  updateProduct: async (id, updates) => product({ id, ...updates }),
   getProductsByIds: async () => [product()],
+  listProductPurchaseHistory: async () => new Map(),
+  listStockMovementsByProducts: async () => [],
   createPurchaseWithItems: async (input) => purchaseDetail({ id: input.id, items: input.items }),
   listPurchases: async () => [],
   getPurchase: async () => null,
@@ -329,6 +335,187 @@ describe('finance service', () => {
       purchasedQuantityBase: 24,
       purchaseCount: 2,
     });
+  });
+
+  it('updates finance product names and records current-stock corrections as adjustment deltas', async () => {
+    const updateProduct = vi.fn<FinanceRepository['updateProduct']>(async (id, updates) =>
+      product({ id, ...updates }),
+    );
+    const createStockMovement = vi.fn<FinanceRepository['createStockMovement']>(async (input) =>
+      movement({ ...input, createdAt: new Date('2026-05-31T10:00:00.000Z') }),
+    );
+    const repository = createRepository({
+      getProductsByIds: async () => [product({ id: 'product-tapa', stockTracking: true })],
+      listStockMovementsByProducts: async () => [
+        movement({ productId: 'product-tapa', quantityBase: 100 }),
+      ],
+      updateProduct,
+      createStockMovement,
+    });
+
+    const result = await updateFinanceProduct(
+      'product-tapa',
+      { name: ' Tapas premium ', currentStockQuantityBase: 144 },
+      repository,
+    );
+
+    expect(updateProduct).toHaveBeenCalledWith(
+      'product-tapa',
+      expect.objectContaining({
+        name: 'Tapas premium',
+        normalizedName: 'tapas premium',
+      }),
+    );
+    expect(createStockMovement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-tapa',
+        movementType: 'adjustment',
+        quantityBase: 44,
+        sourcePurchaseItemId: null,
+        notes: 'Stock correction to 144',
+      }),
+    );
+    expect(result).toMatchObject({
+      id: 'product-tapa',
+      name: 'Tapas premium',
+      stockQuantityBase: 144,
+    });
+
+    await expect(
+      updateFinanceProduct(
+        'missing-product',
+        { currentStockQuantityBase: 5 },
+        createRepository({ getProductsByIds: async () => [] }),
+      ),
+    ).rejects.toMatchObject(
+      new ApiError(404, 'Finance product not found', 'FINANCE_PRODUCT_NOT_FOUND'),
+    );
+  });
+
+  it('returns product purchase history and enriches purchases with stock and price impacts', async () => {
+    const purchaseHistory = [
+      {
+        id: 'purchase-item-1',
+        purchaseQuantity: 1,
+        unitsPerPackage: 12,
+        totalBaseUnits: 12,
+        totalPriceCents: 1_200,
+        costPerBaseUnitCents: 100,
+        purchasedAt: '2026-05-10',
+        createdAt: '2026-05-10T10:00:00.000Z',
+      },
+      {
+        id: 'purchase-item-2',
+        purchaseQuantity: 2,
+        unitsPerPackage: 12,
+        totalBaseUnits: 24,
+        totalPriceCents: 3_600,
+        costPerBaseUnitCents: 150,
+        purchasedAt: '2026-05-20',
+        createdAt: '2026-05-20T10:00:00.000Z',
+      },
+      {
+        id: 'purchase-item-3',
+        purchaseQuantity: 1,
+        unitsPerPackage: 12,
+        totalBaseUnits: 12,
+        totalPriceCents: 960,
+        costPerBaseUnitCents: 80,
+        purchasedAt: '2026-05-25',
+        createdAt: '2026-05-25T10:00:00.000Z',
+      },
+    ];
+    const repository = createRepository({
+      getProductsByIds: async () => [product({ id: 'product-tapa' })],
+      listProductPurchaseHistory: async () =>
+        new Map([
+          ['product-tapa', purchaseHistory],
+          ['product-harina', []],
+        ]),
+      listStockMovementsByProducts: async () => [
+        movement({
+          id: 'movement-previous',
+          productId: 'product-tapa',
+          quantityBase: 12,
+          sourcePurchaseItemId: 'purchase-item-1',
+          createdAt: new Date('2026-05-10T10:00:00.000Z'),
+        }),
+        movement({
+          id: 'movement-current',
+          productId: 'product-tapa',
+          quantityBase: 24,
+          sourcePurchaseItemId: 'purchase-item-2',
+          createdAt: new Date('2026-05-20T10:00:00.000Z'),
+        }),
+        movement({
+          id: 'movement-price-drop',
+          productId: 'product-tapa',
+          quantityBase: 12,
+          sourcePurchaseItemId: 'purchase-item-3',
+          createdAt: new Date('2026-05-25T10:00:00.000Z'),
+        }),
+      ],
+      listPurchases: async () => [
+        purchaseDetail({
+          id: 'purchase-2',
+          items: [
+            {
+              id: 'purchase-item-2',
+              purchaseId: 'purchase-2',
+              productId: 'product-tapa',
+              purchaseUnit: 'pack',
+              purchaseQuantity: 2,
+              unitsPerPackage: 12,
+              totalBaseUnits: 24,
+              unitPriceCents: 1_800,
+              totalPriceCents: 3_600,
+              costPerBaseUnitCents: 150,
+              notes: null,
+            },
+            {
+              id: 'purchase-item-3',
+              purchaseId: 'purchase-2',
+              productId: 'product-tapa',
+              purchaseUnit: 'pack',
+              purchaseQuantity: 1,
+              unitsPerPackage: 12,
+              totalBaseUnits: 12,
+              unitPriceCents: 960,
+              totalPriceCents: 960,
+              costPerBaseUnitCents: 80,
+              notes: null,
+            },
+          ],
+        }),
+      ],
+    });
+
+    await expect(getFinanceProductHistory('product-tapa', repository)).resolves.toEqual(
+      purchaseHistory,
+    );
+
+    const [purchase] = await listFinancePurchases(repository);
+
+    expect(purchase?.itemImpacts).toEqual([
+      {
+        purchaseItemId: 'purchase-item-2',
+        stockBeforeBase: 12,
+        stockAfterBase: 36,
+        previousCostPerBaseUnitCents: 100,
+        newCostPerBaseUnitCents: 150,
+        priceDeltaCents: 50,
+        priceDeltaPercent: 50,
+      },
+      {
+        purchaseItemId: 'purchase-item-3',
+        stockBeforeBase: 36,
+        stockAfterBase: 48,
+        previousCostPerBaseUnitCents: 150,
+        newCostPerBaseUnitCents: 80,
+        priceDeltaCents: -70,
+        priceDeltaPercent: -46.67,
+      },
+    ]);
   });
 
   it('returns partial costing preview warnings instead of failing when finance data is incomplete', async () => {

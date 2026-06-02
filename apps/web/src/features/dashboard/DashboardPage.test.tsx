@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
@@ -204,7 +204,7 @@ describe('DashboardPage', () => {
           unpaidOrderCount: 1,
           grossRevenue: 12000,
           paidRevenue: 0,
-          pendingRevenue: 12000,
+          pendingRevenue: 5000,
           estimatedCosts: 4000,
           estimatedProfit: 8000,
           totalUnits: 12,
@@ -274,7 +274,7 @@ describe('DashboardPage', () => {
             unpaidOrderCount: 1,
             grossRevenue: 12000,
             paidRevenue: 0,
-            pendingRevenue: 12000,
+            pendingRevenue: 5000,
             estimatedCosts: 4000,
             estimatedProfit: 8000,
             totalUnits: 12,
@@ -288,6 +288,28 @@ describe('DashboardPage', () => {
           recentOrders: [],
           chartDays: [{ date: '2026-05-06', count: 1, revenue: 12000, estimatedProfit: 8000 }],
         },
+      },
+      weeklyVarietyAnalytics: {
+        currentWeek: { startDate: '2026-05-04', endDate: '2026-05-10' },
+        previousWeek: { startDate: '2026-04-27', endDate: '2026-05-03' },
+        varieties: [
+          {
+            menuItemId: 'menu-1',
+            name: 'Carne suave',
+            currentWeekQuantity: 18,
+            previousWeekQuantity: 12,
+            difference: 6,
+            changePercent: 50,
+          },
+          {
+            menuItemId: 'menu-2',
+            name: 'Humita',
+            currentWeekQuantity: 0,
+            previousWeekQuantity: 12,
+            difference: -12,
+            changePercent: -100,
+          },
+        ],
       },
       varietySales: {
         all: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 }],
@@ -309,7 +331,7 @@ describe('DashboardPage', () => {
     expect(
       screen.getByRole('heading', { name: /ventas en pesos · histórico completo/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Carne suave')).toBeInTheDocument();
+    expect(screen.getAllByText('Carne suave').length).toBeGreaterThan(0);
     expect(screen.getByText(/24 unidades/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /resumen general/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /accesos rápidos/i })).not.toBeInTheDocument();
@@ -329,6 +351,23 @@ describe('DashboardPage', () => {
     expect(screen.getByText('6 unidades')).toBeInTheDocument();
     expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
     expect(screen.getAllByText(/^1$/).length).toBeGreaterThan(0);
+    const pendingCard = screen.getByText('Pendiente de cobrar').closest('article');
+    expect(pendingCard).not.toBeNull();
+    expect(within(pendingCard as HTMLElement).getByText('ARS 12.000')).toBeInTheDocument();
+    expect(within(pendingCard as HTMLElement).getByText('Total pendiente')).toBeInTheDocument();
+  });
+
+  it('shows all variety weekly performance compared with the previous monday-to-sunday week', async () => {
+    renderDashboardPage();
+
+    expect(
+      await screen.findByRole('heading', { name: /desempeño por variedad/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/lunes a domingo/i)).toBeInTheDocument();
+    expect(await screen.findByText('Humita')).toBeInTheDocument();
+    expect(screen.getByText('18 u.')).toBeInTheDocument();
+    expect(screen.getByText('+6 u.')).toBeInTheDocument();
+    expect(screen.getByText('+50%')).toBeInTheDocument();
   });
 
   it('reloads the dashboard for the selected date', async () => {

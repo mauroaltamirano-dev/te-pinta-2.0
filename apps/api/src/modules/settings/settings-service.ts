@@ -22,6 +22,8 @@ export const defaultSettings: Setting[] = [
   { key: 'promo_combined_dozen_price', value: '15000' },
   { key: 'addon_yasgua_salsa_price', value: '500' },
   { key: 'addon_yasgua_cremosa_price', value: '1000' },
+  { key: 'finance_dashboard_service_percent', value: '20' },
+  { key: 'finance_dashboard_target_margin_percent', value: '50' },
 ];
 
 export const listSettings = async (repository: SettingsRepository): Promise<Setting[]> => {

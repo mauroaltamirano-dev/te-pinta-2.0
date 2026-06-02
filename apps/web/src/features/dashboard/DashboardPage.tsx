@@ -23,7 +23,7 @@ import {
   Wallet,
 } from 'lucide-react';
 
-import type { DeliveryTime, OrderStatus } from '@te-pinta/shared';
+import { getBusinessDateIso, type DeliveryTime, type OrderStatus } from '@te-pinta/shared';
 
 import type {
   DashboardCalendarDay,
@@ -32,8 +32,10 @@ import type {
   DashboardStatusSummary,
   DashboardTopClient,
   DashboardTopVariety,
+  DashboardVarietyWeekComparison,
 } from './dashboard-api';
 import { useDailyDashboard } from './dashboard-hooks';
+import { useMenuItems } from '../menu/menu-hooks';
 
 const deliveryTextLabels: Record<DeliveryTime, string> = {
   mediodia: 'Mediodía',
@@ -61,19 +63,12 @@ const fullDateFormatter = new Intl.DateTimeFormat('es-AR', {
   year: 'numeric',
 });
 
-const toLocalIsoDate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 const parseLocalDate = (date: string): Date => {
   const [year, month, day] = date.split('-').map(Number);
   return new Date(year || 0, (month || 1) - 1, day || 1);
 };
 
-const today = (): string => toLocalIsoDate(new Date());
+const today = (): string => getBusinessDateIso(new Date());
 
 const formatMoney = (value: number): string => `ARS ${Math.round(value).toLocaleString('es-AR')}`;
 const formatCompactMoney = (value: number): string =>
@@ -81,6 +76,24 @@ const formatCompactMoney = (value: number): string =>
 const formatDateLabel = (date: string): string => dateFormatter.format(parseLocalDate(date));
 const formatFullDateLabel = (date: string): string =>
   fullDateFormatter.format(parseLocalDate(date));
+const formatWeekRangeLabel = (startDate?: string, endDate?: string): string =>
+  startDate && endDate ? `${formatDateLabel(startDate)} – ${formatDateLabel(endDate)}` : '';
+
+const formatSignedUnits = (value: number): string => {
+  if (value > 0) return `+${value}`;
+  return String(value);
+};
+
+const formatWeeklyChangeLabel = (variety: DashboardVarietyWeekComparison): string => {
+  if (variety.previousWeekQuantity === 0) {
+    return variety.currentWeekQuantity > 0 ? 'Nuevo' : 'Sin ventas';
+  }
+
+  if (variety.changePercent === null) return 'Sin datos';
+
+  const sign = variety.changePercent > 0 ? '+' : '';
+  return `${sign}${variety.changePercent}%`;
+};
 
 const getDashboardOrderCode = (id: string): string => {
   const lastSegment = id.split('-').at(-1) ?? id;
@@ -179,6 +192,44 @@ const mockStatusSummary: DashboardStatusSummary = {
   ready: 6,
   delivered: 5,
   total: 28,
+};
+
+type DashboardMenuItem = {
+  id: string;
+  name: string;
+  isArchived: boolean;
+};
+
+const buildWeeklyVarietyRows = (
+  weeklyVarieties: DashboardVarietyWeekComparison[],
+  menuItems?: DashboardMenuItem[],
+): DashboardVarietyWeekComparison[] => {
+  const weeklyByMenuItemId = new Map(
+    weeklyVarieties.map((variety) => [variety.menuItemId, variety]),
+  );
+  const rowsFromMenu =
+    menuItems
+      ?.filter((item) => !item.isArchived)
+      .map((item) => {
+        const weeklyVariety = weeklyByMenuItemId.get(item.id);
+        return {
+          menuItemId: item.id,
+          name: weeklyVariety?.name ?? item.name,
+          currentWeekQuantity: weeklyVariety?.currentWeekQuantity ?? 0,
+          previousWeekQuantity: weeklyVariety?.previousWeekQuantity ?? 0,
+          difference: weeklyVariety?.difference ?? 0,
+          changePercent: weeklyVariety?.changePercent ?? null,
+        };
+      }) ?? [];
+  const menuItemIds = new Set(rowsFromMenu.map((item) => item.menuItemId));
+  const historicalRows = weeklyVarieties.filter((variety) => !menuItemIds.has(variety.menuItemId));
+
+  return [...rowsFromMenu, ...historicalRows].sort(
+    (a, b) =>
+      b.currentWeekQuantity - a.currentWeekQuantity ||
+      b.previousWeekQuantity - a.previousWeekQuantity ||
+      a.name.localeCompare(b.name, 'es-AR'),
+  );
 };
 
 const dashboardRangeLabels: Record<DashboardRange, string> = {
@@ -375,11 +426,7 @@ const LineChartCard = ({
                 strokeWidth="0.45"
               />
             ))}
-            <polyline
-              points={`0,96 ${points} 100,96`}
-              fill="rgba(181,74,50,.10)"
-              stroke="none"
-            />
+            <polyline points={`0,96 ${points} 100,96`} fill="rgba(181,74,50,.10)" stroke="none" />
             <polyline
               points={points}
               fill="none"
@@ -480,6 +527,7 @@ export const DashboardPage = () => {
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>('all');
   const [chartMetric, setChartMetric] = useState<DashboardChartMetric>('revenue');
   const dashboardQuery = useDailyDashboard({ date });
+  const menuItemsQuery = useMenuItems();
   const dashboard = dashboardQuery.data;
   const totals = dashboard?.totals;
   const hasBusinessData = Boolean(totals && totals.orderCount > 0);
@@ -509,11 +557,16 @@ export const DashboardPage = () => {
   const statusSummary = dashboard
     ? (selectedRangeAnalytics?.statusSummary ?? dashboard.statusSummary)
     : mockStatusSummary;
+  const weeklyVarietyAnalytics = dashboard?.weeklyVarietyAnalytics;
+  const weeklyVarietyRows = useMemo(
+    () => buildWeeklyVarietyRows(weeklyVarietyAnalytics?.varieties ?? [], menuItemsQuery.data),
+    [menuItemsQuery.data, weeklyVarietyAnalytics?.varieties],
+  );
 
   const monthSales = hasBusinessData ? (selectedRangeTotals?.grossRevenue ?? 0) : 2_786_400;
   const netProfit = hasBusinessData ? (selectedRangeTotals?.estimatedProfit ?? 0) : 1_243_850;
   const totalOrders = hasBusinessData ? (selectedRangeTotals?.orderCount ?? 0) : 28;
-  const pendingRevenue = hasBusinessData ? (selectedRangeTotals?.pendingRevenue ?? 0) : 612_300;
+  const pendingRevenue = hasBusinessData ? (totals?.pendingRevenue ?? 0) : 612_300;
   const averageTicket = hasBusinessData ? (selectedRangeTotals?.averageTicket ?? 0) : 39_805;
 
   const kpis = useMemo(
@@ -545,7 +598,7 @@ export const DashboardPage = () => {
       {
         label: 'Pendiente de cobrar',
         value: formatMoney(pendingRevenue),
-        trend: dashboardRangeLabels[dashboardRange],
+        trend: 'Total pendiente',
         icon: Wallet,
         tone: 'bg-amber-50 text-amber-700 ring-amber-100',
         sparkline: [18, 17, 20, 16, 14, 15, 12],
@@ -778,6 +831,88 @@ export const DashboardPage = () => {
                   ))
                 )}
               </div>
+
+              <div className="mt-5 rounded-2xl border border-border/70 bg-background/70 p-4">
+                <div className="mb-3">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
+                    Analítica semanal
+                  </p>
+                  <h3 className="mt-1 text-lg font-black text-foreground">
+                    Desempeño por variedad
+                  </h3>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">
+                    Semana seleccionada{' '}
+                    {formatWeekRangeLabel(
+                      weeklyVarietyAnalytics?.currentWeek.startDate,
+                      weeklyVarietyAnalytics?.currentWeek.endDate,
+                    )}{' '}
+                    vs semana anterior{' '}
+                    {formatWeekRangeLabel(
+                      weeklyVarietyAnalytics?.previousWeek.startDate,
+                      weeklyVarietyAnalytics?.previousWeek.endDate,
+                    )}
+                    . Lunes a domingo.
+                  </p>
+                </div>
+                {weeklyVarietyRows.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-border bg-white p-4 text-center text-sm font-bold text-muted-foreground">
+                    Sin variedades para comparar.
+                  </p>
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border border-border/70 bg-white">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[520px] w-full border-collapse text-left text-sm">
+                        <thead className="bg-sidebar text-xs uppercase tracking-wide text-crema-maiz">
+                          <tr>
+                            <th className="px-3 py-2 font-black">Variedad</th>
+                            <th className="px-3 py-2 text-right font-black">Semana</th>
+                            <th className="px-3 py-2 text-right font-black">Anterior</th>
+                            <th className="px-3 py-2 text-right font-black">Dif.</th>
+                            <th className="px-3 py-2 text-right font-black">Cambio</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/70">
+                          {weeklyVarietyRows.map((variety) => {
+                            const changeTone =
+                              variety.difference > 0
+                                ? 'text-emerald-700'
+                                : variety.difference < 0
+                                  ? 'text-destructive'
+                                  : 'text-muted-foreground';
+
+                            return (
+                              <tr
+                                className="transition hover:bg-background"
+                                key={variety.menuItemId}
+                              >
+                                <td className="px-3 py-2 font-black text-foreground">
+                                  {variety.name}
+                                </td>
+                                <td className="px-3 py-2 text-right font-black tabular-nums text-sidebar">
+                                  {variety.currentWeekQuantity} u.
+                                </td>
+                                <td className="px-3 py-2 text-right font-bold tabular-nums text-muted-foreground">
+                                  {variety.previousWeekQuantity} u.
+                                </td>
+                                <td
+                                  className={`px-3 py-2 text-right font-black tabular-nums ${changeTone}`}
+                                >
+                                  {formatSignedUnits(variety.difference)} u.
+                                </td>
+                                <td
+                                  className={`px-3 py-2 text-right font-black tabular-nums ${changeTone}`}
+                                >
+                                  {formatWeeklyChangeLabel(variety)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
             </SectionCard>
           </section>
         </div>
@@ -913,7 +1048,8 @@ export const DashboardPage = () => {
                       className="px-4 py-6 text-center text-sm font-bold text-muted-foreground"
                       colSpan={5}
                     >
-                      Sin pedidos recientes para {dashboardRangeLabels[dashboardRange].toLowerCase()}.
+                      Sin pedidos recientes para{' '}
+                      {dashboardRangeLabels[dashboardRange].toLowerCase()}.
                     </td>
                   </tr>
                 ) : (

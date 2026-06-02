@@ -41,6 +41,7 @@ import {
   calculateOrderPromotion,
   type CreateOrderInput,
   type DeliveryTime,
+  getBusinessDateIso,
   type OrderFilters,
   type OrderStatus,
   type UpdateOrderInput,
@@ -249,13 +250,6 @@ const formatDateAr = (date: string): string => {
   return year && month && day ? `${day}-${month}-${year}` : date;
 };
 
-const toIsoDate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 const parseIsoLocalDate = (date: string): Date | null => {
   const [year, month, day] = date.split('-').map(Number);
   if (!year || !month || !day) return null;
@@ -270,8 +264,8 @@ const addDays = (date: Date, days: number): Date => {
 
 const getDeliveryDateMeta = (date: string) => {
   const today = new Date();
-  const todayIso = toIsoDate(today);
-  const tomorrowIso = toIsoDate(addDays(today, 1));
+  const todayIso = getBusinessDateIso(today);
+  const tomorrowIso = getBusinessDateIso(addDays(today, 1));
   const parsed = parseIsoLocalDate(date);
   const weekday = parsed ? WEEKDAY_LABELS[parsed.getDay()] : '';
   const weekdayLabel = weekday ? weekday.charAt(0).toUpperCase() + weekday.slice(1) : 'Fecha';
@@ -421,7 +415,7 @@ const getOrderCode = (id: string): string => {
     : `#${lastSegment.slice(-6).toUpperCase()}`;
 };
 
-const getTodayIsoDate = (): string => toIsoDate(new Date());
+const getTodayIsoDate = (): string => getBusinessDateIso(new Date());
 
 const normalizeText = (value: string): string => value.toLocaleLowerCase('es-AR');
 
@@ -463,7 +457,6 @@ const copyTextToClipboard = async (text: string): Promise<boolean> => {
 
 const buildCustomerOrderMessage = (detail: OrderDetail): string => {
   const pricing = getOrderDetailPricing(detail);
-  const reference = detail.notes?.trim() || detail.customer.address?.trim();
   const lines = [
     `*Pedido ${getOrderCode(detail.id)}*`,
     '',
@@ -476,12 +469,6 @@ const buildCustomerOrderMessage = (detail: OrderDetail): string => {
       (addon) =>
         `• ${formatVarietyLabel(addon.quantity, addon.name)} — ${formatMoney(addon.subtotal)}`,
     ),
-    '',
-    '*Entrega:*',
-    `• ${detail.deliveryType === 'envio' ? 'Envío' : 'Retiro'}`,
-    `• Fecha: ${formatDateAr(detail.deliveryDate)} · ${deliveryTimeLabels[detail.deliveryTime]}`,
-    detail.cooked ? '• Cocinado' : null,
-    reference ? `• Referencia: ${reference}` : null,
     '',
     '*Resumen:*',
     `• Empanadas: ${formatMoney(pricing.itemsSubtotal)}`,
@@ -496,7 +483,6 @@ const buildCustomerOrderMessage = (detail: OrderDetail): string => {
       : null,
     '',
     `*Total: ${formatMoney(detail.total)}*`,
-    `Pago: ${detail.isPaid ? 'Pagado' : 'Pendiente'}`,
   ];
 
   return lines.filter((line): line is string => line !== null).join('\n');
@@ -1616,7 +1602,7 @@ export const OrdersPage = () => {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `pedidos-${visibilityFilter}-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = `pedidos-${visibilityFilter}-${getTodayIsoDate()}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
