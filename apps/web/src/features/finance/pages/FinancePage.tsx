@@ -1,15 +1,44 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CircleDollarSign } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
 import { PageHero } from '@/components/layout/PageHero';
 
 import { FinanceLegacyWorkspace } from '../components/FinanceLegacyWorkspace';
-import { FinanceSectionNav, type FinanceSectionId } from '../components/FinanceSectionNav';
+import {
+  financeSections,
+  FinanceSectionNav,
+  type FinanceSectionId,
+} from '../components/FinanceSectionNav';
 import { useFinanceWorkspaceData } from '../hooks/useFinanceWorkspaceData';
 
+const getSectionFromQuery = (section: string | null): FinanceSectionId =>
+  financeSections.some((item) => item.id === section) ? (section as FinanceSectionId) : 'dashboard';
+
 export const FinancePage = () => {
-  const [activeSection, setActiveSection] = useState<FinanceSectionId>('dashboard');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeSection, setActiveSection] = useState<FinanceSectionId>(() =>
+    getSectionFromQuery(searchParams.get('section')),
+  );
   const workspaceData = useFinanceWorkspaceData();
+  const selectedRecipeMenuItemId =
+    activeSection === 'recipes' ? (searchParams.get('menuItemId') ?? undefined) : undefined;
+
+  useEffect(() => {
+    const nextSection = getSectionFromQuery(searchParams.get('section'));
+    setActiveSection((current) => (current === nextSection ? current : nextSection));
+  }, [searchParams]);
+
+  const handleSectionChange = (section: FinanceSectionId) => {
+    setActiveSection(section);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('section', section);
+    if (section !== 'recipes') {
+      nextParams.delete('menuItemId');
+    }
+    setSearchParams(nextParams, { replace: true });
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <PageHero
@@ -23,8 +52,12 @@ export const FinancePage = () => {
         </span>
       </PageHero>
 
-      <FinanceSectionNav activeSection={activeSection} onSectionChange={setActiveSection} />
-      <FinanceLegacyWorkspace activeSection={activeSection} data={workspaceData} />
+      <FinanceSectionNav activeSection={activeSection} onSectionChange={handleSectionChange} />
+      <FinanceLegacyWorkspace
+        activeSection={activeSection}
+        data={workspaceData}
+        selectedRecipeMenuItemId={selectedRecipeMenuItemId}
+      />
     </div>
   );
 };

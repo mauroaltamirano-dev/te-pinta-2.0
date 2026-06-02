@@ -25,6 +25,9 @@ import { PageHero } from '@/components/layout/PageHero';
 
 import type { DashboardTopVariety } from '../dashboard/dashboard-api';
 import { useDailyDashboard } from '../dashboard/dashboard-hooks';
+import { calculateBaseCostPerDozenCents } from '../finance/helpers/dashboardMath';
+import { useFinanceBaseCostRules, useFinanceRecipes } from '../finance/hooks';
+import type { FinanceRecipe } from '../finance/types';
 import type { MenuItem } from './menu-api';
 import { useCreateMenuItem, useMenuItems, useUpdateMenuItem } from './menu-hooks';
 
@@ -75,6 +78,38 @@ const toFormState = (item: MenuItem): MenuFormState => ({
 
 const formatMoney = (value: number): string => moneyFormatter.format(value);
 
+type MenuFinanceMetrics = {
+  costPerDozen: number;
+  marginPerDozen: number;
+  marginPercent: number;
+  hasRecipe: boolean;
+  warningsCount: number;
+  sourceLabel: string;
+};
+
+const buildMenuFinanceMetrics = (
+  item: MenuItem,
+  recipe: FinanceRecipe | undefined,
+  baseCostPerDozenCents: number,
+): MenuFinanceMetrics => {
+  const hasFinanceCost = Boolean(recipe);
+  const costPerDozenCents = hasFinanceCost
+    ? baseCostPerDozenCents + (recipe?.totalCostPerDozenCents ?? 0)
+    : Math.round(item.costPerDozen * 100);
+  const costPerDozen = costPerDozenCents / 100;
+  const marginPerDozen = item.priceDozen - costPerDozen;
+  const marginPercent = item.priceDozen ? Math.round((marginPerDozen / item.priceDozen) * 100) : 0;
+
+  return {
+    costPerDozen,
+    marginPerDozen,
+    marginPercent,
+    hasRecipe: Boolean(recipe?.items.length),
+    warningsCount: recipe?.warnings.length ?? 0,
+    sourceLabel: hasFinanceCost ? 'Finanzas' : 'Costo manual',
+  };
+};
+
 const formatDozenLabel = (quantity: number): string => {
   if (!quantity) return '0 docenas';
   const dozens = quantity / 12;
@@ -124,19 +159,20 @@ const useIsDesktopPanel = () => {
 
 const MenuItemDetailAnalytics = ({
   item,
+  financeMetrics,
   quantitySold,
   salesPeriod,
   onSalesPeriodChange,
 }: {
   item: MenuItem;
+  financeMetrics: MenuFinanceMetrics;
   quantitySold: number;
   salesPeriod: SalesPeriod;
   onSalesPeriodChange: (period: SalesPeriod) => void;
 }) => {
-  const marginPerDozen = item.priceDozen - item.costPerDozen;
-  const marginPercent = item.priceDozen ? Math.round((marginPerDozen / item.priceDozen) * 100) : 0;
   const estimatedRevenue = (quantitySold / 12) * item.priceDozen;
-  const estimatedCost = (quantitySold / 12) * item.costPerDozen;
+  const estimatedCost = (quantitySold / 12) * financeMetrics.costPerDozen;
+  const recipeHref = `/finanzas?section=recipes&menuItemId=${encodeURIComponent(item.id)}`;
 
   return (
     <div className="space-y-4">
@@ -177,10 +213,10 @@ const MenuItemDetailAnalytics = ({
             <p className="text-xs font-black uppercase tracking-wide">Margen docena</p>
           </div>
           <p className="mt-2 text-2xl font-black tabular-nums text-foreground">
-            {formatMoney(marginPerDozen)}
+            {formatMoney(financeMetrics.marginPerDozen)}
           </p>
           <p className="mt-1 text-xs font-bold text-muted-foreground">
-            {marginPercent}% sobre precio de venta.
+            {financeMetrics.marginPercent}% sobre precio de venta.
           </p>
         </article>
       </div>
@@ -210,12 +246,37 @@ const MenuItemDetailAnalytics = ({
             </dd>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
-            <dt className="font-bold text-muted-foreground">Costo doc.</dt>
+            <dt className="font-bold text-muted-foreground">Costo finanzas</dt>
             <dd className="font-black tabular-nums text-foreground">
-              {formatMoney(item.costPerDozen)}
+              {formatMoney(financeMetrics.costPerDozen)}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl bg-primary/5 px-3 py-2 ring-1 ring-primary/10">
+            <dt className="font-bold text-primary">Margen real</dt>
+            <dd className="font-black tabular-nums text-foreground">
+              {formatMoney(financeMetrics.marginPerDozen)}
             </dd>
           </div>
         </dl>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <a
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-black text-primary-foreground transition hover:bg-primary/90"
+            href={recipeHref}
+          >
+            <Soup className="h-4 w-4" aria-hidden="true" />
+            Ver receta en Finanzas
+          </a>
+          <span className="rounded-full bg-background px-3 py-2 text-xs font-black text-muted-foreground ring-1 ring-border/70">
+            Costo: {financeMetrics.sourceLabel}
+          </span>
+        </div>
+        {!financeMetrics.hasRecipe || financeMetrics.warningsCount > 0 ? (
+          <p className="mt-3 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 ring-1 ring-amber-100">
+            {!financeMetrics.hasRecipe
+              ? 'Falta cargar receta para que este costo sea completo.'
+              : 'Hay ingredientes sin costo actualizado.'}
+          </p>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-dashed border-border bg-background p-4 text-sm">
@@ -248,12 +309,35 @@ export const MenuPage = () => {
   const itemRefs = useRef(new Map<string, HTMLElement>());
   const menuItemsQuery = useMenuItems();
   const dashboardQuery = useDailyDashboard();
+  const financeRecipesQuery = useFinanceRecipes();
+  const financeBaseCostRulesQuery = useFinanceBaseCostRules();
   const createMenuItem = useCreateMenuItem();
   const updateMenuItem = useUpdateMenuItem();
   const isDesktopPanel = useIsDesktopPanel();
   const isSaving = createMenuItem.isPending || updateMenuItem.isPending;
   const allItems = menuItemsQuery.data ?? [];
   const editingItem = allItems.find((item) => item.id === editingItemId) ?? null;
+  const baseCostPerDozenCents = useMemo(
+    () => calculateBaseCostPerDozenCents(financeBaseCostRulesQuery.data ?? []),
+    [financeBaseCostRulesQuery.data],
+  );
+  const recipeByMenuItemId = useMemo(
+    () => new Map((financeRecipesQuery.data ?? []).map((recipe) => [recipe.menuItemId, recipe])),
+    [financeRecipesQuery.data],
+  );
+  const financeMetricsByMenuItemId = useMemo(
+    () =>
+      new Map(
+        allItems.map((item) => [
+          item.id,
+          buildMenuFinanceMetrics(item, recipeByMenuItemId.get(item.id), baseCostPerDozenCents),
+        ]),
+      ),
+    [allItems, baseCostPerDozenCents, recipeByMenuItemId],
+  );
+  const getFinanceMetrics = (item: MenuItem): MenuFinanceMetrics =>
+    financeMetricsByMenuItemId.get(item.id) ??
+    buildMenuFinanceMetrics(item, undefined, baseCostPerDozenCents);
 
   const filteredItems = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -272,11 +356,14 @@ export const MenuPage = () => {
       ? Math.round(allItems.reduce((total, item) => total + item.priceDozen, 0) / allItems.length)
       : 0;
     const averageCost = allItems.length
-      ? Math.round(allItems.reduce((total, item) => total + item.costPerDozen, 0) / allItems.length)
+      ? Math.round(
+          allItems.reduce((total, item) => total + getFinanceMetrics(item).costPerDozen, 0) /
+            allItems.length,
+        )
       : 0;
 
     return { active, averageCost, averageDozen, paused, total: allItems.length };
-  }, [allItems]);
+  }, [allItems, financeMetricsByMenuItemId, baseCostPerDozenCents]);
 
   const selectedItem = useMemo(() => {
     const selected = filteredItems.find((item) => item.id === selectedItemId);
@@ -594,7 +681,8 @@ export const MenuPage = () => {
 
             <div className="mt-5 grid gap-3">
               {filteredItems.map((item) => {
-                const margin = item.priceDozen - item.costPerDozen;
+                const financeMetrics = getFinanceMetrics(item);
+                const recipeHref = `/finanzas?section=recipes&menuItemId=${encodeURIComponent(item.id)}`;
                 const isSelected = selectedItem?.id === item.id;
                 const isRecentlyEdited = item.id === recentlyEditedItemId;
 
@@ -662,19 +750,25 @@ export const MenuPage = () => {
                             </div>
                             <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
                               <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-                                Costo doc.
+                                Costo finanzas
                               </dt>
                               <dd className="mt-1 font-black tabular-nums text-foreground">
-                                {formatMoney(item.costPerDozen)}
+                                {formatMoney(financeMetrics.costPerDozen)}
                               </dd>
+                              <p className="mt-1 text-[0.7rem] font-bold text-muted-foreground">
+                                {financeMetrics.sourceLabel}
+                              </p>
                             </div>
                             <div className="rounded-2xl bg-primary/5 px-3 py-2 ring-1 ring-primary/10">
                               <dt className="text-xs font-black uppercase tracking-wide text-primary">
                                 Margen
                               </dt>
                               <dd className="mt-1 font-black tabular-nums text-foreground">
-                                {formatMoney(margin)}
+                                {formatMoney(financeMetrics.marginPerDozen)}
                               </dd>
+                              <p className="mt-1 text-[0.7rem] font-bold text-primary/80">
+                                {financeMetrics.marginPercent}%
+                              </p>
                             </div>
                           </dl>
                         </div>
@@ -722,8 +816,23 @@ export const MenuPage = () => {
                             <Archive className="h-4 w-4" aria-hidden="true" />
                             Deshabilitar
                           </button>
+                          <a
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-black text-primary transition hover:bg-primary/10 active:scale-[0.98] lg:w-auto"
+                            href={recipeHref}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <Soup className="h-4 w-4" aria-hidden="true" />
+                            Receta
+                          </a>
                         </div>
                       </div>
+                      {!financeMetrics.hasRecipe || financeMetrics.warningsCount > 0 ? (
+                        <p className="mt-3 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 ring-1 ring-amber-100">
+                          {!financeMetrics.hasRecipe
+                            ? 'Falta receta financiera para completar el costo real.'
+                            : 'Hay ingredientes sin costo actualizado.'}
+                        </p>
+                      ) : null}
                     </div>
                   </article>
                 );
@@ -900,6 +1009,7 @@ export const MenuPage = () => {
                 </div>
               </div>
               <MenuItemDetailAnalytics
+                financeMetrics={getFinanceMetrics(panelItem)}
                 item={panelItem}
                 onSalesPeriodChange={setSalesPeriod}
                 quantitySold={panelItemQuantitySold}
@@ -1112,6 +1222,7 @@ export const MenuPage = () => {
                     </div>
                   </div>
                   <MenuItemDetailAnalytics
+                    financeMetrics={getFinanceMetrics(panelItem)}
                     item={panelItem}
                     onSalesPeriodChange={setSalesPeriod}
                     quantitySold={panelItemQuantitySold}

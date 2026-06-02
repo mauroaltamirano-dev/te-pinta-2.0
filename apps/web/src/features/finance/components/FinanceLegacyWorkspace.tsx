@@ -81,9 +81,14 @@ const EmptyState = ({ title, description }: { title: string; description: string
 type FinanceLegacyWorkspaceProps = {
   activeSection: FinanceSectionId;
   data: FinanceWorkspaceData;
+  selectedRecipeMenuItemId?: string;
 };
 
-export const FinanceLegacyWorkspace = ({ activeSection, data }: FinanceLegacyWorkspaceProps) => {
+export const FinanceLegacyWorkspace = ({
+  activeSection,
+  data,
+  selectedRecipeMenuItemId,
+}: FinanceLegacyWorkspaceProps) => {
   const [calculatorForm, setCalculatorForm] = useState<CalculatorFormState>(initialCalculatorForm);
   const [feedback, setFeedback] = useState<FinanceFeedback | null>(null);
   const createBaseCostRule = useCreateFinanceBaseCostRule();
@@ -326,6 +331,7 @@ export const FinanceLegacyWorkspace = ({ activeSection, data }: FinanceLegacyWor
             onSave={handleSaveRecipe}
             products={products}
             recipes={recipes}
+            selectedMenuItemId={selectedRecipeMenuItemId}
           />
         ) : null}
 

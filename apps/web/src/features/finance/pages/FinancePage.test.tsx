@@ -54,11 +54,11 @@ vi.mock('../../settings/settings-api', () => ({
   updateSetting: vi.fn(),
 }));
 
-const renderFinancePage = () => {
+const renderFinancePage = (initialEntry = '/finanzas') => {
   const queryClient = createQueryClient();
 
   return render(
-    <MemoryRouter initialEntries={['/finanzas']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={queryClient}>
         <FinancePage />
       </QueryClientProvider>
@@ -286,6 +286,17 @@ describe('FinancePage', () => {
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
     expect(screen.getByText('Harina 000')).toBeInTheDocument();
     expect(screen.getAllByText(/último costo/i).length).toBeGreaterThan(0);
+  });
+
+  it('opens recipes and selects a variety from finance URL parameters', async () => {
+    renderFinancePage('/finanzas?section=recipes&menuItemId=menu-1');
+
+    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    expect(within(tabs).getByRole('tab', { name: /recetas/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await waitFor(() => expect(screen.getByLabelText(/variedad/i)).toHaveValue('menu-1'));
   });
 
   it('shows empty states when finance data is incomplete', async () => {

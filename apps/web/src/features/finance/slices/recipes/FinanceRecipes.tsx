@@ -19,6 +19,7 @@ type FinanceRecipesProps = {
   baseCostRules: FinanceBaseCostRule[];
   onSave: (menuItemId: string, rows: RecipeDraftItem[]) => void;
   isPending: boolean;
+  selectedMenuItemId?: string;
 };
 
 const baseUnitLabels: Record<FinanceBaseUnit, string> = {
@@ -52,6 +53,7 @@ export const FinanceRecipes = ({
   baseCostRules,
   onSave,
   isPending,
+  selectedMenuItemId,
 }: FinanceRecipesProps) => {
   const activeBaseCostProductIds = new Set(
     baseCostRules.filter((rule) => rule.isActive).map((rule) => rule.productId),
@@ -61,13 +63,21 @@ export const FinanceRecipes = ({
   );
   const activeBaseCostRules = baseCostRules.filter((rule) => rule.isActive);
   const baseCostPerDozenCents = calculateBaseCostPerDozenCents(activeBaseCostRules);
-  const [selectedMenuItemId, setSelectedMenuItemId] = useState('');
-  const menuItemId = selectedMenuItemId || menuItems[0]?.id || recipes[0]?.menuItemId || '';
+  const [selectedMenuItemIdState, setSelectedMenuItemIdState] = useState('');
+  const menuItemId = selectedMenuItemIdState || menuItems[0]?.id || recipes[0]?.menuItemId || '';
   const selectedRecipe = recipes.find((recipe) => recipe.menuItemId === menuItemId);
   const recipeCostPerDozenCents = selectedRecipe?.totalCostPerDozenCents ?? 0;
   const totalCostPerDozenCents = baseCostPerDozenCents + recipeCostPerDozenCents;
   const totalCostPerUnitCents = Math.round(totalCostPerDozenCents / 12);
   const [rows, setRows] = useState<RecipeDraftItem[]>([]);
+
+  useEffect(() => {
+    if (!selectedMenuItemId || !menuItems.some((item) => item.id === selectedMenuItemId)) {
+      return;
+    }
+
+    setSelectedMenuItemIdState(selectedMenuItemId);
+  }, [menuItems, selectedMenuItemId]);
 
   useEffect(() => {
     if (!menuItemId) {
@@ -118,7 +128,7 @@ export const FinanceRecipes = ({
           </div>
         </div>
         <label className="min-w-60 text-sm font-bold text-foreground">Variedad
-          <select className={selectClassName} onChange={(event) => setSelectedMenuItemId(event.target.value)} value={menuItemId}>
+          <select className={selectClassName} onChange={(event) => setSelectedMenuItemIdState(event.target.value)} value={menuItemId}>
             {menuItems.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>

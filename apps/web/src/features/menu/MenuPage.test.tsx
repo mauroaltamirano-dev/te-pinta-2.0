@@ -6,11 +6,17 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { createQueryClient } from '@/lib/query-client';
 
 import { getDailyDashboard, type DailyDashboard } from '../dashboard/dashboard-api';
+import { listFinanceBaseCostRules, listFinanceRecipes } from '../finance/api';
 import { MenuPage } from './MenuPage';
 import { createMenuItem, listMenuItems, updateMenuItem } from './menu-api';
 
 vi.mock('../dashboard/dashboard-api', () => ({
   getDailyDashboard: vi.fn(),
+}));
+
+vi.mock('../finance/api', () => ({
+  listFinanceBaseCostRules: vi.fn(),
+  listFinanceRecipes: vi.fn(),
 }));
 
 vi.mock('./menu-api', () => ({
@@ -137,6 +143,37 @@ describe('MenuPage', () => {
       },
     };
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
+    vi.mocked(listFinanceBaseCostRules).mockResolvedValue([]);
+    vi.mocked(listFinanceRecipes).mockResolvedValue([
+      {
+        menuItemId: 'menu-1',
+        menuItemName: 'Carne suave',
+        items: [
+          {
+            id: 'recipe-item-1',
+            menuItemId: 'menu-1',
+            productId: 'product-1',
+            name: 'Relleno carne',
+            quantityPerDozen: 1,
+            unit: 'kg',
+            quantityBase: 1,
+            latestCostCents: 720000,
+            notes: null,
+          },
+        ],
+        totalCostPerDozenCents: 720000,
+        totalCostPerUnitCents: 60000,
+        warnings: [],
+      },
+      {
+        menuItemId: 'menu-2',
+        menuItemName: 'Humita',
+        items: [],
+        totalCostPerDozenCents: 0,
+        totalCostPerUnitCents: 0,
+        warnings: [],
+      },
+    ]);
     vi.mocked(listMenuItems).mockResolvedValue([
       {
         id: 'menu-1',
@@ -175,6 +212,13 @@ describe('MenuPage', () => {
     expect(
       screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
     ).toHaveTextContent('Precios y costos');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('$ 7.200');
+    expect(screen.getAllByRole('link', { name: /receta/i })[0]).toHaveAttribute(
+      'href',
+      '/finanzas?section=recipes&menuItemId=menu-1',
+    );
 
     await userEvent.type(screen.getByLabelText(/buscar variedad/i), 'carne');
 
