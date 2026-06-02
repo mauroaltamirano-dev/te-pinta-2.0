@@ -586,22 +586,55 @@ describe('OrdersPage', () => {
 
     expect(await screen.findByLabelText(/pedido ana pérez/i)).toBeInTheDocument();
     const closestCards = screen.getAllByRole('article', { name: /pedido /i });
-    expect(closestCards[0]).toHaveAccessibleName(/ana pérez/i);
-    expect(closestCards[1]).toHaveAccessibleName(/pedido lejano/i);
+    expect(closestCards[0]).toHaveAccessibleName(/pedido lejano/i);
+    expect(closestCards[1]).toHaveAccessibleName(/ana pérez/i);
     expect(vi.mocked(listOrders).mock.calls[0]?.[0]).toMatchObject({
       sortBy: 'deliveryDate',
-      sortDir: 'asc',
+      sortDir: 'desc',
     });
 
     await userEvent.selectOptions(screen.getByLabelText(/ordenar por/i), 'date_desc');
 
     const farthestCards = screen.getAllByRole('article', { name: /pedido /i });
-    expect(farthestCards[0]).toHaveAccessibleName(/pedido lejano/i);
-    expect(farthestCards[1]).toHaveAccessibleName(/ana pérez/i);
+    expect(farthestCards[0]).toHaveAccessibleName(/ana pérez/i);
+    expect(farthestCards[1]).toHaveAccessibleName(/pedido lejano/i);
     expect(vi.mocked(listOrders).mock.calls.at(-1)?.[0]).toMatchObject({
       sortBy: 'deliveryDate',
-      sortDir: 'desc',
+      sortDir: 'asc',
     });
+  });
+
+  it('orders same-day deliveries by shift from mediodía to noche', async () => {
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([
+        {
+          ...orderListItem,
+          id: 'order-night',
+          customer: { ...orderListItem.customer, id: 'customer-night', name: 'Noche' },
+          deliveryTime: 'noche',
+        },
+        {
+          ...orderListItem,
+          id: 'order-midday',
+          customer: { ...orderListItem.customer, id: 'customer-midday', name: 'Mediodía' },
+          deliveryTime: 'mediodia',
+        },
+        {
+          ...orderListItem,
+          id: 'order-afternoon',
+          customer: { ...orderListItem.customer, id: 'customer-afternoon', name: 'Tarde' },
+          deliveryTime: 'tarde',
+        },
+      ]),
+    );
+
+    renderOrdersPage();
+
+    await screen.findByLabelText(/pedido mediodía/i);
+    const cards = screen.getAllByRole('article', { name: /pedido /i });
+    expect(cards[0]).toHaveAccessibleName(/mediodía/i);
+    expect(cards[1]).toHaveAccessibleName(/tarde/i);
+    expect(cards[2]).toHaveAccessibleName(/noche/i);
   });
 
   it('renders the create order dialog outside the page container so the overlay covers the whole app', async () => {

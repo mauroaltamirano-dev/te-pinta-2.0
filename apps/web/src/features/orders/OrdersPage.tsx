@@ -156,6 +156,12 @@ const deliveryTimeLabels: Record<OrderFormState['deliveryTime'], string> = {
   noche: 'Noche',
 };
 
+const deliveryTimeSortOrder: Record<OrderFormState['deliveryTime'], number> = {
+  mediodia: 1,
+  tarde: 2,
+  noche: 3,
+};
+
 const deliveryTimeBadgeClassNames: Record<OrderFormState['deliveryTime'], string> = {
   mediodia: 'bg-yellow-100 text-yellow-900 ring-1 ring-yellow-200',
   tarde: 'bg-orange-100 text-orange-900 ring-1 ring-orange-200',
@@ -1034,7 +1040,7 @@ export const OrdersPage = () => {
   const [methodFilter, setMethodFilter] = useState<OrderMethodFilter>('todos');
   const [sortOption, setSortOption] = useState<OrderSortOption>('date_asc');
   const [tableSortCol, setTableSortCol] = useState<TableSortColumn>('date');
-  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('asc');
+  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('desc');
   const [orderPage, setOrderPage] = useState(1);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -1181,9 +1187,9 @@ export const OrdersPage = () => {
       switch (tableSortCol) {
         case 'date':
           return (
-            dir *
-            (a.deliveryDate.localeCompare(b.deliveryDate) ||
-              a.customer.name.localeCompare(b.customer.name, 'es-AR'))
+            dir * a.deliveryDate.localeCompare(b.deliveryDate) ||
+            deliveryTimeSortOrder[a.deliveryTime] - deliveryTimeSortOrder[b.deliveryTime] ||
+            a.customer.name.localeCompare(b.customer.name, 'es-AR')
           );
         case 'name':
           return dir * a.customer.name.localeCompare(b.customer.name, 'es-AR');
@@ -1619,8 +1625,8 @@ export const OrdersPage = () => {
   const handleSortOptionChange = (option: OrderSortOption) => {
     setSortOption(option);
     const sortMap: Record<OrderSortOption, { col: TableSortColumn; dir: TableSortDir }> = {
-      date_asc: { col: 'date', dir: 'asc' },
-      date_desc: { col: 'date', dir: 'desc' },
+      date_asc: { col: 'date', dir: 'desc' },
+      date_desc: { col: 'date', dir: 'asc' },
       name_asc: { col: 'name', dir: 'asc' },
       name_desc: { col: 'name', dir: 'desc' },
       total_desc: { col: 'total', dir: 'desc' },

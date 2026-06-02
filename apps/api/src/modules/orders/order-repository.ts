@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, not, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, not, or, sql, type SQL } from 'drizzle-orm';
 
 import type { OrderFilters, OrderStatus } from '@te-pinta/shared';
 
@@ -222,9 +222,25 @@ const countOrders = async (db: DbClient, conditions: SQL[]): Promise<number> => 
   return row?.value ?? 0;
 };
 
-const getOrderByExpression = (filters: OrderFilters = {}) => {
+const deliveryTimeOrderExpression = sql<number>`case ${orders.deliveryTime}
+  when 'mediodia' then 1
+  when 'tarde' then 2
+  when 'noche' then 3
+  else 4
+end`;
+
+const getOrderByExpressions = (filters: OrderFilters = {}): SQL[] => {
   const sortBy = filters.sortBy ?? 'deliveryDate';
   const sortDir = filters.sortDir ?? 'desc';
+  if (sortBy === 'deliveryDate') {
+    return [
+      sortDir === 'asc' ? asc(orders.deliveryDate) : desc(orders.deliveryDate),
+      asc(deliveryTimeOrderExpression),
+      asc(customers.name),
+      desc(orders.createdAt),
+    ];
+  }
+
   const column =
     sortBy === 'customerName'
       ? customers.name
@@ -234,11 +250,9 @@ const getOrderByExpression = (filters: OrderFilters = {}) => {
           ? orders.status
           : sortBy === 'deliveryType'
             ? orders.deliveryType
-            : sortBy === 'createdAt'
-              ? orders.createdAt
-              : orders.deliveryDate;
+            : orders.createdAt;
 
-  return sortDir === 'asc' ? asc(column) : desc(column);
+  return [sortDir === 'asc' ? asc(column) : desc(column), desc(orders.createdAt)];
 };
 
 const groupOrderItems = (
@@ -433,7 +447,7 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
     const conditions = buildFilterConditions(filters);
     const { page, pageSize } = resolvePagination(filters);
     const offset = (page - 1) * pageSize;
-    const orderByExpression = getOrderByExpression(filters);
+    const orderByExpressions = getOrderByExpressions(filters);
 
     const [total, stats] = await Promise.all([
       countOrders(db, conditions),
@@ -445,14 +459,14 @@ export const createOrderRepository = (db: DbClient): OrderRepository => ({
           .from(orders)
           .innerJoin(customers, eq(orders.customerId, customers.id))
           .where(and(...conditions))
-          .orderBy(orderByExpression, desc(orders.createdAt))
+          .orderBy(...orderByExpressions)
           .limit(pageSize)
           .offset(offset)
       : await db
           .select({ order: orders, customer: customers })
           .from(orders)
           .innerJoin(customers, eq(orders.customerId, customers.id))
-          .orderBy(orderByExpression, desc(orders.createdAt))
+          .orderBy(...orderByExpressions)
           .limit(pageSize)
           .offset(offset);
 
