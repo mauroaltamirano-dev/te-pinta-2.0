@@ -72,6 +72,7 @@ export const buildPurchaseRows = (
 
   return purchases
     .map((purchase) => toRow(purchase, productNames))
+    .filter((row) => row.status === 'active')
     .filter((row) => {
       if (!query) {
         return true;

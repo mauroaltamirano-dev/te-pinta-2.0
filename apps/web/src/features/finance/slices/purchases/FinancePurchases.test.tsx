@@ -111,6 +111,32 @@ const purchases: FinancePurchaseDetail[] = [
     ],
     stockMovements: [],
   },
+  {
+    id: 'purchase-canceled',
+    purchaseDate: '2026-05-23',
+    supplier: 'Proveedor anulado',
+    receiptNumber: 'X-999',
+    notes: 'No debe verse en compras',
+    canceledAt: '2026-05-24T12:00:00.000Z',
+    canceledReason: 'Carga duplicada',
+    items: [
+      {
+        id: 'item-canceled',
+        purchaseId: 'purchase-canceled',
+        productId: 'flour',
+        purchaseUnit: 'kg',
+        purchaseQuantity: 1,
+        unitsPerPackage: 1,
+        totalBaseUnits: 1,
+        unitPriceCents: 100000,
+        totalPriceCents: 100000,
+        costPerBaseUnitCents: 100000,
+        notes: null,
+      },
+    ],
+    itemImpacts: [],
+    stockMovements: [],
+  },
 ];
 
 const renderPurchases = () => {
@@ -147,6 +173,8 @@ describe('FinancePurchases', () => {
 
     await user.clear(screen.getByLabelText(/buscar compra/i));
     const table = screen.getByRole('table', { name: /historial de compras/i });
+    expect(within(table).queryByText(/proveedor anulado/i)).not.toBeInTheDocument();
+
     await user.click(within(table).getByRole('button', { name: /ordenar por total/i }));
 
     const rows = within(table).getAllByRole('row').slice(1);
@@ -188,22 +216,28 @@ describe('FinancePurchases', () => {
     expect(await within(dialog).findByText(/compra registrada/i)).toBeInTheDocument();
   });
 
-  it('expands a purchase with supplier, receipt, notes, stock, and price delta details', async () => {
+  it('opens purchase details in a side sheet with supplier, receipt, stock, and price delta details', async () => {
     const user = userEvent.setup();
     renderPurchases();
 
     const row = screen.getByRole('row', { name: /molino norte/i });
     await user.click(within(row).getByRole('button', { name: /ver detalle de compra molino norte/i }));
 
-    expect(screen.getByText(/comprobante: a-0001/i)).toBeInTheDocument();
-    expect(screen.getByText(/compra mensual/i)).toBeInTheDocument();
-    expect(screen.getByText(/harina 000/i)).toBeInTheDocument();
-    expect(screen.getByText(/cantidad: 2 kg/i)).toBeInTheDocument();
-    expect(screen.getByText(/stock antes: 10 kg/i)).toBeInTheDocument();
-    expect(screen.getByText(/stock después: 12 kg/i)).toBeInTheDocument();
-    expect(screen.getByText(/último precio: \$\s*1\.000/i)).toBeInTheDocument();
-    expect(screen.getByText(/precio nuevo: \$\s*1\.200/i)).toBeInTheDocument();
-    expect(screen.getByText(/subió \+\$\s*200 · 20%/i)).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: /detalle de compra/i });
+
+    expect(dialog).toHaveAccessibleDescription(/molino norte · 20\/05\/2026/i);
+    expect(within(dialog).getByText(/comprobante: a-0001/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/compra mensual/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/harina 000/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/cantidad: 2 kg/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/stock antes: 10 kg/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/stock después: 12 kg/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/último precio: \$\s*1\.000/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/precio nuevo: \$\s*1\.200/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/subió \+\$\s*200 · 20%/i)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: /cerrar detalle de compra/i }));
+    expect(screen.queryByRole('dialog', { name: /detalle de compra/i })).not.toBeInTheDocument();
   });
 
   it('keeps purchase cancel behavior available from the table', async () => {

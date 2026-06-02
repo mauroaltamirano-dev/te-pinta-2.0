@@ -297,7 +297,7 @@ const PurchaseDetailPanel = ({
 export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurchasesProps) => {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<PurchaseSortState>({ field: 'date', direction: 'descending' });
-  const [expandedPurchaseId, setExpandedPurchaseId] = useState<string | null>(null);
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<PurchaseFormState>(() => initialPurchaseForm());
   const [createFeedback, setCreateFeedback] = useState<PurchaseFeedback | null>(null);
@@ -320,6 +320,9 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
       ? Math.round(previewTotalPriceCents / previewTotalBaseUnits)
       : null;
   const rows = useMemo(() => buildPurchaseRows(purchases, products, search, sort), [products, purchases, search, sort]);
+  const selectedPurchase = selectedPurchaseId
+    ? rows.find((purchase) => purchase.id === selectedPurchaseId) ?? null
+    : null;
 
   const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -441,9 +444,8 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
           <button
             aria-label={`Ver detalle de compra ${purchase.supplier || formatDate(purchase.purchaseDate)}`}
             className="rounded-full bg-muted px-3 py-2 text-xs font-black text-foreground transition hover:bg-muted/80"
-            onClick={() =>
-              setExpandedPurchaseId((current) => (current === purchase.id ? null : purchase.id))
-            }
+            aria-haspopup="dialog"
+            onClick={() => setSelectedPurchaseId(purchase.id)}
             type="button"
           >
             Detalle
@@ -516,11 +518,6 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
             getRowKey={(purchase) => purchase.id}
             rows={rows}
           />
-          {rows.map((purchase) =>
-            expandedPurchaseId === purchase.id ? (
-              <PurchaseDetailPanel key={`${purchase.id}-detail`} products={products} purchase={purchase} />
-            ) : null,
-          )}
         </div>
       ) : (
         <div className="rounded-[1.5rem] border border-dashed border-border bg-background/70 p-5 text-sm">
@@ -530,6 +527,23 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
           </p>
         </div>
       )}
+
+      <FinanceActionSheet
+        closeLabel="Cerrar detalle de compra"
+        description={
+          selectedPurchase
+            ? `${selectedPurchase.supplier || 'Sin proveedor'} · ${formatDate(selectedPurchase.purchaseDate)}`
+            : undefined
+        }
+        isOpen={Boolean(selectedPurchase)}
+        onClose={() => setSelectedPurchaseId(null)}
+        placement="side"
+        title="Detalle de compra"
+      >
+        {selectedPurchase ? (
+          <PurchaseDetailPanel products={products} purchase={selectedPurchase} />
+        ) : null}
+      </FinanceActionSheet>
 
       <FinanceActionSheet
         closeLabel="Cerrar registro de compra"

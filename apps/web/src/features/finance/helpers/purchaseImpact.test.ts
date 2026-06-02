@@ -113,7 +113,7 @@ describe('purchaseImpact helpers', () => {
     });
   });
 
-  it('sorts purchases by total amount and keeps canceled rows available for review', () => {
+  it('sorts purchases by total amount and hides canceled rows from the purchase list', () => {
     const sort: PurchaseSortState = { field: 'total', direction: 'descending' };
     const rows = buildPurchaseRows(
       [
@@ -145,8 +145,8 @@ describe('purchaseImpact helpers', () => {
       sort,
     );
 
-    expect(rows.map((row) => row.id)).toEqual(['large', 'small']);
-    expect(rows[1]?.status).toBe('canceled');
+    expect(rows.map((row) => row.id)).toEqual(['large']);
+    expect(rows.some((row) => row.status === 'canceled')).toBe(false);
   });
 
   it('matches item impact details and labels positive, negative, and missing price deltas', () => {

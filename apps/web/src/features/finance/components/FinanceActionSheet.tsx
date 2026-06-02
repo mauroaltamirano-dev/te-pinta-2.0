@@ -12,6 +12,7 @@ type FinanceActionSheetProps = {
   onBack?: () => void;
   closeLabel?: string;
   backLabel?: string;
+  placement?: 'modal' | 'side';
 };
 
 export const FinanceActionSheet = ({
@@ -24,9 +25,11 @@ export const FinanceActionSheet = ({
   onBack,
   closeLabel = 'Close',
   backLabel = 'Back',
+  placement = 'modal',
 }: FinanceActionSheetProps) => {
   const titleId = useId();
   const descriptionId = useId();
+  const isSidePlacement = placement === 'side';
 
   useEffect(() => {
     if (!isOpen) {
@@ -50,7 +53,10 @@ export const FinanceActionSheet = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/50 backdrop-blur-[2px] sm:items-center sm:justify-center"
+      className={[
+        'fixed inset-0 z-50 flex bg-black/50 backdrop-blur-[2px]',
+        isSidePlacement ? 'items-stretch justify-end' : 'items-end sm:items-center sm:justify-center',
+      ].join(' ')}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -61,7 +67,12 @@ export const FinanceActionSheet = ({
         aria-describedby={description ? descriptionId : undefined}
         aria-labelledby={titleId}
         aria-modal="true"
-        className="animate-modal-enter flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-[#E8D3BF] bg-[#FCF8F2] shadow-2xl sm:max-h-[92dvh] sm:max-w-3xl sm:rounded-3xl"
+        className={[
+          'flex w-full flex-col overflow-hidden border border-[#E8D3BF] bg-[#FCF8F2] shadow-2xl',
+          isSidePlacement
+            ? 'h-dvh max-h-dvh max-w-full animate-slide-in-right rounded-none border-y-0 border-r-0 sm:max-w-xl lg:max-w-2xl'
+            : 'max-h-[94dvh] animate-modal-enter rounded-t-3xl sm:max-h-[92dvh] sm:max-w-3xl sm:rounded-3xl',
+        ].join(' ')}
         role="dialog"
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[#E8D3BF] bg-[#FFFDF9] px-4 py-3.5 sm:px-6">
