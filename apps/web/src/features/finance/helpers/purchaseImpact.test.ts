@@ -149,6 +149,25 @@ describe('purchaseImpact helpers', () => {
     expect(rows.some((row) => row.status === 'canceled')).toBe(false);
   });
 
+  it('can include canceled rows when the status filter requests them', () => {
+    const sort: PurchaseSortState = { field: 'date', direction: 'ascending' };
+    const rows = buildPurchaseRows(
+      [
+        purchase({ id: 'active', purchaseDate: '2026-05-22' }),
+        purchase({ id: 'canceled', canceledAt: '2026-05-21T12:00:00.000Z' }),
+      ],
+      products,
+      '',
+      sort,
+      'all',
+    );
+
+    expect(rows.map((row) => [row.id, row.status])).toEqual([
+      ['canceled', 'canceled'],
+      ['active', 'active'],
+    ]);
+  });
+
   it('matches item impact details and labels positive, negative, and missing price deltas', () => {
     const selectedPurchase = purchase({});
     const item = selectedPurchase.items[0]!;

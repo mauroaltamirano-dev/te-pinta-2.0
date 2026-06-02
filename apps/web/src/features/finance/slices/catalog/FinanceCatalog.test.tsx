@@ -187,18 +187,23 @@ describe('FinanceCatalog', () => {
     });
   });
 
-  it('expands a product row with purchase history, supplier, quantity, and price details', async () => {
+  it('opens product purchase history in a side sheet with supplier, quantity, and price details', async () => {
     const user = userEvent.setup();
     renderCatalog();
 
     const flourRow = screen.getByRole('row', { name: /harina 000/i });
     await user.click(within(flourRow).getByRole('button', { name: /ver historial de harina 000/i }));
+    const dialog = await screen.findByRole('dialog', { name: /historial de compras/i });
 
-    expect(await screen.findByText(/molino norte/i)).toBeInTheDocument();
-    expect(screen.getByText(/20\/05\/2026/i)).toBeInTheDocument();
-    expect(screen.getByText(/cantidad: 2 kg/i)).toBeInTheDocument();
-    expect(screen.getByText(/precio total/i)).toBeInTheDocument();
-    expect(screen.getByText(/costo base/i)).toBeInTheDocument();
+    expect(dialog).toHaveAccessibleDescription(/harina 000/i);
+    expect(within(dialog).getByText(/molino norte/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/20\/05\/2026/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/cantidad: 2 kg/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/precio total/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/costo base/i)).toBeInTheDocument();
     expect(getFinanceProductHistory).toHaveBeenCalledWith('flour');
+
+    await user.click(within(dialog).getByRole('button', { name: /cerrar historial de compras/i }));
+    expect(screen.queryByRole('dialog', { name: /historial de compras/i })).not.toBeInTheDocument();
   });
 });

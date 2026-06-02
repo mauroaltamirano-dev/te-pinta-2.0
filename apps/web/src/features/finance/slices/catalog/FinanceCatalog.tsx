@@ -245,12 +245,12 @@ export const FinanceCatalog = ({ products, purchases, isLoading }: FinanceCatalo
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateProductFormState>(initialCreateForm);
   const [editingProduct, setEditingProduct] = useState<FinanceProductWithMetrics | null>(null);
+  const [historyProduct, setHistoryProduct] = useState<FinanceProductWithMetrics | null>(null);
   const [editForm, setEditForm] = useState<EditProductFormState>({
     name: '',
     baseUnit: 'kg',
     currentStockQuantityBase: '0',
   });
-  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [createFeedback, setCreateFeedback] = useState<CatalogFeedback | null>(null);
   const [editFeedback, setEditFeedback] = useState<CatalogFeedback | null>(null);
   const createProduct = useCreateFinanceProduct();
@@ -329,7 +329,7 @@ export const FinanceCatalog = ({ products, purchases, isLoading }: FinanceCatalo
       render: (product) => (
         <button
           className="text-left font-black text-foreground underline-offset-4 hover:underline"
-          onClick={() => setExpandedProductId((current) => (current === product.id ? null : product.id))}
+          onClick={() => setHistoryProduct(product)}
           type="button"
         >
           {product.name}
@@ -396,7 +396,8 @@ export const FinanceCatalog = ({ products, purchases, isLoading }: FinanceCatalo
           <button
             aria-label={`Ver historial de ${product.name}`}
             className="rounded-full bg-muted px-3 py-2 text-xs font-black text-foreground transition hover:bg-muted/80"
-            onClick={() => setExpandedProductId((current) => (current === product.id ? null : product.id))}
+            aria-haspopup="dialog"
+            onClick={() => setHistoryProduct(product)}
             type="button"
           >
             Historial
@@ -483,11 +484,6 @@ export const FinanceCatalog = ({ products, purchases, isLoading }: FinanceCatalo
                 rows={section.products}
               />
 
-              {section.products.map((product) =>
-                expandedProductId === product.id ? (
-                  <ProductHistoryPanel key={`${product.id}-history`} product={product} purchases={purchases} />
-                ) : null,
-              )}
             </section>
           ))}
         </div>
@@ -499,6 +495,19 @@ export const FinanceCatalog = ({ products, purchases, isLoading }: FinanceCatalo
           </p>
         </div>
       )}
+
+      <FinanceActionSheet
+        closeLabel="Cerrar historial de compras"
+        description={historyProduct?.name}
+        isOpen={Boolean(historyProduct)}
+        onClose={() => setHistoryProduct(null)}
+        placement="side"
+        title="Historial de compras"
+      >
+        {historyProduct ? (
+          <ProductHistoryPanel product={historyProduct} purchases={purchases} />
+        ) : null}
+      </FinanceActionSheet>
 
       <FinanceActionSheet
         closeLabel="Cerrar alta de producto"

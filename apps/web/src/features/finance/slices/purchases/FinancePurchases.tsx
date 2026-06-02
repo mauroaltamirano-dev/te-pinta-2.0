@@ -11,6 +11,7 @@ import {
   type PurchaseRow,
   type PurchaseSortField,
   type PurchaseSortState,
+  type PurchaseStatusFilter,
 } from '../../helpers/purchaseImpact';
 import { useCancelFinancePurchase, useCreateFinancePurchase } from '../../hooks';
 import type {
@@ -57,6 +58,11 @@ const baseUnitLabels: Record<FinanceBaseUnit, string> = {
 };
 
 const baseUnitOptions = Object.keys(baseUnitLabels) as FinanceBaseUnit[];
+const purchaseStatusFilters: { id: PurchaseStatusFilter; label: string }[] = [
+  { id: 'active', label: 'Activas' },
+  { id: 'canceled', label: 'Anuladas' },
+  { id: 'all', label: 'Todas' },
+];
 
 const todayIso = () => getBusinessDateIso(new Date());
 
@@ -297,6 +303,7 @@ const PurchaseDetailPanel = ({
 export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurchasesProps) => {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<PurchaseSortState>({ field: 'date', direction: 'descending' });
+  const [statusFilter, setStatusFilter] = useState<PurchaseStatusFilter>('active');
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<PurchaseFormState>(() => initialPurchaseForm());
@@ -319,7 +326,11 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
     previewTotalBaseUnits > 0 && previewTotalPriceCents > 0
       ? Math.round(previewTotalPriceCents / previewTotalBaseUnits)
       : null;
-  const rows = useMemo(() => buildPurchaseRows(purchases, products, search, sort), [products, purchases, search, sort]);
+  const rows = useMemo(
+    () => buildPurchaseRows(purchases, products, search, sort, statusFilter),
+    [products, purchases, search, sort, statusFilter],
+  );
+  const totalSpentCents = rows.reduce((total, purchase) => total + purchase.totalCents, 0);
   const selectedPurchase = selectedPurchaseId
     ? rows.find((purchase) => purchase.id === selectedPurchaseId) ?? null
     : null;
@@ -491,6 +502,44 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
       </div>
 
       <FeedbackBanner feedback={cancelFeedback} />
+
+      <div className="grid gap-3 rounded-[1.5rem] border border-border/70 bg-white p-4 shadow-card lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+            Total gastado · {purchaseStatusFilters.find((filter) => filter.id === statusFilter)?.label}
+          </p>
+          <p className="mt-1 text-3xl font-black tracking-tight text-foreground tabular-nums">
+            {formatMoneyFromCents(totalSpentCents)}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-muted-foreground">
+            {rows.length.toLocaleString('es-AR')} compra(s) en la vista actual.
+          </p>
+        </div>
+        <div
+          aria-label="Filtrar compras por estado"
+          className="grid grid-cols-3 gap-1 rounded-full bg-background p-1 ring-1 ring-border/70"
+        >
+          {purchaseStatusFilters.map((filter) => {
+            const isSelected = statusFilter === filter.id;
+
+            return (
+              <button
+                aria-pressed={isSelected}
+                className={
+                  isSelected
+                    ? 'rounded-full bg-sidebar px-3 py-2 text-xs font-black text-white shadow-card'
+                    : 'rounded-full px-3 py-2 text-xs font-black text-muted-foreground transition hover:bg-white hover:text-foreground'
+                }
+                key={filter.id}
+                onClick={() => setStatusFilter(filter.id)}
+                type="button"
+              >
+                {filter.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <label className="block rounded-[1.5rem] border border-border/70 bg-white px-4 py-3 text-sm font-bold text-foreground shadow-card">
         <span className="flex items-center gap-2">

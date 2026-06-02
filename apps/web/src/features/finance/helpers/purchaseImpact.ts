@@ -13,6 +13,8 @@ export type PurchaseSortState = {
   direction: PurchaseSortDirection;
 };
 
+export type PurchaseStatusFilter = 'active' | 'canceled' | 'all';
+
 export type PurchaseRow = FinancePurchaseDetail & {
   productNames: string[];
   totalCents: number;
@@ -66,13 +68,14 @@ export const buildPurchaseRows = (
   products: FinanceProductWithMetrics[],
   search: string,
   sort: PurchaseSortState,
+  statusFilter: PurchaseStatusFilter = 'active',
 ): PurchaseRow[] => {
   const productNames = productNameById(products);
   const query = normalize(search);
 
   return purchases
     .map((purchase) => toRow(purchase, productNames))
-    .filter((row) => row.status === 'active')
+    .filter((row) => statusFilter === 'all' || row.status === statusFilter)
     .filter((row) => {
       if (!query) {
         return true;

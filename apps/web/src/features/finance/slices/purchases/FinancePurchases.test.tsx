@@ -166,6 +166,8 @@ describe('FinancePurchases', () => {
     renderPurchases();
 
     expect(screen.getByRole('heading', { name: /compras inteligentes/i })).toBeInTheDocument();
+    expect(screen.getByText(/total gastado · activas/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$\s*4\.600/i)).toBeInTheDocument();
     await user.type(screen.getByLabelText(/buscar compra/i), 'lácteos');
 
     expect(screen.getByRole('cell', { name: /lácteos sur/i })).toBeInTheDocument();
@@ -180,6 +182,23 @@ describe('FinancePurchases', () => {
     const rows = within(table).getAllByRole('row').slice(1);
     expect(within(rows[0]!).getByText(/molino norte/i)).toBeInTheDocument();
     expect(within(rows[1]!).getByText(/lácteos sur/i)).toBeInTheDocument();
+  });
+
+  it('filters active, canceled, and all purchases while recalculating total spent', async () => {
+    const user = userEvent.setup();
+    renderPurchases();
+
+    await user.click(screen.getByRole('button', { name: /anuladas/i }));
+    expect(screen.getByText(/total gastado · anuladas/i)).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /proveedor anulado/i })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: /molino norte/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/\$\s*1\.000/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: /todas/i }));
+    expect(screen.getByText(/total gastado · todas/i)).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /molino norte/i })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /proveedor anulado/i })).toBeInTheDocument();
+    expect(screen.getByText(/\$\s*5\.600/i)).toBeInTheDocument();
   });
 
   it('keeps the create purchase sheet open and submits an Orders-style purchase payload', async () => {
