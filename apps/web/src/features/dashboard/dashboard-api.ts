@@ -24,7 +24,7 @@ export type DashboardVarietyWeekComparison = {
 
 export type DashboardWeeklyVarietyAnalytics = {
   currentWeek: DashboardWeekRange;
-  previousWeek: DashboardWeekRange;
+  comparisonWeek: DashboardWeekRange;
   varieties: DashboardVarietyWeekComparison[];
 };
 
@@ -69,7 +69,7 @@ export type DashboardRecentOrder = {
   total: number;
 };
 
-export type DashboardRange = 'all' | 'last30' | 'last7';
+export type DashboardRange = 'all' | 'last31' | 'last7';
 
 export type DashboardTotals = {
   orderCount: number;
@@ -82,6 +82,7 @@ export type DashboardTotals = {
   estimatedCosts: number;
   estimatedProfit: number;
   totalUnits: number;
+  soldDozens: number;
   averageTicket: number;
 };
 
@@ -92,6 +93,14 @@ export type DashboardRangeAnalytics = {
   statusSummary: DashboardStatusSummary;
   recentOrders: DashboardRecentOrder[];
   chartDays: DashboardCalendarDay[];
+};
+
+export type DashboardSelectedRange = {
+  mode: 'preset' | 'custom' | 'weekComparison';
+  label: string;
+  startDate: string | null;
+  endDate: string | null;
+  preset?: DashboardRange;
 };
 
 export type DailyDashboard = {
@@ -109,10 +118,12 @@ export type DailyDashboard = {
   totals: DashboardTotals;
   rangeTotals: Record<DashboardRange, DashboardTotals>;
   rangeAnalytics?: Record<DashboardRange, DashboardRangeAnalytics>;
+  selectedRange?: DashboardSelectedRange;
+  selectedRangeAnalytics?: DashboardRangeAnalytics;
   weeklyVarietyAnalytics?: DashboardWeeklyVarietyAnalytics;
   varietySales: {
     all: DashboardTopVariety[];
-    last30: DashboardTopVariety[];
+    last31: DashboardTopVariety[];
     last7: DashboardTopVariety[];
     selectedDate: DashboardTopVariety[];
   };

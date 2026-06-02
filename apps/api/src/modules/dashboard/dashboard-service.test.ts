@@ -82,6 +82,7 @@ describe('dashboard service', () => {
         paidRevenue: 19500,
         pendingRevenue: 9000,
         totalUnits: 23,
+        soldDozens: 1.92,
         averageTicket: 9500,
       },
       statusSummary: {
@@ -134,7 +135,7 @@ describe('dashboard service', () => {
     expect(result.upcomingOrders).toHaveLength(1);
   });
 
-  it('builds range analytics anchored to the selected date', async () => {
+  it('builds preset range analytics anchored to the selected date', async () => {
     const repository: DashboardRepository = {
       listOrders: async () => [
         order({
@@ -165,31 +166,66 @@ describe('dashboard service', () => {
     );
 
     expect(result.rangeAnalytics.all.totals.orderCount).toBe(3);
-    expect(result.rangeAnalytics.last30.totals.orderCount).toBe(2);
+    expect(result.rangeAnalytics.last31.totals.orderCount).toBe(2);
     expect(result.rangeAnalytics.last7.totals.orderCount).toBe(1);
     expect(result.rangeAnalytics.last7.topVarieties).toEqual([
       { menuItemId: 'menu-1', name: 'Carne suave', quantity: 12 },
     ]);
-    expect(result.rangeAnalytics.last30.chartDays).toHaveLength(30);
+    expect(result.rangeAnalytics.last31.chartDays).toHaveLength(31);
     expect(result.rangeAnalytics.last7.chartDays).toHaveLength(7);
   });
 
-  it('compares variety sales by monday-to-sunday weeks anchored to the selected date', async () => {
+  it('returns custom range analytics with exact range metadata', async () => {
+    const repository: DashboardRepository = {
+      listOrders: async () => [
+        order({ id: 'inside-start', deliveryDate: '2026-05-01', total: 15000 }),
+        order({ id: 'inside-end', deliveryDate: '2026-05-15', total: 9000 }),
+        order({ id: 'outside', deliveryDate: '2026-05-16', total: 6000 }),
+      ],
+    };
+
+    const result = await getDailyDashboard(
+      {
+        date: '2026-05-30',
+        analyticsMode: 'custom',
+        startDate: '2026-05-01',
+        endDate: '2026-05-15',
+      },
+      repository,
+      () => new Date('2026-05-30T12:00:00.000Z'),
+    );
+
+    expect(result.selectedRange).toEqual({
+      mode: 'custom',
+      label: '01/05/2026 – 15/05/2026',
+      startDate: '2026-05-01',
+      endDate: '2026-05-15',
+    });
+    expect(result.selectedRangeAnalytics.totals).toMatchObject({
+      orderCount: 2,
+      grossRevenue: 24000,
+      totalUnits: 24,
+      soldDozens: 2,
+    });
+    expect(result.selectedRangeAnalytics.chartDays).toHaveLength(15);
+  });
+
+  it('compares variety sales by arbitrary monday-to-sunday week starts', async () => {
     const repository: DashboardRepository = {
       listOrders: async () => [
         order({
-          id: 'order-current-monday',
-          deliveryDate: '2026-05-25',
+          id: 'order-current-week',
+          deliveryDate: '2026-05-04',
           items: [item({ menuItemId: 'menu-1', menuItemName: 'Carne suave', quantity: 12 })],
         }),
         order({
-          id: 'order-current-sunday',
-          deliveryDate: '2026-05-31',
+          id: 'order-current-week-extra',
+          deliveryDate: '2026-05-10',
           items: [item({ menuItemId: 'menu-2', menuItemName: 'Humita', quantity: 6 })],
         }),
         order({
-          id: 'order-previous-week',
-          deliveryDate: '2026-05-24',
+          id: 'order-comparison-week',
+          deliveryDate: '2026-04-07',
           items: [
             item({ menuItemId: 'menu-1', menuItemName: 'Carne suave', quantity: 6 }),
             item({ menuItemId: 'menu-3', menuItemName: 'Verdura', quantity: 12 }),
@@ -199,14 +235,19 @@ describe('dashboard service', () => {
     };
 
     const result = await getDailyDashboard(
-      { date: '2026-05-30' },
+      {
+        date: '2026-05-30',
+        analyticsMode: 'weekComparison',
+        currentWeekStart: '2026-05-04',
+        comparisonWeekStart: '2026-04-07',
+      },
       repository,
       () => new Date('2026-05-30T12:00:00.000Z'),
     );
 
     expect(result.weeklyVarietyAnalytics).toEqual({
-      currentWeek: { startDate: '2026-05-25', endDate: '2026-05-31' },
-      previousWeek: { startDate: '2026-05-18', endDate: '2026-05-24' },
+      currentWeek: { startDate: '2026-05-04', endDate: '2026-05-10' },
+      comparisonWeek: { startDate: '2026-04-06', endDate: '2026-04-12' },
       varieties: [
         {
           menuItemId: 'menu-1',

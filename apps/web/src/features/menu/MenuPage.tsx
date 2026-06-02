@@ -96,11 +96,11 @@ const menuBadgeClassName =
 const inputClassName =
   'mt-2 w-full rounded-full border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20';
 
-type SalesPeriod = 'all' | 'last30' | 'last7';
+type SalesPeriod = 'all' | 'last31' | 'last7';
 
 const salesPeriodLabels: Record<SalesPeriod, string> = {
   all: 'Total',
-  last30: '30 días',
+  last31: '31 días',
   last7: '7 días',
 };
 

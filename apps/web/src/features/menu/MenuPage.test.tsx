@@ -79,6 +79,7 @@ describe('MenuPage', () => {
         estimatedCosts: 18000,
         estimatedProfit: 30000,
         totalUnits: 30,
+        soldDozens: 2.5,
         averageTicket: 16000,
       },
       rangeTotals: {
@@ -93,9 +94,10 @@ describe('MenuPage', () => {
           estimatedCosts: 18000,
           estimatedProfit: 30000,
           totalUnits: 30,
+          soldDozens: 2.5,
           averageTicket: 16000,
         },
-        last30: {
+        last31: {
           orderCount: 3,
           activeOrderCount: 1,
           finalizedOrderCount: 2,
@@ -106,6 +108,7 @@ describe('MenuPage', () => {
           estimatedCosts: 18000,
           estimatedProfit: 30000,
           totalUnits: 30,
+          soldDozens: 2.5,
           averageTicket: 16000,
         },
         last7: {
@@ -119,6 +122,7 @@ describe('MenuPage', () => {
           estimatedCosts: 18000,
           estimatedProfit: 30000,
           totalUnits: 30,
+          soldDozens: 2.5,
           averageTicket: 16000,
         },
       },
@@ -127,7 +131,7 @@ describe('MenuPage', () => {
           { menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 },
           { menuItemId: 'menu-2', name: 'Humita', quantity: 6 },
         ],
-        last30: [],
+        last31: [],
         last7: [],
         selectedDate: [],
       },

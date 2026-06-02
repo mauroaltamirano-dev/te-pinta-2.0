@@ -356,6 +356,12 @@ export const orderFiltersSchema = z.object({
 
 export const dashboardQuerySchema = z.object({
   date: z.iso.date().optional(),
+  analyticsMode: z.enum(['preset', 'custom', 'weekComparison']).optional(),
+  preset: z.enum(['all', 'last31', 'last7']).optional(),
+  startDate: z.iso.date().optional(),
+  endDate: z.iso.date().optional(),
+  currentWeekStart: z.iso.date().optional(),
+  comparisonWeekStart: z.iso.date().optional(),
 });
 
 export const apiErrorSchema = z.object({

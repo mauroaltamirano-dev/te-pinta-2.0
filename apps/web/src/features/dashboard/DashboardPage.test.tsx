@@ -168,6 +168,7 @@ describe('DashboardPage', () => {
         estimatedCosts: 16000,
         estimatedProfit: 29600,
         totalUnits: 36,
+        soldDozens: 3,
         averageTicket: 15200,
       },
       rangeTotals: {
@@ -182,9 +183,10 @@ describe('DashboardPage', () => {
           estimatedCosts: 16000,
           estimatedProfit: 29600,
           totalUnits: 36,
+          soldDozens: 3,
           averageTicket: 15200,
         },
-        last30: {
+        last31: {
           orderCount: 2,
           activeOrderCount: 1,
           finalizedOrderCount: 1,
@@ -195,6 +197,7 @@ describe('DashboardPage', () => {
           estimatedCosts: 12000,
           estimatedProfit: 21600,
           totalUnits: 24,
+          soldDozens: 2,
           averageTicket: 16800,
         },
         last7: {
@@ -208,6 +211,7 @@ describe('DashboardPage', () => {
           estimatedCosts: 4000,
           estimatedProfit: 8000,
           totalUnits: 12,
+          soldDozens: 1,
           averageTicket: 12000,
         },
       },
@@ -224,6 +228,7 @@ describe('DashboardPage', () => {
             estimatedCosts: 16000,
             estimatedProfit: 29600,
             totalUnits: 36,
+            soldDozens: 3,
             averageTicket: 15200,
           },
           topClients: [
@@ -239,7 +244,7 @@ describe('DashboardPage', () => {
           recentOrders: [],
           chartDays: [{ date: '2026-05-06', count: 3, revenue: 45600, estimatedProfit: 29600 }],
         },
-        last30: {
+        last31: {
           totals: {
             orderCount: 2,
             activeOrderCount: 1,
@@ -251,6 +256,7 @@ describe('DashboardPage', () => {
             estimatedCosts: 12000,
             estimatedProfit: 21600,
             totalUnits: 24,
+            soldDozens: 2,
             averageTicket: 16800,
           },
           topClients: [
@@ -278,6 +284,7 @@ describe('DashboardPage', () => {
             estimatedCosts: 4000,
             estimatedProfit: 8000,
             totalUnits: 12,
+            soldDozens: 1,
             averageTicket: 12000,
           },
           topClients: [
@@ -291,7 +298,7 @@ describe('DashboardPage', () => {
       },
       weeklyVarietyAnalytics: {
         currentWeek: { startDate: '2026-05-04', endDate: '2026-05-10' },
-        previousWeek: { startDate: '2026-04-27', endDate: '2026-05-03' },
+        comparisonWeek: { startDate: '2026-04-27', endDate: '2026-05-03' },
         varieties: [
           {
             menuItemId: 'menu-1',
@@ -313,7 +320,7 @@ describe('DashboardPage', () => {
       },
       varietySales: {
         all: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 }],
-        last30: [{ menuItemId: 'menu-2', name: 'Humita', quantity: 12 }],
+        last31: [{ menuItemId: 'menu-2', name: 'Humita', quantity: 12 }],
         last7: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 6 }],
         selectedDate: [],
       },
@@ -329,8 +336,9 @@ describe('DashboardPage', () => {
     expect(screen.getAllByText('ARS 45.600').length).toBeGreaterThan(0);
     expect(screen.getByText(/rango de análisis/i)).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /ventas en pesos · histórico completo/i }),
+      screen.getByRole('heading', { name: /ventas en pesos · siempre/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/3 docenas vendidas/i)).toBeInTheDocument();
     expect(screen.getAllByText('Carne suave').length).toBeGreaterThan(0);
     expect(screen.getByText(/24 unidades/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /resumen general/i })).toBeInTheDocument();
@@ -370,15 +378,57 @@ describe('DashboardPage', () => {
     expect(screen.getByText('+50%')).toBeInTheDocument();
   });
 
+  it('requests custom range analytics with explicit from and to dates', async () => {
+    renderDashboardPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /rango manual/i }));
+    fireEvent.change(screen.getByLabelText(/desde/i), { target: { value: '2026-05-01' } });
+    fireEvent.change(screen.getByLabelText(/hasta/i), { target: { value: '2026-05-15' } });
+
+    await waitFor(() => {
+      expect(getDailyDashboard).toHaveBeenLastCalledWith({
+        date: expect.any(String),
+        analyticsMode: 'custom',
+        startDate: '2026-05-01',
+        endDate: '2026-05-15',
+      });
+    });
+  });
+
+  it('requests month week-bucket comparison analytics', async () => {
+    renderDashboardPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /comparar semanas/i }));
+    const monthInputs = screen.getAllByLabelText(/mes/i);
+    const weekInputs = screen.getAllByLabelText(/semana/i);
+    fireEvent.change(monthInputs[0]!, { target: { value: '2026-05' } });
+    fireEvent.change(weekInputs[0]!, { target: { value: '1' } });
+    fireEvent.change(monthInputs[1]!, { target: { value: '2026-04' } });
+    fireEvent.change(weekInputs[1]!, { target: { value: '1' } });
+
+    await waitFor(() => {
+      expect(getDailyDashboard).toHaveBeenLastCalledWith({
+        date: expect.any(String),
+        analyticsMode: 'weekComparison',
+        currentWeekStart: '2026-04-27',
+        comparisonWeekStart: '2026-03-30',
+      });
+    });
+  });
+
   it('reloads the dashboard for the selected date', async () => {
     renderDashboardPage();
 
-    fireEvent.change(await screen.findByLabelText(/fecha del dashboard/i), {
+    fireEvent.change(await screen.findByLabelText(/fecha base del dashboard/i), {
       target: { value: '2026-05-07' },
     });
 
     await waitFor(() => {
-      expect(getDailyDashboard).toHaveBeenLastCalledWith({ date: '2026-05-07' });
+      expect(getDailyDashboard).toHaveBeenLastCalledWith({
+        date: '2026-05-07',
+        analyticsMode: 'preset',
+        preset: 'all',
+      });
     });
   });
 });

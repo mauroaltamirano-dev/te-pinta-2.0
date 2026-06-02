@@ -49,7 +49,7 @@ export type DashboardVarietyWeekComparison = {
 
 export type DashboardWeeklyVarietyAnalytics = {
   currentWeek: DashboardWeekRange;
-  previousWeek: DashboardWeekRange;
+  comparisonWeek: DashboardWeekRange;
   varieties: DashboardVarietyWeekComparison[];
 };
 
@@ -105,10 +105,11 @@ export type DashboardTotals = {
   estimatedCosts: number;
   estimatedProfit: number;
   totalUnits: number;
+  soldDozens: number;
   averageTicket: number;
 };
 
-export type DashboardRange = 'all' | 'last30' | 'last7';
+export type DashboardRange = 'all' | 'last31' | 'last7';
 
 export type DashboardRangeAnalytics = {
   totals: DashboardTotals;
@@ -117,6 +118,14 @@ export type DashboardRangeAnalytics = {
   statusSummary: DashboardStatusSummary;
   recentOrders: DashboardRecentOrder[];
   chartDays: DashboardCalendarDay[];
+};
+
+export type DashboardSelectedRange = {
+  mode: 'preset' | 'custom' | 'weekComparison';
+  label: string;
+  startDate: string | null;
+  endDate: string | null;
+  preset?: DashboardRange;
 };
 
 export type DailyDashboard = {
@@ -134,10 +143,12 @@ export type DailyDashboard = {
   totals: DashboardTotals;
   rangeTotals: Record<DashboardRange, DashboardTotals>;
   rangeAnalytics: Record<DashboardRange, DashboardRangeAnalytics>;
+  selectedRange: DashboardSelectedRange;
+  selectedRangeAnalytics: DashboardRangeAnalytics;
   weeklyVarietyAnalytics: DashboardWeeklyVarietyAnalytics;
   varietySales: {
     all: DashboardTopVariety[];
-    last30: DashboardTopVariety[];
+    last31: DashboardTopVariety[];
     last7: DashboardTopVariety[];
     selectedDate: DashboardTopVariety[];
   };
@@ -161,6 +172,11 @@ const parseIsoDate = (date: string): Date => {
   return new Date(year || 0, (month || 1) - 1, day || 1);
 };
 
+const formatIsoDateLabel = (date: string): string => {
+  const [year, month, day] = date.split('-');
+  return `${day}/${month}/${year}`;
+};
+
 const addDays = (date: Date, days: number): Date => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -171,6 +187,19 @@ const startOfMondayWeek = (date: Date): Date => {
   const day = date.getDay();
   const daysSinceMonday = (day + 6) % 7;
   return addDays(date, -daysSinceMonday);
+};
+
+const normalizeRange = (startDate: string, endDate: string): DashboardWeekRange =>
+  startDate <= endDate
+    ? { startDate, endDate }
+    : { startDate: endDate, endDate: startDate };
+
+const weekRangeFromStart = (startDate: string): DashboardWeekRange => {
+  const start = startOfMondayWeek(parseIsoDate(startDate));
+  return {
+    startDate: toIsoDate(start),
+    endDate: toIsoDate(addDays(start, 6)),
+  };
 };
 
 const isFinalized = (order: DashboardOrder): boolean =>
@@ -227,33 +256,30 @@ const buildVarietyQuantityMap = (orders: DashboardOrder[]): Map<string, Dashboar
 
 const buildWeeklyVarietyAnalytics = (
   orders: DashboardOrder[],
-  anchorDate: Date,
+  currentWeekStartDate: string,
+  comparisonWeekStartDate?: string,
 ): DashboardWeeklyVarietyAnalytics => {
-  const currentWeekStart = startOfMondayWeek(anchorDate);
-  const currentWeekEnd = addDays(currentWeekStart, 6);
-  const previousWeekStart = addDays(currentWeekStart, -7);
-  const previousWeekEnd = addDays(currentWeekStart, -1);
-  const currentWeekRange = {
-    startDate: toIsoDate(currentWeekStart),
-    endDate: toIsoDate(currentWeekEnd),
-  };
-  const previousWeekRange = {
-    startDate: toIsoDate(previousWeekStart),
-    endDate: toIsoDate(previousWeekEnd),
-  };
+  const currentWeekRange = weekRangeFromStart(currentWeekStartDate);
+  const currentWeekStart = parseIsoDate(currentWeekRange.startDate);
+  const comparisonWeekRange = comparisonWeekStartDate
+    ? weekRangeFromStart(comparisonWeekStartDate)
+    : {
+        startDate: toIsoDate(addDays(currentWeekStart, -7)),
+        endDate: toIsoDate(addDays(currentWeekStart, -1)),
+      };
   const filterByRange = ({ startDate, endDate }: DashboardWeekRange): DashboardOrder[] =>
     orders.filter((order) => order.deliveryDate >= startDate && order.deliveryDate <= endDate);
   const currentWeekVarieties = buildVarietyQuantityMap(filterByRange(currentWeekRange));
-  const previousWeekVarieties = buildVarietyQuantityMap(filterByRange(previousWeekRange));
-  const menuItemIds = new Set([...currentWeekVarieties.keys(), ...previousWeekVarieties.keys()]);
+  const comparisonWeekVarieties = buildVarietyQuantityMap(filterByRange(comparisonWeekRange));
+  const menuItemIds = new Set([...currentWeekVarieties.keys(), ...comparisonWeekVarieties.keys()]);
 
   return {
     currentWeek: currentWeekRange,
-    previousWeek: previousWeekRange,
+    comparisonWeek: comparisonWeekRange,
     varieties: [...menuItemIds]
       .map((menuItemId) => {
         const current = currentWeekVarieties.get(menuItemId);
-        const previous = previousWeekVarieties.get(menuItemId);
+        const previous = comparisonWeekVarieties.get(menuItemId);
         const currentWeekQuantity = current?.quantity ?? 0;
         const previousWeekQuantity = previous?.quantity ?? 0;
         const difference = currentWeekQuantity - previousWeekQuantity;
@@ -320,6 +346,7 @@ const buildTotals = (orders: DashboardOrder[]): DashboardTotals => {
     estimatedCosts,
     estimatedProfit: roundMoney(grossRevenue - estimatedCosts),
     totalUnits,
+    soldDozens: roundMoney(totalUnits / 12),
     averageTicket: orderCount > 0 ? roundMoney(grossRevenue / orderCount) : 0,
   };
 };
@@ -357,17 +384,17 @@ export const getDailyDashboard = async (
   const anchorDate = parseIsoDate(date);
   const allOrders = await repository.listOrders();
   const selectedDateOrders = allOrders.filter((order) => order.deliveryDate === date);
-  const last30Start = toIsoDate(addDays(anchorDate, -29));
+  const last31Start = toIsoDate(addDays(anchorDate, -30));
   const last7Start = toIsoDate(addDays(anchorDate, -6));
-  const last30Orders = allOrders.filter(
-    (order) => order.deliveryDate >= last30Start && order.deliveryDate <= date,
+  const last31Orders = allOrders.filter(
+    (order) => order.deliveryDate >= last31Start && order.deliveryDate <= date,
   );
   const last7Orders = allOrders.filter(
     (order) => order.deliveryDate >= last7Start && order.deliveryDate <= date,
   );
   const rangeTotals = {
     all: buildTotals(allOrders),
-    last30: buildTotals(last30Orders),
+    last31: buildTotals(last31Orders),
     last7: buildTotals(last7Orders),
   };
   const deliveryShifts: Record<DeliveryTime, number> = {
@@ -398,10 +425,33 @@ export const getDailyDashboard = async (
     Array.from({ length }, (_, index) =>
       buildCalendarDay(toIsoDate(addDays(anchorDate, index - length + 1))),
     );
+  const buildCalendarBetween = (startDate: string, endDate: string): DashboardCalendarDay[] => {
+    const start = parseIsoDate(startDate);
+    const end = parseIsoDate(endDate);
+    const dayCount = Math.max(
+      1,
+      Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+    );
+
+    return Array.from({ length: dayCount }, (_, index) =>
+      buildCalendarDay(toIsoDate(addDays(start, index))),
+    );
+  };
   const buildHistoricalCalendar = (orders: DashboardOrder[]): DashboardCalendarDay[] =>
     [...new Set(orders.map((order) => order.deliveryDate))]
       .sort((a, b) => a.localeCompare(b))
       .map(buildCalendarDay);
+  const buildRangeAnalytics = (
+    orders: DashboardOrder[],
+    chartDays: DashboardCalendarDay[],
+  ): DashboardRangeAnalytics => ({
+    totals: buildTotals(orders),
+    topClients: buildTopClients(orders),
+    topVarieties: buildTopVarieties(orders),
+    statusSummary: buildStatusSummary(orders),
+    recentOrders: buildRecentOrders(orders),
+    chartDays,
+  });
   const todayIso = currentBusinessDate;
   const nextSevenDays = Array.from({ length: 7 }, (_, index) =>
     buildCalendarDay(toIsoDate(addDays(anchorDate, index))),
@@ -409,35 +459,76 @@ export const getDailyDashboard = async (
   const lastSevenDays = buildCalendarRange(7);
   const rangeOrders: Record<DashboardRange, DashboardOrder[]> = {
     all: allOrders,
-    last30: last30Orders,
+    last31: last31Orders,
     last7: last7Orders,
   };
   const rangeAnalytics: Record<DashboardRange, DashboardRangeAnalytics> = {
-    all: {
-      totals: rangeTotals.all,
-      topClients: buildTopClients(rangeOrders.all),
-      topVarieties: buildTopVarieties(rangeOrders.all),
-      statusSummary: buildStatusSummary(rangeOrders.all),
-      recentOrders: buildRecentOrders(rangeOrders.all),
-      chartDays: buildHistoricalCalendar(rangeOrders.all),
-    },
-    last30: {
-      totals: rangeTotals.last30,
-      topClients: buildTopClients(rangeOrders.last30),
-      topVarieties: buildTopVarieties(rangeOrders.last30),
-      statusSummary: buildStatusSummary(rangeOrders.last30),
-      recentOrders: buildRecentOrders(rangeOrders.last30),
-      chartDays: buildCalendarRange(30),
-    },
-    last7: {
-      totals: rangeTotals.last7,
-      topClients: buildTopClients(rangeOrders.last7),
-      topVarieties: buildTopVarieties(rangeOrders.last7),
-      statusSummary: buildStatusSummary(rangeOrders.last7),
-      recentOrders: buildRecentOrders(rangeOrders.last7),
-      chartDays: lastSevenDays,
-    },
+    all: buildRangeAnalytics(rangeOrders.all, buildHistoricalCalendar(rangeOrders.all)),
+    last31: buildRangeAnalytics(rangeOrders.last31, buildCalendarRange(31)),
+    last7: buildRangeAnalytics(rangeOrders.last7, lastSevenDays),
   };
+  const presetLabels: Record<DashboardRange, string> = {
+    all: 'Siempre',
+    last31: 'Últimos 31 días',
+    last7: 'Últimos 7 días',
+  };
+  const presetDateRanges: Record<DashboardRange, DashboardWeekRange | null> = {
+    all: null,
+    last31: { startDate: last31Start, endDate: date },
+    last7: { startDate: last7Start, endDate: date },
+  };
+  const requestedPreset = query.preset ?? 'all';
+  const requestedMode = query.analyticsMode ?? 'preset';
+  const weeklyVarietyAnalytics = buildWeeklyVarietyAnalytics(
+    allOrders,
+    query.currentWeekStart ?? date,
+    query.comparisonWeekStart,
+  );
+  const currentWeekRange = weeklyVarietyAnalytics.currentWeek;
+  const selectedRange =
+    requestedMode === 'custom' && query.startDate && query.endDate
+      ? normalizeRange(query.startDate, query.endDate)
+      : requestedMode === 'weekComparison'
+        ? currentWeekRange
+        : null;
+  const selectedRangeOrders = selectedRange
+    ? allOrders.filter(
+        (order) =>
+          order.deliveryDate >= selectedRange.startDate && order.deliveryDate <= selectedRange.endDate,
+      )
+    : rangeOrders[requestedPreset];
+  const selectedRangeAnalytics = selectedRange
+    ? buildRangeAnalytics(
+        selectedRangeOrders,
+        buildCalendarBetween(selectedRange.startDate, selectedRange.endDate),
+      )
+    : rangeAnalytics[requestedPreset];
+  const selectedRangeMetadata: DashboardSelectedRange =
+    requestedMode === 'custom' && selectedRange && query.startDate && query.endDate
+      ? {
+          mode: 'custom',
+          label: `${formatIsoDateLabel(selectedRange.startDate)} – ${formatIsoDateLabel(
+            selectedRange.endDate,
+          )}`,
+          startDate: selectedRange.startDate,
+          endDate: selectedRange.endDate,
+        }
+      : requestedMode === 'weekComparison' && selectedRange
+        ? {
+            mode: 'weekComparison',
+            label: `Semana ${formatIsoDateLabel(selectedRange.startDate)} – ${formatIsoDateLabel(
+              selectedRange.endDate,
+            )}`,
+            startDate: selectedRange.startDate,
+            endDate: selectedRange.endDate,
+          }
+        : {
+            mode: 'preset',
+            preset: requestedPreset,
+            label: presetLabels[requestedPreset],
+            startDate: presetDateRanges[requestedPreset]?.startDate ?? null,
+            endDate: presetDateRanges[requestedPreset]?.endDate ?? null,
+          };
 
   const upcomingOrders = allOrders
     .filter((order) => order.deliveryDate >= todayIso && !isFinalized(order))
@@ -472,10 +563,12 @@ export const getDailyDashboard = async (
     totals: rangeTotals.all,
     rangeTotals,
     rangeAnalytics,
-    weeklyVarietyAnalytics: buildWeeklyVarietyAnalytics(allOrders, anchorDate),
+    selectedRange: selectedRangeMetadata,
+    selectedRangeAnalytics,
+    weeklyVarietyAnalytics,
     varietySales: {
       all: buildTopVarieties(allOrders),
-      last30: buildTopVarieties(last30Orders),
+      last31: buildTopVarieties(last31Orders),
       last7: buildTopVarieties(last7Orders),
       selectedDate: buildTopVarieties(selectedDateOrders),
     },

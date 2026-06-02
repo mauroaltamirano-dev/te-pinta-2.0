@@ -23,7 +23,12 @@ import {
   Wallet,
 } from 'lucide-react';
 
-import { getBusinessDateIso, type DeliveryTime, type OrderStatus } from '@te-pinta/shared';
+import {
+  getBusinessDateIso,
+  type DashboardQuery,
+  type DeliveryTime,
+  type OrderStatus,
+} from '@te-pinta/shared';
 
 import type {
   DashboardCalendarDay,
@@ -68,11 +73,32 @@ const parseLocalDate = (date: string): Date => {
   return new Date(year || 0, (month || 1) - 1, day || 1);
 };
 
+const toIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addLocalDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
 const today = (): string => getBusinessDateIso(new Date());
+const currentMonth = (): string => today().slice(0, 7);
+const previousMonth = (): string => {
+  const date = parseLocalDate(`${currentMonth()}-01`);
+  date.setMonth(date.getMonth() - 1);
+  return toIsoDate(date).slice(0, 7);
+};
 
 const formatMoney = (value: number): string => `ARS ${Math.round(value).toLocaleString('es-AR')}`;
 const formatCompactMoney = (value: number): string =>
   value >= 1_000_000 ? `ARS ${(value / 1_000_000).toFixed(1)}M` : formatMoney(value);
+const formatDozens = (value: number): string =>
+  value.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 const formatDateLabel = (date: string): string => dateFormatter.format(parseLocalDate(date));
 const formatFullDateLabel = (date: string): string =>
   fullDateFormatter.format(parseLocalDate(date));
@@ -234,17 +260,34 @@ const buildWeeklyVarietyRows = (
 
 const dashboardRangeLabels: Record<DashboardRange, string> = {
   all: 'Siempre',
-  last30: 'Últimos 30 días',
+  last31: 'Últimos 31 días',
   last7: 'Últimos 7 días',
 };
 
-const dashboardRangeDescriptions: Record<DashboardRange, string> = {
-  all: 'Histórico completo',
-  last30: 'Últimos 30 días',
-  last7: 'Últimos 7 días',
+const dashboardRangeOptions: DashboardRange[] = ['all', 'last31', 'last7'];
+type DashboardAnalysisMode = 'preset' | 'custom' | 'weekComparison';
+const dashboardModeLabels: Record<DashboardAnalysisMode, string> = {
+  preset: 'Presets',
+  custom: 'Rango manual',
+  weekComparison: 'Comparar semanas',
+};
+const weekNumberOptions = [1, 2, 3, 4, 5];
+
+const getMonthWeekStart = (month: string, weekNumber: number): string => {
+  const [year, monthIndex] = month.split('-').map(Number);
+  const firstDay = new Date(year || 0, (monthIndex || 1) - 1, 1);
+  const daysSinceMonday = (firstDay.getDay() + 6) % 7;
+  const firstWeekStart = addLocalDays(firstDay, -daysSinceMonday);
+
+  return toIsoDate(addLocalDays(firstWeekStart, (weekNumber - 1) * 7));
 };
 
-const dashboardRangeOptions: DashboardRange[] = ['all', 'last30', 'last7'];
+const getMonthWeekOptionLabel = (month: string, weekNumber: number): string => {
+  const startDate = getMonthWeekStart(month, weekNumber);
+  const endDate = toIsoDate(addLocalDays(parseLocalDate(startDate), 6));
+
+  return `Semana ${weekNumber} · ${formatWeekRangeLabel(startDate, endDate)}`;
+};
 
 type RangePillsProps = {
   value: DashboardRange;
@@ -365,11 +408,11 @@ const chartMetricLabels: Record<DashboardChartMetric, { title: string; chip: str
 const LineChartCard = ({
   days,
   metric,
-  range,
+  rangeLabel,
 }: {
   days: DashboardCalendarDay[];
   metric: DashboardChartMetric;
-  range: DashboardRange;
+  rangeLabel: string;
 }) => {
   const values = days.map((day) =>
     metric === 'profit' ? (day.estimatedProfit ?? day.revenue) : day.revenue,
@@ -392,7 +435,7 @@ const LineChartCard = ({
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h3 className="font-black text-foreground">
-            {chartMetricLabels[metric].title} · {dashboardRangeDescriptions[range]}
+            {chartMetricLabels[metric].title} · {rangeLabel}
           </h3>
           <p className="text-xs font-semibold text-muted-foreground">
             Cada punto usa la fecha de entrega dentro del rango seleccionado.
@@ -413,7 +456,7 @@ const LineChartCard = ({
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
             role="img"
-            aria-label={`Gráfico de línea de ${chartMetricLabels[metric].chip.toLowerCase()} para ${dashboardRangeLabels[range]}`}
+            aria-label={`Gráfico de línea de ${chartMetricLabels[metric].chip.toLowerCase()} para ${rangeLabel}`}
           >
             {[20, 40, 60, 80].map((y) => (
               <line
@@ -524,9 +567,47 @@ const OrderStatusChip = ({ status }: { status: OrderStatus }) => (
 
 export const DashboardPage = () => {
   const [date, setDate] = useState(today);
+  const [analysisMode, setAnalysisMode] = useState<DashboardAnalysisMode>('preset');
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>('all');
+  const [customStartDate, setCustomStartDate] = useState(today);
+  const [customEndDate, setCustomEndDate] = useState(today);
+  const [currentWeekMonth, setCurrentWeekMonth] = useState(currentMonth);
+  const [currentWeekNumber, setCurrentWeekNumber] = useState(1);
+  const [comparisonWeekMonth, setComparisonWeekMonth] = useState(previousMonth);
+  const [comparisonWeekNumber, setComparisonWeekNumber] = useState(1);
   const [chartMetric, setChartMetric] = useState<DashboardChartMetric>('revenue');
-  const dashboardQuery = useDailyDashboard({ date });
+  const dashboardRequest = useMemo<DashboardQuery>(() => {
+    if (analysisMode === 'custom') {
+      return {
+        date,
+        analyticsMode: 'custom',
+        startDate: customStartDate,
+        endDate: customEndDate,
+      };
+    }
+
+    if (analysisMode === 'weekComparison') {
+      return {
+        date,
+        analyticsMode: 'weekComparison',
+        currentWeekStart: getMonthWeekStart(currentWeekMonth, currentWeekNumber),
+        comparisonWeekStart: getMonthWeekStart(comparisonWeekMonth, comparisonWeekNumber),
+      };
+    }
+
+    return { date, analyticsMode: 'preset', preset: dashboardRange };
+  }, [
+    analysisMode,
+    comparisonWeekMonth,
+    comparisonWeekNumber,
+    currentWeekMonth,
+    currentWeekNumber,
+    customEndDate,
+    customStartDate,
+    dashboardRange,
+    date,
+  ]);
+  const dashboardQuery = useDailyDashboard(dashboardRequest);
   const menuItemsQuery = useMenuItems();
   const dashboard = dashboardQuery.data;
   const totals = dashboard?.totals;
@@ -535,7 +616,9 @@ export const DashboardPage = () => {
   const lastSevenDays = dashboard?.lastSevenDays?.length
     ? dashboard.lastSevenDays
     : mockLastSevenDays;
-  const selectedRangeAnalytics = dashboard?.rangeAnalytics?.[dashboardRange];
+  const selectedRangeAnalytics =
+    dashboard?.selectedRangeAnalytics ?? dashboard?.rangeAnalytics?.[dashboardRange];
+  const selectedRangeLabel = dashboard?.selectedRange?.label ?? dashboardRangeLabels[dashboardRange];
   const nextSevenDays = dashboard?.nextSevenDays?.length
     ? dashboard.nextSevenDays
     : mockNextSevenDays;
@@ -566,6 +649,7 @@ export const DashboardPage = () => {
   const monthSales = hasBusinessData ? (selectedRangeTotals?.grossRevenue ?? 0) : 2_786_400;
   const netProfit = hasBusinessData ? (selectedRangeTotals?.estimatedProfit ?? 0) : 1_243_850;
   const totalOrders = hasBusinessData ? (selectedRangeTotals?.orderCount ?? 0) : 28;
+  const soldDozens = hasBusinessData ? (selectedRangeTotals?.soldDozens ?? 0) : 42;
   const pendingRevenue = hasBusinessData ? (totals?.pendingRevenue ?? 0) : 612_300;
   const averageTicket = hasBusinessData ? (selectedRangeTotals?.averageTicket ?? 0) : 39_805;
 
@@ -574,7 +658,7 @@ export const DashboardPage = () => {
       {
         label: 'Ventas',
         value: formatMoney(monthSales),
-        trend: dashboardRangeLabels[dashboardRange],
+        trend: selectedRangeLabel,
         icon: CircleDollarSign,
         tone: 'bg-primary/10 text-primary ring-primary/15',
         sparkline: [12, 18, 16, 24, 22, 31, 38],
@@ -582,7 +666,7 @@ export const DashboardPage = () => {
       {
         label: 'Ganancia neta',
         value: formatMoney(netProfit),
-        trend: dashboardRangeLabels[dashboardRange],
+        trend: selectedRangeLabel,
         icon: TrendingUp,
         tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
         sparkline: [8, 12, 14, 18, 17, 24, 29],
@@ -590,7 +674,7 @@ export const DashboardPage = () => {
       {
         label: 'Pedidos totales',
         value: String(totalOrders),
-        trend: dashboardRangeLabels[dashboardRange],
+        trend: `${formatDozens(soldDozens)} docenas vendidas`,
         icon: ClipboardList,
         tone: 'bg-sky-50 text-sky-700 ring-sky-100',
         sparkline: [5, 8, 7, 11, 14, 13, 16],
@@ -606,13 +690,13 @@ export const DashboardPage = () => {
       {
         label: 'Ticket promedio',
         value: formatMoney(averageTicket),
-        trend: dashboardRangeLabels[dashboardRange],
+        trend: selectedRangeLabel,
         icon: CreditCard,
         tone: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
         sparkline: [9, 10, 13, 12, 15, 17, 19],
       },
     ],
-    [averageTicket, dashboardRange, monthSales, netProfit, pendingRevenue, totalOrders],
+    [averageTicket, monthSales, netProfit, pendingRevenue, selectedRangeLabel, soldDozens, totalOrders],
   );
 
   return (
@@ -632,7 +716,7 @@ export const DashboardPage = () => {
 
           <div className="grid gap-3 lg:grid-cols-[minmax(12rem,.8fr)_minmax(18rem,1fr)_auto_auto] lg:items-center">
             <label className="grid gap-1.5 text-xs font-black uppercase tracking-wide text-sidebar-muted">
-              Fecha del dashboard · rango de fechas
+              Fecha base del dashboard
               <input
                 className="min-h-11 rounded-2xl border border-white/15 bg-white px-4 text-sm font-black text-sidebar outline-none transition focus:border-accent focus:ring-4 focus:ring-accent/25"
                 onChange={(event) => setDate(event.target.value)}
@@ -684,15 +768,132 @@ export const DashboardPage = () => {
       ) : null}
 
       <section className="space-y-3" aria-label="Indicadores principales">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">
-            Rango de análisis
-          </p>
-          <RangePills
-            ariaLabel="Rango de análisis del dashboard"
-            value={dashboardRange}
-            onChange={setDashboardRange}
-          />
+        <div className="rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-card">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">
+                Rango de análisis
+              </p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">
+                Mostrando: <span className="font-black text-foreground">{selectedRangeLabel}</span>
+              </p>
+            </div>
+            <div
+              aria-label="Modo de análisis del dashboard"
+              className="grid gap-1 rounded-full bg-background p-1 ring-1 ring-border/70 sm:grid-cols-3"
+            >
+              {(['preset', 'custom', 'weekComparison'] as DashboardAnalysisMode[]).map((mode) => {
+                const isSelected = analysisMode === mode;
+
+                return (
+                  <button
+                    aria-pressed={isSelected}
+                    className={
+                      isSelected
+                        ? 'rounded-full bg-sidebar px-3 py-2 text-xs font-black text-white shadow-card'
+                        : 'rounded-full px-3 py-2 text-xs font-black text-muted-foreground transition hover:bg-white hover:text-foreground'
+                    }
+                    key={mode}
+                    onClick={() => setAnalysisMode(mode)}
+                    type="button"
+                  >
+                    {dashboardModeLabels[mode]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {analysisMode === 'preset' ? (
+            <div className="mt-3">
+              <RangePills
+                ariaLabel="Rango de análisis del dashboard"
+                value={dashboardRange}
+                onChange={(value) => {
+                  setAnalysisMode('preset');
+                  setDashboardRange(value);
+                }}
+              />
+            </div>
+          ) : null}
+
+          {analysisMode === 'custom' ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Desde
+                <input
+                  className="mt-1 min-h-11 w-full rounded-2xl border border-border bg-white px-4 text-sm font-black text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20"
+                  onChange={(event) => setCustomStartDate(event.target.value)}
+                  type="date"
+                  value={customStartDate}
+                />
+              </label>
+              <label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                Hasta
+                <input
+                  className="mt-1 min-h-11 w-full rounded-2xl border border-border bg-white px-4 text-sm font-black text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20"
+                  onChange={(event) => setCustomEndDate(event.target.value)}
+                  type="date"
+                  value={customEndDate}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {analysisMode === 'weekComparison' ? (
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {[
+                {
+                  title: 'Semana principal',
+                  month: currentWeekMonth,
+                  week: currentWeekNumber,
+                  onMonth: setCurrentWeekMonth,
+                  onWeek: setCurrentWeekNumber,
+                },
+                {
+                  title: 'Semana a comparar',
+                  month: comparisonWeekMonth,
+                  week: comparisonWeekNumber,
+                  onMonth: setComparisonWeekMonth,
+                  onWeek: setComparisonWeekNumber,
+                },
+              ].map((control) => (
+                <div
+                  className="grid gap-2 rounded-2xl border border-border/70 bg-background p-3"
+                  key={control.title}
+                >
+                  <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">
+                    {control.title}
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <label className="text-xs font-bold text-muted-foreground">
+                      Mes
+                      <input
+                        className="mt-1 min-h-11 w-full rounded-2xl border border-border bg-white px-4 text-sm font-black text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20"
+                        onChange={(event) => control.onMonth(event.target.value)}
+                        type="month"
+                        value={control.month}
+                      />
+                    </label>
+                    <label className="text-xs font-bold text-muted-foreground">
+                      Semana
+                      <select
+                        className="mt-1 min-h-11 rounded-2xl border border-border bg-white px-4 text-sm font-black text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20"
+                        onChange={(event) => control.onWeek(Number(event.target.value))}
+                        value={control.week}
+                      >
+                        {weekNumberOptions.map((week) => (
+                          <option key={week} value={week}>
+                            {getMonthWeekOptionLabel(control.month, week)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {kpis.map((kpi) => (
@@ -703,7 +904,7 @@ export const DashboardPage = () => {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,.75fr)]">
         <div className="space-y-6">
-          <SectionCard>
+          <SectionCard className="lg:col-span-2">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
@@ -741,7 +942,7 @@ export const DashboardPage = () => {
               </div>
             </div>
             <div className="grid gap-4">
-              <LineChartCard days={chartDays} metric={chartMetric} range={dashboardRange} />
+              <LineChartCard days={chartDays} metric={chartMetric} rangeLabel={selectedRangeLabel} />
             </div>
           </SectionCard>
 
@@ -761,7 +962,7 @@ export const DashboardPage = () => {
               <div className="grid gap-3">
                 {topClients.length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-border bg-background/70 p-4 text-center text-sm font-bold text-muted-foreground">
-                    Sin clientes para {dashboardRangeLabels[dashboardRange].toLowerCase()}.
+                    Sin clientes para {selectedRangeLabel.toLowerCase()}.
                   </p>
                 ) : (
                   topClients.slice(0, 5).map((client, index) => (
@@ -799,7 +1000,7 @@ export const DashboardPage = () => {
                   <h2 className="mt-1 text-xl font-black text-foreground">Ranking de productos</h2>
                 </div>
                 <span className="rounded-full bg-background px-3 py-1.5 text-xs font-black text-muted-foreground ring-1 ring-border/70">
-                  {dashboardRangeLabels[dashboardRange]}
+                  {selectedRangeLabel}
                 </span>
               </div>
               <div className="grid gap-3">
@@ -831,89 +1032,84 @@ export const DashboardPage = () => {
                   ))
                 )}
               </div>
-
-              <div className="mt-5 rounded-2xl border border-border/70 bg-background/70 p-4">
-                <div className="mb-3">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
-                    Analítica semanal
-                  </p>
-                  <h3 className="mt-1 text-lg font-black text-foreground">
-                    Desempeño por variedad
-                  </h3>
-                  <p className="mt-1 text-xs font-bold text-muted-foreground">
-                    Semana seleccionada{' '}
-                    {formatWeekRangeLabel(
-                      weeklyVarietyAnalytics?.currentWeek.startDate,
-                      weeklyVarietyAnalytics?.currentWeek.endDate,
-                    )}{' '}
-                    vs semana anterior{' '}
-                    {formatWeekRangeLabel(
-                      weeklyVarietyAnalytics?.previousWeek.startDate,
-                      weeklyVarietyAnalytics?.previousWeek.endDate,
-                    )}
-                    . Lunes a domingo.
-                  </p>
-                </div>
-                {weeklyVarietyRows.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-border bg-white p-4 text-center text-sm font-bold text-muted-foreground">
-                    Sin variedades para comparar.
-                  </p>
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-border/70 bg-white">
-                    <div className="overflow-x-auto">
-                      <table className="min-w-[520px] w-full border-collapse text-left text-sm">
-                        <thead className="bg-sidebar text-xs uppercase tracking-wide text-crema-maiz">
-                          <tr>
-                            <th className="px-3 py-2 font-black">Variedad</th>
-                            <th className="px-3 py-2 text-right font-black">Semana</th>
-                            <th className="px-3 py-2 text-right font-black">Anterior</th>
-                            <th className="px-3 py-2 text-right font-black">Dif.</th>
-                            <th className="px-3 py-2 text-right font-black">Cambio</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/70">
-                          {weeklyVarietyRows.map((variety) => {
-                            const changeTone =
-                              variety.difference > 0
-                                ? 'text-emerald-700'
-                                : variety.difference < 0
-                                  ? 'text-destructive'
-                                  : 'text-muted-foreground';
-
-                            return (
-                              <tr
-                                className="transition hover:bg-background"
-                                key={variety.menuItemId}
-                              >
-                                <td className="px-3 py-2 font-black text-foreground">
-                                  {variety.name}
-                                </td>
-                                <td className="px-3 py-2 text-right font-black tabular-nums text-sidebar">
-                                  {variety.currentWeekQuantity} u.
-                                </td>
-                                <td className="px-3 py-2 text-right font-bold tabular-nums text-muted-foreground">
-                                  {variety.previousWeekQuantity} u.
-                                </td>
-                                <td
-                                  className={`px-3 py-2 text-right font-black tabular-nums ${changeTone}`}
-                                >
-                                  {formatSignedUnits(variety.difference)} u.
-                                </td>
-                                <td
-                                  className={`px-3 py-2 text-right font-black tabular-nums ${changeTone}`}
-                                >
-                                  {formatWeeklyChangeLabel(variety)}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
             </SectionCard>
+
+
+          <SectionCard>
+            <div className="mb-3">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
+                Analítica semanal
+              </p>
+              <h2 className="mt-1 text-xl font-black text-foreground">Desempeño por variedad</h2>
+              <p className="mt-1 text-xs font-bold text-muted-foreground">
+                Semana seleccionada{' '}
+                {formatWeekRangeLabel(
+                  weeklyVarietyAnalytics?.currentWeek.startDate,
+                  weeklyVarietyAnalytics?.currentWeek.endDate,
+                )}{' '}
+                vs comparación{' '}
+                {formatWeekRangeLabel(
+                  weeklyVarietyAnalytics?.comparisonWeek.startDate,
+                  weeklyVarietyAnalytics?.comparisonWeek.endDate,
+                )}
+                . Lunes a domingo.
+              </p>
+            </div>
+            {weeklyVarietyRows.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-border bg-white p-4 text-center text-sm font-bold text-muted-foreground">
+                Sin variedades para comparar.
+              </p>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-border/70 bg-white">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[520px] w-full border-collapse text-left text-sm">
+                    <thead className="bg-sidebar text-xs uppercase tracking-wide text-crema-maiz">
+                      <tr>
+                        <th className="px-3 py-2 font-black">Variedad</th>
+                        <th className="px-3 py-2 text-right font-black">Semana</th>
+                        <th className="px-3 py-2 text-right font-black">Comparación</th>
+                        <th className="px-3 py-2 text-right font-black">Dif.</th>
+                        <th className="px-3 py-2 text-right font-black">Cambio</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/70">
+                      {weeklyVarietyRows.map((variety) => {
+                        const changeTone =
+                          variety.difference > 0
+                            ? 'text-emerald-700'
+                            : variety.difference < 0
+                              ? 'text-destructive'
+                              : 'text-muted-foreground';
+
+                        return (
+                          <tr className="transition hover:bg-background" key={variety.menuItemId}>
+                            <td className="px-3 py-2 font-black text-foreground">{variety.name}</td>
+                            <td className="px-3 py-2 text-right font-black tabular-nums text-sidebar">
+                              {variety.currentWeekQuantity} u.
+                            </td>
+                            <td className="px-3 py-2 text-right font-bold tabular-nums text-muted-foreground">
+                              {variety.previousWeekQuantity} u.
+                            </td>
+                            <td
+                              className={`px-3 py-2 text-right font-black tabular-nums ${changeTone}`}
+                            >
+                              {formatSignedUnits(variety.difference)} u.
+                            </td>
+                            <td
+                              className={`px-3 py-2 text-right font-black tabular-nums ${changeTone}`}
+                            >
+                              {formatWeeklyChangeLabel(variety)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
           </section>
         </div>
 
@@ -1049,7 +1245,7 @@ export const DashboardPage = () => {
                       colSpan={5}
                     >
                       Sin pedidos recientes para{' '}
-                      {dashboardRangeLabels[dashboardRange].toLowerCase()}.
+                      {selectedRangeLabel.toLowerCase()}.
                     </td>
                   </tr>
                 ) : (
