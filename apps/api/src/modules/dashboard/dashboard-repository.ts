@@ -13,6 +13,7 @@ export const createDashboardRepository = (db: DbClient): DashboardRepository => 
         order: orders,
         customer: customers,
         orderItem: orderItems,
+        orderCostTotalCents: orders.costTotalCents,
         menuItemName: menuItems.name,
         menuItemCostPerDozen: menuItems.costPerDozen,
         menuItemPriceDozen: menuItems.priceDozen,
@@ -37,6 +38,7 @@ export const createDashboardRepository = (db: DbClient): DashboardRepository => 
         createdAt: row.order.createdAt,
         subtotal: Number(row.order.subtotal),
         total: Number(row.order.total),
+        costTotalCents: row.orderCostTotalCents,
         items: [],
       };
 

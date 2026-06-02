@@ -296,6 +296,13 @@ describe('DashboardPage', () => {
           chartDays: [{ date: '2026-05-06', count: 1, revenue: 12000, estimatedProfit: 8000 }],
         },
       },
+      selectedRange: {
+        mode: 'preset',
+        preset: 'all',
+        label: 'Siempre · desde 01/05/2026',
+        startDate: '2026-05-01',
+        endDate: '2026-05-06',
+      },
       weeklyVarietyAnalytics: {
         currentWeek: { startDate: '2026-05-04', endDate: '2026-05-10' },
         comparisonWeek: { startDate: '2026-04-27', endDate: '2026-05-03' },
@@ -336,7 +343,7 @@ describe('DashboardPage', () => {
     expect(screen.getAllByText('ARS 45.600').length).toBeGreaterThan(0);
     expect(screen.getByText(/rango de análisis/i)).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /ventas en pesos · siempre/i }),
+      screen.getByRole('heading', { name: /ventas en pesos · siempre · desde 01\/05\/2026/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/3 docenas vendidas/i)).toBeInTheDocument();
     expect(screen.getAllByText('Carne suave').length).toBeGreaterThan(0);

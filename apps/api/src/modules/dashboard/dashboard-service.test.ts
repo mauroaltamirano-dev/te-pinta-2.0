@@ -85,6 +85,13 @@ describe('dashboard service', () => {
         soldDozens: 1.92,
         averageTicket: 9500,
       },
+      selectedRange: {
+        mode: 'preset',
+        preset: 'all',
+        label: 'Siempre · desde 01/05/2026',
+        startDate: '2026-05-01',
+        endDate: '2026-05-06',
+      },
       statusSummary: {
         confirmed: 1,
         inProduction: 0,
@@ -111,6 +118,32 @@ describe('dashboard service', () => {
     );
 
     expect(result.date).toBe('2026-05-06');
+  });
+
+  it('uses the saved finance cost snapshot before falling back to menu item costs', async () => {
+    const repository: DashboardRepository = {
+      listOrders: async () => [
+        order({
+          costTotalCents: 10_000_00,
+          total: 24000,
+          items: [item({ quantity: 12, costPerDozen: 1000 })],
+        }),
+        order({
+          id: 'order-without-snapshot',
+          total: 12000,
+          items: [item({ quantity: 12, costPerDozen: 4000 })],
+        }),
+      ],
+    };
+
+    const result = await getDailyDashboard(
+      { date: '2026-05-06' },
+      repository,
+      () => new Date('2026-05-06T12:00:00.000Z'),
+    );
+
+    expect(result.totals.estimatedCosts).toBe(14000);
+    expect(result.totals.estimatedProfit).toBe(22000);
   });
 
   it('uses the Argentina business date when UTC is already tomorrow', async () => {

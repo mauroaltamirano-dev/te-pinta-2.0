@@ -24,6 +24,7 @@ export type DashboardOrder = {
   createdAt: Date;
   subtotal: number;
   total: number;
+  costTotalCents?: number | null;
   items: DashboardOrderItem[];
 };
 
@@ -210,10 +211,12 @@ const sumEstimatedCost = (orders: DashboardOrder[]): number =>
     orders.reduce(
       (orderTotal, order) =>
         orderTotal +
-        order.items.reduce(
-          (itemTotal, item) => itemTotal + (item.quantity / 12) * item.costPerDozen,
-          0,
-        ),
+        (order.costTotalCents !== undefined && order.costTotalCents !== null
+          ? order.costTotalCents / 100
+          : order.items.reduce(
+              (itemTotal, item) => itemTotal + (item.quantity / 12) * item.costPerDozen,
+              0,
+            )),
       0,
     ),
   );
@@ -467,13 +470,18 @@ export const getDailyDashboard = async (
     last31: buildRangeAnalytics(rangeOrders.last31, buildCalendarRange(31)),
     last7: buildRangeAnalytics(rangeOrders.last7, lastSevenDays),
   };
+  const firstOrderDate = rangeOrders.all.reduce<string | null>(
+    (firstDate, order) =>
+      firstDate === null || order.deliveryDate < firstDate ? order.deliveryDate : firstDate,
+    null,
+  );
   const presetLabels: Record<DashboardRange, string> = {
-    all: 'Siempre',
+    all: firstOrderDate ? `Siempre · desde ${formatIsoDateLabel(firstOrderDate)}` : 'Siempre',
     last31: 'Últimos 31 días',
     last7: 'Últimos 7 días',
   };
   const presetDateRanges: Record<DashboardRange, DashboardWeekRange | null> = {
-    all: null,
+    all: firstOrderDate ? { startDate: firstOrderDate, endDate: date } : null,
     last31: { startDate: last31Start, endDate: date },
     last7: { startDate: last7Start, endDate: date },
   };
