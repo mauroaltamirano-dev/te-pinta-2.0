@@ -143,7 +143,21 @@ describe('MenuPage', () => {
       },
     };
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
-    vi.mocked(listFinanceBaseCostRules).mockResolvedValue([]);
+    vi.mocked(listFinanceBaseCostRules).mockResolvedValue([
+      {
+        id: 'base-rule-1',
+        productId: 'base-product-1',
+        productName: 'Harina 000',
+        name: 'Harina base',
+        componentType: 'base_raw_material',
+        appliesTo: 'per_empanada',
+        quantity: 0.05,
+        groupSizeUnits: 12,
+        roundingMode: 'exact',
+        latestCostCents: 120000,
+        isActive: true,
+      },
+    ]);
     vi.mocked(listFinanceRecipes).mockResolvedValue([
       {
         menuItemId: 'menu-1',
@@ -214,7 +228,26 @@ describe('MenuPage', () => {
     ).toHaveTextContent('Precios y costos');
     expect(
       screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('Costo relleno');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
     ).toHaveTextContent('$ 7.200');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('Costo base');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('$ 720');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('Costo total');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('$ 7.920');
+    expect(screen.getByRole('link', { name: /ver detalle financiero/i })).toHaveAttribute(
+      'href',
+      '/finanzas?section=dashboard&menuItemId=menu-1',
+    );
     expect(screen.getAllByRole('link', { name: /receta/i })[0]).toHaveAttribute(
       'href',
       '/finanzas?section=recipes&menuItemId=menu-1',

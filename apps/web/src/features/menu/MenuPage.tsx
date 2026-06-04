@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
+  ArrowUpRight,
   Archive,
   BadgeDollarSign,
   BarChart3,
@@ -80,9 +81,12 @@ const formatMoney = (value: number): string => moneyFormatter.format(value);
 
 type MenuFinanceMetrics = {
   costPerDozen: number;
+  recipeCostPerDozen: number;
+  baseCostPerDozen: number;
   marginPerDozen: number;
   marginPercent: number;
   hasRecipe: boolean;
+  hasFinanceCost: boolean;
   warningsCount: number;
   sourceLabel: string;
 };
@@ -93,20 +97,26 @@ const buildMenuFinanceMetrics = (
   baseCostPerDozenCents: number,
 ): MenuFinanceMetrics => {
   const hasFinanceCost = Boolean(recipe);
+  const recipeCostPerDozenCents = hasFinanceCost ? (recipe?.totalCostPerDozenCents ?? 0) : 0;
   const costPerDozenCents = hasFinanceCost
-    ? baseCostPerDozenCents + (recipe?.totalCostPerDozenCents ?? 0)
+    ? baseCostPerDozenCents + recipeCostPerDozenCents
     : Math.round(item.costPerDozen * 100);
   const costPerDozen = costPerDozenCents / 100;
+  const recipeCostPerDozen = recipeCostPerDozenCents / 100;
+  const baseCostPerDozen = hasFinanceCost ? baseCostPerDozenCents / 100 : 0;
   const marginPerDozen = item.priceDozen - costPerDozen;
   const marginPercent = item.priceDozen ? Math.round((marginPerDozen / item.priceDozen) * 100) : 0;
 
   return {
+    baseCostPerDozen,
     costPerDozen,
+    recipeCostPerDozen,
     marginPerDozen,
     marginPercent,
     hasRecipe: Boolean(recipe?.items.length),
+    hasFinanceCost,
     warningsCount: recipe?.warnings.length ?? 0,
-    sourceLabel: hasFinanceCost ? 'Finanzas' : 'Costo manual',
+    sourceLabel: hasFinanceCost ? 'Receta + costo base' : 'Costo manual',
   };
 };
 
@@ -173,6 +183,7 @@ const MenuItemDetailAnalytics = ({
   const estimatedRevenue = (quantitySold / 12) * item.priceDozen;
   const estimatedCost = (quantitySold / 12) * financeMetrics.costPerDozen;
   const recipeHref = `/finanzas?section=recipes&menuItemId=${encodeURIComponent(item.id)}`;
+  const financeDetailHref = `/finanzas?section=dashboard&menuItemId=${encodeURIComponent(item.id)}`;
 
   return (
     <div className="space-y-4">
@@ -246,15 +257,36 @@ const MenuItemDetailAnalytics = ({
             </dd>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
-            <dt className="font-bold text-muted-foreground">Costo finanzas</dt>
+            <dt className="font-bold text-muted-foreground">
+              {financeMetrics.hasFinanceCost ? 'Costo relleno' : 'Costo manual'}
+            </dt>
+            <dd className="font-black tabular-nums text-foreground">
+              {formatMoney(
+                financeMetrics.hasFinanceCost
+                  ? financeMetrics.recipeCostPerDozen
+                  : financeMetrics.costPerDozen,
+              )}
+            </dd>
+          </div>
+          {financeMetrics.hasFinanceCost ? (
+            <div className="flex items-center justify-between rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
+              <dt className="font-bold text-muted-foreground">Costo base</dt>
+              <dd className="font-black tabular-nums text-foreground">
+                {formatMoney(financeMetrics.baseCostPerDozen)}
+              </dd>
+            </div>
+          ) : null}
+          <div className="flex items-center justify-between rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
+            <dt className="font-bold text-muted-foreground">Costo total</dt>
             <dd className="font-black tabular-nums text-foreground">
               {formatMoney(financeMetrics.costPerDozen)}
             </dd>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-primary/5 px-3 py-2 ring-1 ring-primary/10">
             <dt className="font-bold text-primary">Margen real</dt>
-            <dd className="font-black tabular-nums text-foreground">
+            <dd className="inline-flex items-center gap-1 font-black tabular-nums text-foreground">
               {formatMoney(financeMetrics.marginPerDozen)}
+              <ArrowUpRight className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             </dd>
           </div>
         </dl>
@@ -265,6 +297,13 @@ const MenuItemDetailAnalytics = ({
           >
             <Soup className="h-4 w-4" aria-hidden="true" />
             Ver receta en Finanzas
+          </a>
+          <a
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-xs font-black text-sidebar transition hover:bg-muted"
+            href={financeDetailHref}
+          >
+            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            Ver detalle financiero
           </a>
           <span className="rounded-full bg-background px-3 py-2 text-xs font-black text-muted-foreground ring-1 ring-border/70">
             Costo: {financeMetrics.sourceLabel}
@@ -750,13 +789,15 @@ export const MenuPage = () => {
                             </div>
                             <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
                               <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-                                Costo finanzas
+                                Costo total
                               </dt>
                               <dd className="mt-1 font-black tabular-nums text-foreground">
                                 {formatMoney(financeMetrics.costPerDozen)}
                               </dd>
                               <p className="mt-1 text-[0.7rem] font-bold text-muted-foreground">
-                                {financeMetrics.sourceLabel}
+                                {financeMetrics.hasFinanceCost
+                                  ? `Relleno ${formatMoney(financeMetrics.recipeCostPerDozen)} + base ${formatMoney(financeMetrics.baseCostPerDozen)}`
+                                  : financeMetrics.sourceLabel}
                               </p>
                             </div>
                             <div className="rounded-2xl bg-primary/5 px-3 py-2 ring-1 ring-primary/10">
@@ -774,7 +815,7 @@ export const MenuPage = () => {
                         </div>
                         <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:flex-col xl:flex-row">
                           <button
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-primary bg-primary px-4 py-2 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 lg:w-auto"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-sidebar bg-sidebar px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-sidebar/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70 lg:w-auto"
                             disabled={isSaving}
                             onClick={(event) => {
                               event.stopPropagation();
@@ -817,7 +858,7 @@ export const MenuPage = () => {
                             Deshabilitar
                           </button>
                           <a
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-black text-primary transition hover:bg-primary/10 active:scale-[0.98] lg:w-auto"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-primary bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 active:scale-[0.98] lg:w-auto"
                             href={recipeHref}
                             onClick={(event) => event.stopPropagation()}
                           >
