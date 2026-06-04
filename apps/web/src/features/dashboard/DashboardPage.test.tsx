@@ -1,28 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createQueryClient } from '@/lib/query-client';
 
-import { listCustomers } from '../customers/customers-api';
-import { listIngredients } from '../ingredients/ingredients-api';
-import { listMenuItems } from '../menu/menu-api';
 import { listOrders, type OrderListResponse } from '../orders/orders-api';
 import { getDailyDashboard, type DailyDashboard } from './dashboard-api';
 import { DashboardPage } from './DashboardPage';
-
-vi.mock('../customers/customers-api', () => ({
-  listCustomers: vi.fn(),
-}));
-
-vi.mock('../ingredients/ingredients-api', () => ({
-  listIngredients: vi.fn(),
-}));
-
-vi.mock('../menu/menu-api', () => ({
-  listMenuItems: vi.fn(),
-}));
 
 vi.mock('../orders/orders-api', () => ({
   listOrders: vi.fn(),
@@ -31,6 +16,189 @@ vi.mock('../orders/orders-api', () => ({
 vi.mock('./dashboard-api', () => ({
   getDailyDashboard: vi.fn(),
 }));
+
+const totals = {
+  orderCount: 13,
+  activeOrderCount: 10,
+  finalizedOrderCount: 3,
+  unpaidOrderCount: 3,
+  grossRevenue: 185000,
+  paidRevenue: 153000,
+  pendingRevenue: 32000,
+  estimatedCosts: 130500,
+  estimatedProfit: 54500,
+  totalUnits: 204,
+  soldDozens: 17,
+  averageTicket: 14230,
+};
+
+const zeroTotals = {
+  orderCount: 0,
+  activeOrderCount: 0,
+  finalizedOrderCount: 0,
+  unpaidOrderCount: 0,
+  grossRevenue: 0,
+  paidRevenue: 0,
+  pendingRevenue: 0,
+  estimatedCosts: 0,
+  estimatedProfit: 0,
+  totalUnits: 0,
+  soldDozens: 0,
+  averageTicket: 0,
+};
+
+const chartDays = [
+  { date: '2026-06-01', count: 1, revenue: 18000, estimatedProfit: 5400 },
+  { date: '2026-06-02', count: 2, revenue: 22000, estimatedProfit: 6600 },
+  { date: '2026-06-03', count: 2, revenue: 27000, estimatedProfit: 8100 },
+  { date: '2026-06-04', count: 3, revenue: 31000, estimatedProfit: 9300 },
+  { date: '2026-06-05', count: 2, revenue: 24000, estimatedProfit: 7200 },
+  { date: '2026-06-06', count: 2, revenue: 38000, estimatedProfit: 11400 },
+  { date: '2026-06-07', count: 1, revenue: 25000, estimatedProfit: 7500 },
+];
+
+const dashboardResponse: DailyDashboard = {
+  date: '2026-06-04',
+  orderCount: 3,
+  totalRevenue: 31000,
+  deliveryShifts: {
+    mediodia: 1,
+    tarde: 1,
+    noche: 1,
+  },
+  topVarieties: [
+    { menuItemId: 'menu-1', name: 'Salteña', quantity: 34 },
+    { menuItemId: 'menu-2', name: 'Jamón y queso', quantity: 31 },
+  ],
+  topClients: [
+    { customerId: 'customer-1', name: 'Distribuidora San Martín', orderCount: 4, totalRevenue: 48000 },
+    { customerId: 'customer-2', name: 'María Gómez', orderCount: 2, totalRevenue: 36000 },
+  ],
+  upcomingOrders: [],
+  nextSevenDays: chartDays,
+  lastSevenDays: chartDays,
+  statusSummary: { confirmed: 6, inProduction: 0, ready: 2, delivered: 5, total: 13 },
+  recentOrders: [],
+  totals,
+  rangeTotals: { all: totals, last31: totals, last7: totals },
+  rangeAnalytics: {
+    all: {
+      totals,
+      topClients: [],
+      topVarieties: [],
+      statusSummary: { confirmed: 6, inProduction: 0, ready: 2, delivered: 5, total: 13 },
+      recentOrders: [],
+      chartDays,
+    },
+    last31: {
+      totals,
+      topClients: [],
+      topVarieties: [],
+      statusSummary: { confirmed: 6, inProduction: 0, ready: 2, delivered: 5, total: 13 },
+      recentOrders: [],
+      chartDays,
+    },
+    last7: {
+      totals,
+      topClients: [],
+      topVarieties: [],
+      statusSummary: { confirmed: 6, inProduction: 0, ready: 2, delivered: 5, total: 13 },
+      recentOrders: [],
+      chartDays,
+    },
+  },
+  selectedRange: {
+    mode: 'custom',
+    label: '01/06/2026 – 07/06/2026',
+    startDate: '2026-06-01',
+    endDate: '2026-06-07',
+  },
+  selectedRangeAnalytics: {
+    totals,
+    topClients: [
+      { customerId: 'customer-1', name: 'Distribuidora San Martín', orderCount: 4, totalRevenue: 48000 },
+      { customerId: 'customer-2', name: 'María Gómez', orderCount: 2, totalRevenue: 36000 },
+      { customerId: 'customer-3', name: 'Juan Pérez', orderCount: 1, totalRevenue: 12000 },
+      { customerId: 'customer-4', name: 'Sofía López', orderCount: 1, totalRevenue: 9000 },
+    ],
+    topVarieties: [
+      { menuItemId: 'menu-1', name: 'Salteña', quantity: 34 },
+      { menuItemId: 'menu-2', name: 'Jamón y queso', quantity: 31 },
+      { menuItemId: 'menu-3', name: 'Caprese', quantity: 26 },
+    ],
+    statusSummary: { confirmed: 6, inProduction: 0, ready: 2, delivered: 5, total: 13 },
+    recentOrders: [],
+    chartDays,
+  },
+  weeklyVarietyAnalytics: {
+    currentWeek: { startDate: '2026-06-01', endDate: '2026-06-07' },
+    comparisonWeek: { startDate: '2026-05-25', endDate: '2026-05-31' },
+    varieties: [],
+  },
+  varietySales: {
+    all: [],
+    last31: [],
+    last7: [],
+    selectedDate: [],
+  },
+};
+
+const ordersResponse: OrderListResponse = {
+  orders: [
+    {
+      id: 'order-1043',
+      customer: { id: 'customer-2', name: 'María Gómez', phone: '1122334455', address: null },
+      deliveryDate: '2026-06-04',
+      deliveryTime: 'tarde',
+      deliveryType: 'retiro',
+      cooked: false,
+      notes: null,
+      discountPercent: 0,
+      deliveryFee: 0,
+      cookingFee: 0,
+      subtotal: 42000,
+      total: 42000,
+      status: 'confirmado',
+      isPaid: false,
+      itemCount: 2,
+      totalQuantity: 36,
+      items: [
+        { id: 'item-1', menuItemId: 'menu-1', menuItemName: 'Salteña', quantity: 24, unitPrice: 1200, subtotal: 28800 },
+        { id: 'item-2', menuItemId: 'menu-2', menuItemName: 'Jamón y queso', quantity: 12, unitPrice: 1100, subtotal: 13200 },
+      ],
+    },
+    {
+      id: 'order-1044',
+      customer: { id: 'customer-3', name: 'Juan Pérez', phone: null, address: null },
+      deliveryDate: '2026-06-05',
+      deliveryTime: 'noche',
+      deliveryType: 'envio',
+      cooked: false,
+      notes: null,
+      discountPercent: 0,
+      deliveryFee: 0,
+      cookingFee: 0,
+      subtotal: 24000,
+      total: 24000,
+      status: 'confirmado',
+      isPaid: true,
+      itemCount: 1,
+      totalQuantity: 24,
+      items: [
+        { id: 'item-3', menuItemId: 'menu-3', menuItemName: 'Caprese', quantity: 24, unitPrice: 1000, subtotal: 24000 },
+      ],
+    },
+  ],
+  pagination: {
+    page: 1,
+    pageSize: 8,
+    total: 2,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false,
+  },
+  stats: { active: 2, finalized: 0 },
+};
 
 const renderDashboardPage = () => {
   const queryClient = createQueryClient();
@@ -47,348 +215,44 @@ const renderDashboardPage = () => {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    const ordersResponse: OrderListResponse = {
-      orders: [
-        {
-          id: 'order-1',
-          customer: {
-            id: 'customer-1',
-            name: 'Ana Pérez',
-            phone: '1122334455',
-            address: 'Av. Siempre Viva 742',
-          },
-          deliveryDate: '2026-05-06',
-          deliveryTime: 'mediodia',
-          deliveryType: 'envio',
-          cooked: false,
-          notes: null,
-          discountPercent: 0,
-          deliveryFee: 0,
-          cookingFee: 0,
-          subtotal: 12000,
-          total: 12000,
-          status: 'confirmado',
-          isPaid: false,
-          itemCount: 1,
-          totalQuantity: 12,
-        },
-        {
-          id: 'order-2',
-          customer: {
-            id: 'customer-2',
-            name: 'Mauro Altamirano',
-            phone: '3537559269',
-            address: 'Alcorta 66',
-          },
-          deliveryDate: '2026-05-06',
-          deliveryTime: 'noche',
-          deliveryType: 'retiro',
-          cooked: true,
-          notes: null,
-          discountPercent: 0,
-          deliveryFee: 0,
-          cookingFee: 0,
-          subtotal: 33600,
-          total: 33600,
-          status: 'entregado',
-          isPaid: true,
-          itemCount: 2,
-          totalQuantity: 24,
-        },
-      ],
-      pagination: {
-        page: 1,
-        pageSize: 20,
-        total: 2,
-        totalPages: 1,
-        hasNextPage: false,
-        hasPreviousPage: false,
-      },
-      stats: { active: 1, finalized: 1 },
-    };
-    vi.mocked(listOrders).mockResolvedValue(ordersResponse);
-    vi.mocked(listCustomers).mockResolvedValue([
-      { id: 'customer-1', name: 'Ana Pérez', phone: '1122334455', address: 'Av. Siempre Viva 742' },
-      { id: 'customer-2', name: 'Mauro Altamirano', phone: '3537559269', address: 'Alcorta 66' },
-    ]);
-    vi.mocked(listMenuItems).mockResolvedValue([
-      {
-        id: 'menu-1',
-        name: 'Carne suave',
-        priceUnit: 1200,
-        priceHalfDozen: 6500,
-        priceDozen: 12000,
-        costPerDozen: 4800,
-        isActive: true,
-        isArchived: false,
-      },
-      {
-        id: 'menu-2',
-        name: 'Humita',
-        priceUnit: 1100,
-        priceHalfDozen: 6100,
-        priceDozen: 11500,
-        costPerDozen: 4300,
-        isActive: false,
-        isArchived: false,
-      },
-    ]);
-    vi.mocked(listIngredients).mockResolvedValue([
-      { id: 'ingredient-1', name: 'Harina 0000', unit: 'kg', purchasePrice: 900 },
-    ]);
-    const dashboardResponse: DailyDashboard = {
-      date: '2026-05-06',
-      orderCount: 3,
-      totalRevenue: 45600,
-      deliveryShifts: {
-        mediodia: 1,
-        tarde: 0,
-        noche: 2,
-      },
-      topVarieties: [
-        { menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 },
-        { menuItemId: 'menu-2', name: 'Humita', quantity: 12 },
-      ],
-      topClients: [
-        { customerId: 'customer-2', name: 'Mauro Altamirano', orderCount: 1, totalRevenue: 33600 },
-      ],
-      upcomingOrders: [],
-      nextSevenDays: [{ date: '2026-05-06', count: 3, revenue: 45600 }],
-      lastSevenDays: [{ date: '2026-05-06', count: 3, revenue: 45600 }],
-      statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 2, total: 3 },
-      recentOrders: [],
-      totals: {
-        orderCount: 3,
-        activeOrderCount: 1,
-        finalizedOrderCount: 2,
-        unpaidOrderCount: 1,
-        grossRevenue: 45600,
-        paidRevenue: 33600,
-        pendingRevenue: 12000,
-        estimatedCosts: 16000,
-        estimatedProfit: 29600,
-        totalUnits: 36,
-        soldDozens: 3,
-        averageTicket: 15200,
-      },
-      rangeTotals: {
-        all: {
-          orderCount: 3,
-          activeOrderCount: 1,
-          finalizedOrderCount: 2,
-          unpaidOrderCount: 1,
-          grossRevenue: 45600,
-          paidRevenue: 33600,
-          pendingRevenue: 12000,
-          estimatedCosts: 16000,
-          estimatedProfit: 29600,
-          totalUnits: 36,
-          soldDozens: 3,
-          averageTicket: 15200,
-        },
-        last31: {
-          orderCount: 2,
-          activeOrderCount: 1,
-          finalizedOrderCount: 1,
-          unpaidOrderCount: 1,
-          grossRevenue: 33600,
-          paidRevenue: 21600,
-          pendingRevenue: 12000,
-          estimatedCosts: 12000,
-          estimatedProfit: 21600,
-          totalUnits: 24,
-          soldDozens: 2,
-          averageTicket: 16800,
-        },
-        last7: {
-          orderCount: 1,
-          activeOrderCount: 1,
-          finalizedOrderCount: 0,
-          unpaidOrderCount: 1,
-          grossRevenue: 12000,
-          paidRevenue: 0,
-          pendingRevenue: 5000,
-          estimatedCosts: 4000,
-          estimatedProfit: 8000,
-          totalUnits: 12,
-          soldDozens: 1,
-          averageTicket: 12000,
-        },
-      },
-      rangeAnalytics: {
-        all: {
-          totals: {
-            orderCount: 3,
-            activeOrderCount: 1,
-            finalizedOrderCount: 2,
-            unpaidOrderCount: 1,
-            grossRevenue: 45600,
-            paidRevenue: 33600,
-            pendingRevenue: 12000,
-            estimatedCosts: 16000,
-            estimatedProfit: 29600,
-            totalUnits: 36,
-            soldDozens: 3,
-            averageTicket: 15200,
-          },
-          topClients: [
-            {
-              customerId: 'customer-2',
-              name: 'Mauro Altamirano',
-              orderCount: 1,
-              totalRevenue: 33600,
-            },
-          ],
-          topVarieties: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 }],
-          statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 2, total: 3 },
-          recentOrders: [],
-          chartDays: [{ date: '2026-05-06', count: 3, revenue: 45600, estimatedProfit: 29600 }],
-        },
-        last31: {
-          totals: {
-            orderCount: 2,
-            activeOrderCount: 1,
-            finalizedOrderCount: 1,
-            unpaidOrderCount: 1,
-            grossRevenue: 33600,
-            paidRevenue: 21600,
-            pendingRevenue: 12000,
-            estimatedCosts: 12000,
-            estimatedProfit: 21600,
-            totalUnits: 24,
-            soldDozens: 2,
-            averageTicket: 16800,
-          },
-          topClients: [
-            {
-              customerId: 'customer-2',
-              name: 'Mauro Altamirano',
-              orderCount: 1,
-              totalRevenue: 21600,
-            },
-          ],
-          topVarieties: [{ menuItemId: 'menu-2', name: 'Humita', quantity: 12 }],
-          statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 1, total: 2 },
-          recentOrders: [],
-          chartDays: [{ date: '2026-05-06', count: 2, revenue: 33600, estimatedProfit: 21600 }],
-        },
-        last7: {
-          totals: {
-            orderCount: 1,
-            activeOrderCount: 1,
-            finalizedOrderCount: 0,
-            unpaidOrderCount: 1,
-            grossRevenue: 12000,
-            paidRevenue: 0,
-            pendingRevenue: 5000,
-            estimatedCosts: 4000,
-            estimatedProfit: 8000,
-            totalUnits: 12,
-            soldDozens: 1,
-            averageTicket: 12000,
-          },
-          topClients: [
-            { customerId: 'customer-1', name: 'Ana Pérez', orderCount: 1, totalRevenue: 12000 },
-          ],
-          topVarieties: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 6 }],
-          statusSummary: { confirmed: 1, inProduction: 0, ready: 0, delivered: 0, total: 1 },
-          recentOrders: [],
-          chartDays: [{ date: '2026-05-06', count: 1, revenue: 12000, estimatedProfit: 8000 }],
-        },
-      },
-      selectedRange: {
-        mode: 'preset',
-        preset: 'all',
-        label: 'Siempre · desde 01/05/2026',
-        startDate: '2026-05-01',
-        endDate: '2026-05-06',
-      },
-      weeklyVarietyAnalytics: {
-        currentWeek: { startDate: '2026-05-04', endDate: '2026-05-10' },
-        comparisonWeek: { startDate: '2026-04-27', endDate: '2026-05-03' },
-        varieties: [
-          {
-            menuItemId: 'menu-1',
-            name: 'Carne suave',
-            currentWeekQuantity: 18,
-            previousWeekQuantity: 12,
-            difference: 6,
-            changePercent: 50,
-          },
-          {
-            menuItemId: 'menu-2',
-            name: 'Humita',
-            currentWeekQuantity: 0,
-            previousWeekQuantity: 12,
-            difference: -12,
-            changePercent: -100,
-          },
-        ],
-      },
-      varietySales: {
-        all: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 24 }],
-        last31: [{ menuItemId: 'menu-2', name: 'Humita', quantity: 12 }],
-        last7: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 6 }],
-        selectedDate: [],
-      },
-    };
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
+    vi.mocked(listOrders).mockResolvedValue(ordersResponse);
   });
 
-  it('shows daily order count, revenue, delivery shifts and top varieties', async () => {
+  it('shows the operational dashboard structure with real dashboard and order data', async () => {
     renderDashboardPage();
 
-    expect(await screen.findByText('Centro operativo')).toBeInTheDocument();
-    expect(await screen.findByText('3')).toBeInTheDocument();
-    expect(screen.getAllByText('ARS 45.600').length).toBeGreaterThan(0);
-    expect(screen.getByText(/rango de análisis/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /dashboard general/i })).toBeInTheDocument();
+    expect(screen.getByText(/resumen operativo y financiero del emprendimiento/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /nuevo pedido/i })).toHaveAttribute('href', '/orders');
+    expect(screen.getByRole('link', { name: /registrar gasto/i })).toHaveAttribute(
+      'href',
+      '/finanzas?section=purchases',
+    );
+
+    expect(screen.getByText('Ventas del período')).toBeInTheDocument();
+    expect(screen.getByText('$185.000')).toBeInTheDocument();
+    expect(screen.getByText('Ganancia estimada')).toBeInTheDocument();
+    expect(screen.getAllByText('$54.500').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pendiente de cobro').length).toBeGreaterThan(0);
+
+    expect(screen.getByRole('heading', { name: /agenda inmediata/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/maría gómez/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: /qué hay que producir/i })).toBeInTheDocument();
+    expect(screen.getByText(/salteña/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /dinero asignado/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /más elegidas/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /ritmo de venta/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /movimiento comercial/i })).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: /ventas en pesos · siempre · desde 01\/05\/2026/i }),
+      await screen.findByRole('heading', { name: /seguimiento secundario/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/3 docenas vendidas/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Carne suave').length).toBeGreaterThan(0);
-    expect(screen.getByText(/24 unidades/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /resumen general/i })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /accesos rápidos/i })).not.toBeInTheDocument();
-  });
-
-  it('applies the selected dashboard range to KPIs, rankings, status and chart', async () => {
-    renderDashboardPage();
-
-    fireEvent.click(await screen.findByRole('button', { name: /últimos 7 días/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /ventas en pesos · últimos 7 días/i }),
-      ).toBeInTheDocument();
-    });
-    expect(screen.getAllByText('ARS 12.000').length).toBeGreaterThan(0);
-    expect(screen.getByText('6 unidades')).toBeInTheDocument();
-    expect(screen.getByText('Ana Pérez')).toBeInTheDocument();
-    expect(screen.getAllByText(/^1$/).length).toBeGreaterThan(0);
-    const pendingCard = screen.getByText('Pendiente de cobrar').closest('article');
-    expect(pendingCard).not.toBeNull();
-    expect(within(pendingCard as HTMLElement).getByText('ARS 12.000')).toBeInTheDocument();
-    expect(within(pendingCard as HTMLElement).getByText('Total pendiente')).toBeInTheDocument();
-  });
-
-  it('shows all variety weekly performance compared with the previous monday-to-sunday week', async () => {
-    renderDashboardPage();
-
-    expect(
-      await screen.findByRole('heading', { name: /desempeño por variedad/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/lunes a domingo/i)).toBeInTheDocument();
-    expect(await screen.findByText('Humita')).toBeInTheDocument();
-    expect(screen.getByText('18 u.')).toBeInTheDocument();
-    expect(screen.getByText('+6 u.')).toBeInTheDocument();
-    expect(screen.getByText('+50%')).toBeInTheDocument();
   });
 
   it('requests custom range analytics with explicit from and to dates', async () => {
     renderDashboardPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: /rango manual/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /rango personalizado/i }));
     fireEvent.change(screen.getByLabelText(/desde/i), { target: { value: '2026-05-01' } });
     fireEvent.change(screen.getByLabelText(/hasta/i), { target: { value: '2026-05-15' } });
 
@@ -402,40 +266,58 @@ describe('DashboardPage', () => {
     });
   });
 
-  it('requests month week-bucket comparison analytics', async () => {
+  it('reloads the dashboard for the selected day filter and date', async () => {
     renderDashboardPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: /comparar semanas/i }));
-    const monthInputs = screen.getAllByLabelText(/mes/i);
-    const weekInputs = screen.getAllByLabelText(/semana/i);
-    fireEvent.change(monthInputs[0]!, { target: { value: '2026-05' } });
-    fireEvent.change(weekInputs[0]!, { target: { value: '1' } });
-    fireEvent.change(monthInputs[1]!, { target: { value: '2026-04' } });
-    fireEvent.change(weekInputs[1]!, { target: { value: '1' } });
-
-    await waitFor(() => {
-      expect(getDailyDashboard).toHaveBeenLastCalledWith({
-        date: expect.any(String),
-        analyticsMode: 'weekComparison',
-        currentWeekStart: '2026-04-27',
-        comparisonWeekStart: '2026-03-30',
-      });
-    });
-  });
-
-  it('reloads the dashboard for the selected date', async () => {
-    renderDashboardPage();
-
-    fireEvent.change(await screen.findByLabelText(/fecha base del dashboard/i), {
+    fireEvent.click(await screen.findByRole('button', { name: /^hoy$/i }));
+    fireEvent.change(screen.getByLabelText(/fecha base/i), {
       target: { value: '2026-05-07' },
     });
 
     await waitFor(() => {
       expect(getDailyDashboard).toHaveBeenLastCalledWith({
         date: '2026-05-07',
-        analyticsMode: 'preset',
-        preset: 'all',
+        analyticsMode: 'custom',
+        startDate: '2026-05-07',
+        endDate: '2026-05-07',
       });
     });
+  });
+
+  it('shows empty states when real data exists but the period has no activity', async () => {
+    vi.mocked(getDailyDashboard).mockResolvedValue({
+      ...dashboardResponse,
+      totals: zeroTotals,
+      rangeTotals: { all: zeroTotals, last31: zeroTotals, last7: zeroTotals },
+      topClients: [],
+      topVarieties: [],
+      selectedRangeAnalytics: {
+        totals: zeroTotals,
+        topClients: [],
+        topVarieties: [],
+        statusSummary: { confirmed: 0, inProduction: 0, ready: 0, delivered: 0, total: 0 },
+        recentOrders: [],
+        chartDays: [],
+      },
+    });
+    vi.mocked(listOrders).mockResolvedValue({
+      orders: [],
+      pagination: {
+        page: 1,
+        pageSize: 8,
+        total: 0,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      stats: { active: 0, finalized: 0 },
+    });
+
+    renderDashboardPage();
+
+    expect(await screen.findByText(/no hay pedidos próximos/i)).toBeInTheDocument();
+    expect(screen.getByText(/no hay producción pendiente/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/no hay ventas en el período/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/no hay clientes para este período/i)).toBeInTheDocument();
   });
 });
