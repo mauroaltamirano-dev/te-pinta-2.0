@@ -96,6 +96,31 @@ export const listOrders = async (filters: OrderFilters = {}): Promise<OrderListR
   return response.data;
 };
 
+const ORDERS_MAX_PAGE_SIZE = 100;
+
+/** Recorre todas las páginas respetando el límite de la API (100 por página). */
+export const listAllOrders = async (
+  filters: Omit<OrderFilters, 'page' | 'pageSize'> = {},
+): Promise<OrderListItem[]> => {
+  const orders: OrderListItem[] = [];
+  let page = 1;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const response = await listOrders({
+      ...filters,
+      page,
+      pageSize: ORDERS_MAX_PAGE_SIZE,
+    });
+
+    orders.push(...response.orders);
+    hasNextPage = response.pagination.hasNextPage;
+    page += 1;
+  }
+
+  return orders;
+};
+
 export const getOrder = async (id: string): Promise<OrderDetail> => {
   const response = await apiClient.get<{ order: OrderDetail }>(`/orders/${id}`);
 

@@ -1,18 +1,25 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import { createQueryClient } from '@/lib/query-client';
 
-import { listOrders } from '../orders/orders-api';
+import type * as OrdersApiModule from '../orders/orders-api';
+
+import { listAllOrders, listOrders } from '../orders/orders-api';
 import { CustomersPage } from './CustomersPage';
 import { createCustomer, deleteCustomer, listCustomers, updateCustomer } from './customers-api';
 
-vi.mock('../orders/orders-api', () => ({
-  listOrders: vi.fn(),
-}));
+vi.mock('../orders/orders-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof OrdersApiModule>();
+  return {
+    ...actual,
+    listOrders: vi.fn(),
+    listAllOrders: vi.fn(),
+  };
+});
 
 vi.mock('./customers-api', () => ({
   createCustomer: vi.fn(),
@@ -54,8 +61,7 @@ describe('CustomersPage', () => {
     vi.resetAllMocks();
     mockDesktopViewport(true);
     Element.prototype.scrollIntoView = vi.fn();
-    vi.mocked(listOrders).mockResolvedValue({
-      orders: [
+    const orders = [
         {
           id: 'order-3',
           customer: {
@@ -125,7 +131,10 @@ describe('CustomersPage', () => {
           itemCount: 1,
           totalQuantity: 6,
         },
-      ],
+      ] as const;
+
+    vi.mocked(listOrders).mockResolvedValue({
+      orders: [...orders],
       pagination: {
         page: 1,
         pageSize: 25,
@@ -136,6 +145,7 @@ describe('CustomersPage', () => {
       },
       stats: { active: 2, finalized: 1 },
     });
+    vi.mocked(listAllOrders).mockResolvedValue([...orders]);
     vi.mocked(listCustomers).mockResolvedValue([
       {
         id: 'customer-1',
@@ -158,7 +168,7 @@ describe('CustomersPage', () => {
     expect(await screen.findByText('Ana Pérez')).toBeInTheDocument();
     expect(screen.getByText('Bruno Gómez')).toBeInTheDocument();
 
-    await userEvent.type(screen.getByLabelText(/buscar cliente/i), '9988');
+    await userEvent.type(screen.getByLabelText(/buscar clientes/i), '9988');
 
     expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument();
     expect(screen.getByText('Bruno Gómez')).toBeInTheDocument();
@@ -173,6 +183,7 @@ describe('CustomersPage', () => {
     });
 
     renderCustomersPage();
+    await userEvent.click(screen.getByRole('button', { name: /nuevo cliente/i }));
 
     await userEvent.type(screen.getByLabelText(/nombre del cliente/i), 'Carla Ruiz');
     await userEvent.type(screen.getByLabelText(/teléfono/i), '1155550000');
@@ -186,7 +197,7 @@ describe('CustomersPage', () => {
     });
   });
 
-  it('opens the edit panel when selecting a customer and saves changes', async () => {
+  it('opens the detail panel when selecting a customer and saves changes', async () => {
     vi.mocked(updateCustomer).mockResolvedValue({
       id: 'customer-1',
       name: 'Ana Pérez',
@@ -198,23 +209,16 @@ describe('CustomersPage', () => {
 
     await userEvent.click(await screen.findByLabelText(/cliente ana pérez/i));
 
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('Editando Ana Pérez');
-    expect(screen.getByLabelText(/nombre del cliente/i)).toHaveValue('Ana Pérez');
-    expect(screen.getByLabelText(/teléfono/i)).toHaveValue('1122334455');
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('Total gastado');
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('$ 36.000');
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('Historial reciente');
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('Saldo no pagado');
+    const detailPanel = screen.getByRole('region', { name: /detalle de ana pérez/i });
+    expect(detailPanel).toHaveTextContent('Ana Pérez');
+    expect(detailPanel).toHaveTextContent('Total comprado');
+
+    await waitFor(() => {
+      expect(detailPanel).toHaveTextContent('$ 36.000');
+    });
+
+    expect(detailPanel).toHaveTextContent('Historial de compras');
+    expect(detailPanel).toHaveTextContent('Pendientes');
 
     await userEvent.clear(screen.getByLabelText(/teléfono/i));
     await userEvent.type(screen.getByLabelText(/teléfono/i), '1133334444');
@@ -232,42 +236,47 @@ describe('CustomersPage', () => {
     ]);
   });
 
-  it('opens the selected customer as a full-screen edit panel on mobile', async () => {
+  it('opens the selected customer as a full-screen panel on mobile', async () => {
     mockDesktopViewport(false);
 
     renderCustomersPage();
 
     await userEvent.click(await screen.findByLabelText(/cliente bruno gómez/i));
 
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('Editando Bruno Gómez');
+    expect(screen.getByRole('region', { name: /detalle de bruno gómez/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /volver/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/nombre del cliente/i)).toHaveValue('Bruno Gómez');
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('$ 6.500');
-    expect(
-      screen.getByRole('region', { name: /formulario de edición de cliente/i }),
-    ).toHaveTextContent('6 unidades acumuladas');
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /detalle de bruno gómez/i })).toHaveTextContent(
+        '$ 6.500',
+      );
+    });
 
     await userEvent.click(screen.getByRole('button', { name: /volver/i }));
 
     await waitFor(() =>
-      expect(
-        screen.queryByRole('region', { name: /formulario de edición de cliente/i }),
-      ).not.toBeInTheDocument(),
+      expect(screen.queryByRole('region', { name: /detalle de bruno gómez/i })).not.toBeInTheDocument(),
     );
   });
 
-  it('deletes a customer from the list', async () => {
+  it('deletes a customer from the detail panel', async () => {
     vi.mocked(deleteCustomer).mockResolvedValue(undefined);
 
     renderCustomersPage();
 
-    const brunoRow = within(await screen.findByLabelText(/cliente bruno gómez/i));
-    await userEvent.click(brunoRow.getByRole('button', { name: /eliminar/i }));
+    await userEvent.click(await screen.findByLabelText(/cliente bruno gómez/i));
+    window.confirm = vi.fn(() => true);
+    await userEvent.click(screen.getByRole('button', { name: /eliminar cliente/i }));
 
     expect(vi.mocked(deleteCustomer).mock.calls[0]?.[0]).toBe('customer-2');
+  });
+
+  it('filters customers with quick chips', async () => {
+    renderCustomersPage();
+
+    await screen.findByText('Ana Pérez');
+    await userEvent.click(screen.getByRole('tab', { name: /con deuda/i }));
+
+    expect(screen.queryByText('Bruno Gómez')).not.toBeInTheDocument();
   });
 });
