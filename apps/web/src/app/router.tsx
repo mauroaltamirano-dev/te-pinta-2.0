@@ -4,7 +4,6 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { CustomersPage } from '@/features/customers/CustomersPage';
 import { FinancePage } from '@/features/finance/pages/FinancePage';
-import { IngredientsPage } from '@/features/ingredients/IngredientsPage';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 import { MenuPage } from '@/features/menu/MenuPage';
 import { OrdersPage } from '@/features/orders/OrdersPage';
@@ -35,7 +34,7 @@ export const protectedRoutes = [
   },
   {
     path: 'ingredients',
-    element: <IngredientsPage />,
+    element: <Navigate replace to="/finanzas?section=catalog" />,
   },
   {
     path: 'settings',

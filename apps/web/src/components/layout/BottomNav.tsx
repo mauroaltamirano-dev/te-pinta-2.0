@@ -1,14 +1,25 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 
+import { useAuthStore } from '@/features/auth/auth-store';
 import { cn } from '@/lib/utils';
 
 import { mobileNavItems } from './nav-items';
 
 export const BottomNav = () => {
+  const navigate = useNavigate();
+  const logout = useAuthStore((state) => state.logout);
+  const isLoggingOut = useAuthStore((state) => state.status === 'loading');
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <nav
       aria-label="Navegación móvil"
-      className="fixed inset-x-0 bottom-0 z-40 overflow-hidden border-t border-sidebar-foreground/12 bg-sidebar px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-3 text-card shadow-[0_-18px_42px_rgba(10,31,53,0.28)] backdrop-blur md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 overflow-hidden border-t border-sidebar-foreground/12 bg-sidebar px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-3 text-card shadow-[0_-18px_42px_rgba(10,31,53,0.28)] md:hidden"
     >
       <div
         aria-hidden="true"
@@ -81,6 +92,15 @@ export const BottomNav = () => {
           );
         })}
       </div>
+      <button
+        className="relative mx-auto mt-2 flex min-h-10 w-full max-w-lg items-center justify-center gap-2 rounded-[1.15rem] border border-sidebar-foreground/15 bg-white/10 px-3 text-xs font-black text-white transition hover:bg-primary disabled:pointer-events-none disabled:opacity-70"
+        disabled={isLoggingOut}
+        onClick={handleLogout}
+        type="button"
+      >
+        <LogOut className="size-4" aria-hidden />
+        Cerrar sesión
+      </button>
     </nav>
   );
 };

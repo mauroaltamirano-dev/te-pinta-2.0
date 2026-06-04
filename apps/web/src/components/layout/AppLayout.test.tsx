@@ -1,12 +1,35 @@
 import { render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import type * as ReactRouterDom from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { logoutAdmin } from '@/features/auth/auth-api';
+import { resetAuthStoreForTests } from '@/features/auth/auth-store';
 
 import { AppLayout } from './AppLayout';
+
+const navigateMock = vi.hoisted(() => vi.fn());
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof ReactRouterDom>();
+
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
+
+vi.mock('@/features/auth/auth-api', () => ({
+  loginAdmin: vi.fn(),
+  logoutAdmin: vi.fn(),
+  refreshAdminSession: vi.fn(),
+}));
 
 const renderLayout = (initialPath = '/dashboard') => {
   const router = createMemoryRouter(
     [
+      { path: '/login', element: <h2>Login admin</h2> },
       {
         path: '/',
         element: <AppLayout />,
@@ -23,6 +46,13 @@ const renderLayout = (initialPath = '/dashboard') => {
 };
 
 describe('AppLayout', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    navigateMock.mockReset();
+    resetAuthStoreForTests();
+    vi.mocked(logoutAdmin).mockResolvedValue(undefined);
+  });
+
   it('renders desktop sidebar, mobile bottom nav, and nested route content', () => {
     renderLayout();
 
@@ -75,11 +105,27 @@ describe('AppLayout', () => {
       'href',
       '/menu',
     );
-    expect(within(mobileNav).getByRole('link', { name: /insumos/i })).toHaveAttribute(
+    expect(within(mobileNav).getByRole('link', { name: /configuración/i })).toHaveAttribute(
       'href',
-      '/ingredients',
+      '/settings',
     );
+    expect(within(mobileNav).getByRole('button', { name: /cerrar sesión/i })).toBeInTheDocument();
     expect(within(mobileNav).queryByRole('link', { name: /clientes/i })).not.toBeInTheDocument();
-    expect(within(mobileNav).queryByRole('link', { name: /settings/i })).not.toBeInTheDocument();
+    expect(within(mobileNav).queryByRole('link', { name: /insumos/i })).not.toBeInTheDocument();
+    expect(within(mobileNav).queryByRole('link', { name: /ingredientes/i })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole('link', { name: /ingredientes/i })).not.toBeInTheDocument();
+  });
+
+  it('logs out from the mobile navigation and replaces the route with login', async () => {
+    renderLayout('/orders');
+
+    await userEvent.click(
+      within(screen.getByRole('navigation', { name: /navegación móvil/i })).getByRole('button', {
+        name: /cerrar sesión/i,
+      }),
+    );
+
+    expect(logoutAdmin).toHaveBeenCalledOnce();
+    expect(navigateMock).toHaveBeenCalledWith('/login', { replace: true });
   });
 });

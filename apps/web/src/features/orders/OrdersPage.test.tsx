@@ -473,6 +473,18 @@ describe('OrdersPage', () => {
     }
   });
 
+  it('keeps the header actions actionable without a notification control', async () => {
+    renderOrdersPage();
+
+    expect(await screen.findByRole('heading', { name: /pedidos/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /exportar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\+ nuevo pedido/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /notificaciones de pedidos/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/notificaciones/i)).not.toBeInTheDocument();
+  });
+
   it('highlights delivery dates that are today or tomorrow in the order preview', async () => {
     const today = new Date();
     const todayIso = getBusinessDateIso(today);

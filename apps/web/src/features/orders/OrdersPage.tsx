@@ -7,7 +7,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Bell,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
@@ -3480,16 +3479,6 @@ export const OrdersPage = () => {
           title="Pedidos"
           description="Administrá y seguí todos los pedidos de tu emprendimiento."
         >
-          <button
-            aria-label="Notificaciones de pedidos"
-            className="relative rounded-full border border-white/10 bg-white px-3 py-2.5 text-muted-foreground shadow-card transition hover:border-primary/30 hover:text-primary"
-            type="button"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-1 -top-1 rounded-full bg-primary px-1.5 text-[10px] font-black text-primary-foreground">
-              {summary.pending}
-            </span>
-          </button>
           <button
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white px-4 py-2.5 text-sm font-black text-foreground shadow-card transition hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
             disabled={visibleOrders.length === 0}
