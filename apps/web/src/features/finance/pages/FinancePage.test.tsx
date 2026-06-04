@@ -201,7 +201,7 @@ describe('FinancePage', () => {
       receiptNumber: null,
       notes: null,
       canceledAt: '2026-05-29T12:00:00.000Z',
-      canceledReason: 'Anulación manual desde Finanzas',
+      canceledReason: 'Anulación manual desde Gestión',
       items: [],
       stockMovements: [],
     });
@@ -259,9 +259,9 @@ describe('FinancePage', () => {
   it('renders the finance workspace route without the legacy stock tab', async () => {
     renderFinancePage();
 
-    expect(await screen.findByRole('heading', { name: /finanzas/i, level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /gestión/i, level: 1 })).toBeInTheDocument();
 
-    const tabs = screen.getByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = screen.getByRole('tablist', { name: /secciones de gestión/i });
     expect(within(tabs).getByRole('tab', { name: /dashboard/i })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -291,7 +291,7 @@ describe('FinancePage', () => {
   it('opens recipes and selects a variety from finance URL parameters', async () => {
     renderFinancePage('/finanzas?section=recipes&menuItemId=menu-1');
 
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = await screen.findByRole('tablist', { name: /secciones de gestión/i });
     expect(within(tabs).getByRole('tab', { name: /recetas/i })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -307,10 +307,10 @@ describe('FinancePage', () => {
 
     renderFinancePage();
 
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = await screen.findByRole('tablist', { name: /secciones de gestión/i });
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /catálogo/i }));
-    expect(screen.getByText(/todavía no cargaste productos financieros/i)).toBeInTheDocument();
+    expect(screen.getByText(/todavía no cargaste productos de gestión/i)).toBeInTheDocument();
 
     await userEvent.click(within(tabs).getByRole('tab', { name: /costos base/i }));
     expect(screen.getByText(/sin reglas de costo base/i)).toBeInTheDocument();
@@ -344,7 +344,7 @@ describe('FinancePage', () => {
 
     renderFinancePage();
 
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = await screen.findByRole('tablist', { name: /secciones de gestión/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /calculadora/i }));
     await userEvent.clear(screen.getByLabelText(/total de venta/i));
     await userEvent.type(screen.getByLabelText(/total de venta/i), '24000');
@@ -365,7 +365,7 @@ describe('FinancePage', () => {
   it('creates base cost rules from the finance workspace', async () => {
     renderFinancePage();
 
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = await screen.findByRole('tablist', { name: /secciones de gestión/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /costos base/i }));
 
     expect(screen.getByText(/base 12 emp/i)).toBeInTheDocument();
@@ -392,7 +392,7 @@ describe('FinancePage', () => {
   it('saves recipe ingredients by menu variety and product base unit', async () => {
     renderFinancePage();
 
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = await screen.findByRole('tablist', { name: /secciones de gestión/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /recetas/i }));
 
     expect(screen.getByText(/total docena/i)).toBeInTheDocument();
@@ -429,7 +429,7 @@ describe('FinancePage', () => {
   it('registers weighted purchases using the product base unit instead of pack language', async () => {
     renderFinancePage();
 
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = await screen.findByRole('tablist', { name: /secciones de gestión/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /compras/i }));
 
     await userEvent.click(screen.getByRole('button', { name: /registrar compra/i }));
@@ -467,7 +467,7 @@ describe('FinancePage', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderFinancePage();
 
-    const tabs = await screen.findByRole('tablist', { name: /secciones de finanzas/i });
+    const tabs = await screen.findByRole('tablist', { name: /secciones de gestión/i });
     await userEvent.click(within(tabs).getByRole('tab', { name: /compras/i }));
 
     expect(await screen.findByText(/molino norte/i)).toBeInTheDocument();

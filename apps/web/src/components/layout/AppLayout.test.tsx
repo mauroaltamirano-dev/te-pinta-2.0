@@ -97,7 +97,7 @@ describe('AppLayout', () => {
       'href',
       '/orders',
     );
-    expect(within(mobileNav).getByRole('link', { name: /finanzas/i })).toHaveAttribute(
+    expect(within(mobileNav).getByRole('link', { name: /gestión/i })).toHaveAttribute(
       'href',
       '/finanzas',
     );

@@ -136,7 +136,7 @@ describe('finance catalog hooks', () => {
     vi.mocked(cancelFinancePurchase).mockResolvedValue({
       ...savedPurchase,
       canceledAt: '2026-06-01T12:00:00.000Z',
-      canceledReason: 'Anulación manual desde Finanzas',
+      canceledReason: 'Anulación manual desde Gestión',
     });
     const { queryClient, wrapper } = createWrapper();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');

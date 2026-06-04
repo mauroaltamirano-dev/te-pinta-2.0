@@ -75,7 +75,7 @@ export const protectedRoutes = [
     element: (
       <PlaceholderPage
         title="Stock"
-        description="Vista dedicada para stock operativo. Los insumos y costos se gestionan desde Finanzas."
+        description="Vista dedicada para stock operativo. Los insumos y costos se gestionan desde Gestión."
       />
     ),
   },

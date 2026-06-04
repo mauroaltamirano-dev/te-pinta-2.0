@@ -38,10 +38,10 @@ export const FinanceSectionNav = ({ activeSection, onSectionChange }: FinanceSec
       className="block text-sm font-bold text-foreground sm:hidden"
       htmlFor="finance-section-select"
     >
-      Sección de finanzas
+      Sección de gestión
     </label>
     <select
-      aria-label="Sección de finanzas"
+      aria-label="Sección de gestión"
       className="block w-full rounded-2xl border border-border bg-card px-3 py-2 text-sm font-black text-foreground shadow-card focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:hidden"
       id="finance-section-select"
       onChange={(event) => {
@@ -59,7 +59,7 @@ export const FinanceSectionNav = ({ activeSection, onSectionChange }: FinanceSec
     </select>
 
     <div
-      aria-label="Secciones de finanzas"
+      aria-label="Secciones de gestión"
       className="hidden gap-2 rounded-[1.5rem] border border-border/70 bg-card p-2 shadow-card sm:grid sm:grid-cols-2 lg:grid-cols-6"
       role="tablist"
     >

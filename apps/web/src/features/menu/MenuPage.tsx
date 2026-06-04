@@ -296,7 +296,7 @@ const MenuItemDetailAnalytics = ({
             href={recipeHref}
           >
             <Soup className="h-4 w-4" aria-hidden="true" />
-            Ver receta en Finanzas
+            Ver receta en Gestión
           </a>
           <a
             className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-xs font-black text-sidebar transition hover:bg-muted"
@@ -469,7 +469,7 @@ export const MenuPage = () => {
 
   const handleArchiveItem = (item: MenuItem) => {
     const confirmed = window.confirm(
-      `¿Deshabilitar "${item.name}"? Va a desaparecer de pedidos, finanzas y menú operativo, pero seguirá guardada para pedidos históricos.`,
+      `¿Deshabilitar "${item.name}"? Va a desaparecer de pedidos, gestión y menú operativo, pero seguirá guardada para pedidos históricos.`,
     );
     if (!confirmed) {
       return;
@@ -870,7 +870,7 @@ export const MenuPage = () => {
                       {!financeMetrics.hasRecipe || financeMetrics.warningsCount > 0 ? (
                         <p className="mt-3 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 ring-1 ring-amber-100">
                           {!financeMetrics.hasRecipe
-                            ? 'Falta receta financiera para completar el costo real.'
+                            ? 'Falta receta de costos para completar el costo real.'
                             : 'Hay ingredientes sin costo actualizado.'}
                         </p>
                       ) : null}

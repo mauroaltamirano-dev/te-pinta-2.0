@@ -290,6 +290,6 @@ export const dashboardSecondaryAlertsMock: DashboardAlert[] = [
     level: 'warning',
     title: 'Billetera costo base',
     detail: 'Por debajo del objetivo recomendado.',
-    actionLabel: 'Ver finanzas',
+    actionLabel: 'Ver gestión',
   },
 ];

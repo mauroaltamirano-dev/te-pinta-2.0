@@ -447,7 +447,7 @@ export const buildSecondaryAlerts = ({
     level: 'warning',
     title: 'Billetera costo base',
     detail: 'Revisar reserva contra producción estimada.',
-    actionLabel: 'Ver finanzas',
+    actionLabel: 'Ver gestión',
   });
 
   return alerts.slice(0, 5);

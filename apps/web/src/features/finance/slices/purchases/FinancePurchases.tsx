@@ -390,7 +390,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
     }
 
     cancelPurchase.mutate(
-      { id: purchase.id, input: { reason: 'Anulación manual desde Finanzas' } },
+      { id: purchase.id, input: { reason: 'Anulación manual desde Gestión' } },
       {
         onSuccess: () =>
           setCancelFeedback({
@@ -556,7 +556,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
 
       {isLoading ? (
         <div className="rounded-[1.5rem] border border-dashed border-border bg-background/70 p-5 text-sm font-bold text-muted-foreground">
-          Cargando compras financieras...
+          Cargando compras de gestión...
         </div>
       ) : rows.length ? (
         <div className="space-y-4">

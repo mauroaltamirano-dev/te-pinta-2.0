@@ -157,7 +157,7 @@ describe('FinancePurchases', () => {
     vi.mocked(cancelFinancePurchase).mockResolvedValue({
       ...purchases[0]!,
       canceledAt: '2026-05-23T12:00:00.000Z',
-      canceledReason: 'Anulación manual desde Finanzas',
+      canceledReason: 'Anulación manual desde Gestión',
     });
   });
 
@@ -268,7 +268,7 @@ describe('FinancePurchases', () => {
 
     await waitFor(() => expect(cancelFinancePurchase).toHaveBeenCalled());
     expect(cancelFinancePurchase).toHaveBeenCalledWith('purchase-1', {
-      reason: 'Anulación manual desde Finanzas',
+      reason: 'Anulación manual desde Gestión',
     });
     expect(await screen.findByText(/compra anulada/i)).toBeInTheDocument();
   });

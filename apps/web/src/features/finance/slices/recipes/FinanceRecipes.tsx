@@ -112,7 +112,7 @@ export const FinanceRecipes = ({
     return (
       <div className="rounded-[1.5rem] border border-dashed border-border bg-background/70 p-5 text-sm">
         <p className="font-black text-foreground">Sin variedades de menú</p>
-        <p className="mt-1 font-semibold leading-6 text-muted-foreground">Primero cargá variedades en Menú. Después Finanzas puede asociarles recetas por docena.</p>
+        <p className="mt-1 font-semibold leading-6 text-muted-foreground">Primero cargá variedades en Menú. Después Gestión puede asociarles recetas por docena.</p>
       </div>
     );
   }

@@ -455,7 +455,7 @@ export const FinanceCatalog = ({ products, purchases, isLoading }: FinanceCatalo
 
       {isLoading ? (
         <div className="rounded-[1.5rem] border border-dashed border-border bg-background/70 p-5 text-sm font-bold text-muted-foreground">
-          Cargando catálogo financiero...
+          Cargando catálogo de gestión...
         </div>
       ) : sections.length ? (
         <div className="space-y-5">
@@ -489,7 +489,7 @@ export const FinanceCatalog = ({ products, purchases, isLoading }: FinanceCatalo
         </div>
       ) : (
         <div className="rounded-[1.5rem] border border-dashed border-border bg-background/70 p-5 text-sm">
-          <p className="font-black text-foreground">Todavía no cargaste productos financieros</p>
+          <p className="font-black text-foreground">Todavía no cargaste productos de gestión</p>
           <p className="mt-1 font-semibold leading-6 text-muted-foreground">
             Creá materia prima, packaging o gastos para empezar a calcular costos reales.
           </p>

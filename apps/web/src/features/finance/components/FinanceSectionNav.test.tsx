@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { FinanceSectionNav, financeSections, type FinanceSectionId } from './FinanceSectionNav';
 
 describe('FinanceSectionNav', () => {
-  it('renders the finance sections without exposing the legacy stock tab', () => {
+  it('renders the management sections without exposing the legacy stock tab', () => {
     render(<FinanceSectionNav activeSection="dashboard" onSectionChange={vi.fn()} />);
 
-    const tablist = screen.getByRole('tablist', { name: /secciones de finanzas/i });
+    const tablist = screen.getByRole('tablist', { name: /secciones de gestión/i });
 
     expect(financeSections.map((section) => section.id)).toEqual([
       'dashboard',
@@ -33,7 +33,7 @@ describe('FinanceSectionNav', () => {
     render(<FinanceSectionNav activeSection="dashboard" onSectionChange={handleSectionChange} />);
 
     await user.selectOptions(
-      screen.getByRole('combobox', { name: /sección de finanzas/i }),
+      screen.getByRole('combobox', { name: /sección de gestión/i }),
       'purchases',
     );
 

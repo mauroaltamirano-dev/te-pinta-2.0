@@ -42,13 +42,13 @@ export const FinancePage = () => {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <PageHero
-        eyebrow="Finanzas"
-        title="Finanzas"
-        description="Un espacio único para costos, compras y rentabilidad. Si faltan datos, la app avisa sin romper la operación."
+        eyebrow="Gestión"
+        title="Gestión"
+        description="Centro operativo para costos, compras, recetas y rentabilidad. Si faltan datos, la app avisa sin romper la operación."
       >
         <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-sidebar-muted ring-1 ring-white/10">
           <CircleDollarSign className="h-4 w-4 text-accent" aria-hidden={true} />
-          MVP financiero
+          Gestión operativa
         </span>
       </PageHero>
 
