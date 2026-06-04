@@ -59,6 +59,8 @@ export const HomePage = () => {
               <img
                 src={logo}
                 alt="Te Pinta"
+                width={208}
+                height={131}
                 className="h-auto w-52 drop-shadow-[0_18px_45px_rgba(34,22,15,0.14)] sm:w-64"
               />
             </div>

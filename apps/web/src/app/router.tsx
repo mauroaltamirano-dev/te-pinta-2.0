@@ -1,15 +1,31 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { AppLayout } from '@/components/layout/AppLayout';
-import { DashboardPage } from '@/features/dashboard/DashboardPage';
-import { CustomersPage } from '@/features/customers/CustomersPage';
-import { FinancePage } from '@/features/finance/pages/FinancePage';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
-import { MenuPage } from '@/features/menu/MenuPage';
-import { OrdersPage } from '@/features/orders/OrdersPage';
-import { SettingsPage } from '@/features/settings/SettingsPage';
 import { HomePage } from '@/routes/HomePage';
 import { LoginPage } from '@/routes/LoginPage';
+import { PlaceholderPage } from '@/routes/PlaceholderPage';
+
+import { lazyRoute } from './lazy-route';
+
+const DashboardPage = lazyRoute(
+  () => import('@/features/dashboard/DashboardPage'),
+  'DashboardPage',
+);
+const OrdersPage = lazyRoute(() => import('@/features/orders/OrdersPage'), 'OrdersPage');
+const MenuPage = lazyRoute(() => import('@/features/menu/MenuPage'), 'MenuPage');
+const CustomersPage = lazyRoute(
+  () => import('@/features/customers/CustomersPage'),
+  'CustomersPage',
+);
+const FinancePage = lazyRoute(
+  () => import('@/features/finance/pages/FinancePage'),
+  'FinancePage',
+);
+const SettingsPage = lazyRoute(
+  () => import('@/features/settings/SettingsPage'),
+  'SettingsPage',
+);
 
 export const protectedRoutes = [
   {
@@ -19,6 +35,24 @@ export const protectedRoutes = [
   {
     path: 'orders',
     element: <OrdersPage />,
+  },
+  {
+    path: 'production',
+    element: (
+      <PlaceholderPage
+        title="Producción"
+        description="Vista dedicada para planificar producción, tandas y preparación. Por ahora el resumen operativo vive en el dashboard general."
+      />
+    ),
+  },
+  {
+    path: 'sales',
+    element: (
+      <PlaceholderPage
+        title="Ventas"
+        description="Vista dedicada para análisis comercial. Por ahora las ventas principales se ven en el dashboard general."
+      />
+    ),
   },
   {
     path: 'menu',
@@ -35,6 +69,15 @@ export const protectedRoutes = [
   {
     path: 'ingredients',
     element: <Navigate replace to="/finanzas?section=catalog" />,
+  },
+  {
+    path: 'stock',
+    element: (
+      <PlaceholderPage
+        title="Stock"
+        description="Vista dedicada para stock operativo. Los insumos y costos se gestionan desde Finanzas."
+      />
+    ),
   },
   {
     path: 'settings',

@@ -19,16 +19,8 @@ export const BottomNav = () => {
   return (
     <nav
       aria-label="Navegación móvil"
-      className="fixed inset-x-0 bottom-0 z-40 overflow-hidden border-t border-sidebar-foreground/12 bg-sidebar px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-3 text-card shadow-[0_-18px_42px_rgba(10,31,53,0.28)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 overflow-hidden border-t border-sidebar-foreground/12 bg-sidebar px-3 pb-[max(0.7rem,env(safe-area-inset-bottom))] pt-3 text-card shadow-[0_-8px_24px_rgba(10,31,53,0.18)] md:hidden"
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(circle at 18% -20%, rgba(210, 138, 45, 0.3), transparent 12rem), radial-gradient(circle at 90% 20%, rgba(181, 74, 50, 0.22), transparent 11rem), linear-gradient(180deg, rgba(255, 248, 239, 0.08), rgba(0, 0, 0, 0.08))',
-        }}
-      />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-accent to-success"
@@ -42,11 +34,11 @@ export const BottomNav = () => {
               key={item.href}
               className={({ isActive }) =>
                 cn(
-                  'group relative flex min-w-0 flex-col items-center gap-1 rounded-[1.15rem] px-1.5 py-2 text-[0.62rem] font-extrabold transition-all duration-200 ease-out',
+                  'group relative flex min-w-0 flex-col items-center gap-1 rounded-[1.15rem] px-1.5 py-2 text-[0.62rem] font-extrabold transition-colors duration-200 ease-out',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar',
                   isActive
                     ? 'bg-card text-sidebar shadow-glow'
-                    : 'text-card/78 hover:-translate-y-0.5 hover:bg-sidebar-foreground/10 hover:text-white',
+                    : 'text-card/78 hover:bg-sidebar-foreground/10 hover:text-white',
                 )
               }
               to={item.href}
@@ -61,7 +53,7 @@ export const BottomNav = () => {
                   ) : null}
                   <span
                     className={cn(
-                      'flex size-8 items-center justify-center rounded-xl ring-1 transition-all duration-200',
+                      'flex size-8 items-center justify-center rounded-xl ring-1 transition-colors duration-200',
                       isActive
                         ? 'bg-primary text-card ring-primary/20 shadow-sm'
                         : 'bg-sidebar-foreground/8 text-card ring-sidebar-foreground/12 group-hover:bg-primary group-hover:ring-primary/30',
@@ -69,7 +61,7 @@ export const BottomNav = () => {
                   >
                     <Icon
                       aria-hidden="true"
-                      className="size-[1.125rem] transition-transform duration-200 group-hover:scale-110"
+                      className="size-[1.125rem]"
                     />
                   </span>
                   <span
@@ -93,7 +85,7 @@ export const BottomNav = () => {
         })}
       </div>
       <button
-        className="relative mx-auto mt-2 flex min-h-10 w-full max-w-lg items-center justify-center gap-2 rounded-[1.15rem] border border-sidebar-foreground/15 bg-white/10 px-3 text-xs font-black text-white transition hover:bg-primary disabled:pointer-events-none disabled:opacity-70"
+        className="relative mx-auto mt-2 flex min-h-10 w-full max-w-lg items-center justify-center gap-2 rounded-[1.15rem] border border-sidebar-foreground/15 bg-white/10 px-3 text-xs font-black text-white transition-colors hover:bg-primary disabled:pointer-events-none disabled:opacity-70"
         disabled={isLoggingOut}
         onClick={handleLogout}
         type="button"

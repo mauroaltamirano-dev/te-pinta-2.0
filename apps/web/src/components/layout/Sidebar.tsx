@@ -129,6 +129,8 @@ export const Sidebar = () => {
           <img
             src={logo}
             alt="Logo de Te Pinta"
+            width={160}
+            height={107}
             className="mx-auto h-auto w-40 object-contain drop-shadow-sm"
           />
 
