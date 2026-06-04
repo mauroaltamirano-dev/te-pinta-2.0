@@ -19,7 +19,6 @@ import {
   dashboardTotalsMock,
   dashboardVarietySalesMock,
   dashboardWalletsMock,
-  dashboardWeeklySalesMock,
 } from './dashboard.mock';
 import { useOrders } from '../orders/orders-hooks';
 
@@ -29,7 +28,6 @@ import {
   buildProductionSummaryFromOrders,
   buildSecondaryAlerts,
   buildVarietySales,
-  buildWeeklySales,
   deliveryTextLabels,
   formatMoney,
   formatQuantity,
@@ -51,8 +49,7 @@ import { CriticalAlertsBar } from './components/CriticalAlertsBar';
 import { UpcomingOrdersCard } from './components/UpcomingOrdersCard';
 import { ProductionPendingCard } from './components/ProductionPendingCard';
 import { WalletsSummary } from './components/WalletsSummary';
-import { VarietySalesChart, WeeklySalesChart } from './components/AnalyticsCards';
-import { CustomerSummaryCard } from './components/CustomerSummaryCard';
+import { CommercialAnalyticsSection } from './components/AnalyticsCards';
 import { AlertsPanel } from './components/AlertsPanel';
 
 export const DashboardPage = () => {
@@ -92,7 +89,6 @@ export const DashboardPage = () => {
   const totals = selectedTotals ?? (hasDashboardResponse ? dashboard!.totals : dashboardTotalsMock);
   const topClients = selectedRangeAnalytics?.topClients ?? dashboard?.topClients ?? [];
   const topVarieties = selectedRangeAnalytics?.topVarieties ?? dashboard?.topVarieties ?? [];
-  const chartDays = selectedRangeAnalytics?.chartDays ?? dashboard?.lastSevenDays ?? [];
 
   const orders = useMemo<DashboardOrderCard[]>(() => {
     if (ordersQuery.data) {
@@ -130,12 +126,6 @@ export const DashboardPage = () => {
 
     return buildVarietySales(topVarieties);
   }, [topVarieties, useMockDashboardData]);
-
-  const weeklySales = useMemo(() => {
-    if (useMockDashboardData) return dashboardWeeklySalesMock;
-
-    return buildWeeklySales(chartDays);
-  }, [chartDays, useMockDashboardData]);
 
   const customerSummary = useMemo(() => {
     if (useMockDashboardData) return dashboardCustomerSummaryMock;
@@ -270,13 +260,7 @@ export const DashboardPage = () => {
         <UpcomingOrdersCard orders={orders} />
         <ProductionPendingCard summary={productionSummary} />
         <WalletsSummary wallets={dashboardWalletsMock} />
-
-        <section className="order-6 grid gap-6 xl:grid-cols-2" aria-label="Analítica comercial">
-          <VarietySalesChart varieties={varietySales} />
-          <WeeklySalesChart weeklySales={weeklySales} />
-        </section>
-
-        <CustomerSummaryCard summary={customerSummary} />
+        <CommercialAnalyticsSection summary={customerSummary} varieties={varietySales} />
         <AlertsPanel alerts={secondaryAlerts} />
       </div>
     </div>

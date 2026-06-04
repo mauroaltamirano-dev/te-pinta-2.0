@@ -5,13 +5,16 @@ import { cn } from '@/lib/utils';
 export const SectionCard = ({
   children,
   className,
+  'aria-label': ariaLabel,
   as: Component = 'section',
 }: {
   children: ReactNode;
   className?: string;
+  'aria-label'?: string;
   as?: 'section' | 'article' | 'aside';
 }) => (
   <Component
+    aria-label={ariaLabel}
     className={cn(
       'rounded-[1.75rem] border border-white/80 bg-white p-5 shadow-card',
       className,
