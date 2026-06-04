@@ -19,13 +19,17 @@ import {
   dashboardTotalsMock,
   dashboardVarietySalesMock,
   dashboardWalletsMock,
+  dashboardWeeklySalesMock,
 } from './dashboard.mock';
+import { useFinancePurchases } from '../finance/hooks';
 import { useOrders } from '../orders/orders-hooks';
 
 import {
+  buildPurchaseSpendSeries,
   buildCriticalAlerts,
   buildCustomerSummary,
   buildProductionSummaryFromOrders,
+  buildSalesMoneySeries,
   buildSecondaryAlerts,
   buildVarietySales,
   deliveryTextLabels,
@@ -49,7 +53,7 @@ import { CriticalAlertsBar } from './components/CriticalAlertsBar';
 import { UpcomingOrdersCard } from './components/UpcomingOrdersCard';
 import { ProductionPendingCard } from './components/ProductionPendingCard';
 import { WalletsSummary } from './components/WalletsSummary';
-import { CommercialAnalyticsSection } from './components/AnalyticsCards';
+import { CommercialAnalyticsSection, GeneralSummaryChart } from './components/AnalyticsCards';
 import { AlertsPanel } from './components/AlertsPanel';
 
 export const DashboardPage = () => {
@@ -79,6 +83,10 @@ export const DashboardPage = () => {
     sortBy: 'deliveryDate',
     sortDir: 'asc',
     pageSize: 8,
+  });
+  const purchasesQuery = useFinancePurchases({
+    from: periodRange.startDate,
+    to: periodRange.endDate,
   });
   const dashboard = dashboardQuery.data;
   const selectedRangeAnalytics = dashboard?.selectedRangeAnalytics;
@@ -132,6 +140,27 @@ export const DashboardPage = () => {
 
     return buildCustomerSummary(topClients);
   }, [topClients, useMockDashboardData]);
+
+  const salesSeries = useMemo(() => {
+    if (useMockDashboardData) {
+      return dashboardWeeklySalesMock.map((day) => ({
+        date: day.day,
+        day: day.day,
+        value: day.value,
+      }));
+    }
+
+    return buildSalesMoneySeries(selectedRangeAnalytics?.chartDays ?? dashboard?.lastSevenDays ?? []);
+  }, [dashboard?.lastSevenDays, selectedRangeAnalytics?.chartDays, useMockDashboardData]);
+
+  const purchaseSeries = useMemo(
+    () =>
+      buildPurchaseSpendSeries(
+        purchasesQuery.data ?? [],
+        selectedRangeAnalytics?.chartDays ?? dashboard?.lastSevenDays ?? [],
+      ),
+    [dashboard?.lastSevenDays, purchasesQuery.data, selectedRangeAnalytics?.chartDays],
+  );
 
   const criticalAlerts = useMemo(
     () =>
@@ -260,6 +289,7 @@ export const DashboardPage = () => {
         <UpcomingOrdersCard orders={orders} />
         <ProductionPendingCard summary={productionSummary} />
         <WalletsSummary wallets={dashboardWalletsMock} />
+        <GeneralSummaryChart purchaseSeries={purchaseSeries} salesSeries={salesSeries} />
         <CommercialAnalyticsSection summary={customerSummary} varieties={varietySales} />
         <AlertsPanel alerts={secondaryAlerts} />
       </div>

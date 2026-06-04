@@ -57,6 +57,18 @@ export type KpiCardData = {
   helpText?: string;
 };
 
+export type DashboardMoneyChartPoint = {
+  date: string;
+  day: string;
+  value: number;
+};
+
+type PurchaseSpendSource = {
+  purchaseDate: string;
+  canceledAt: string | Date | null;
+  items: Array<{ totalPriceCents: number }>;
+};
+
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
 const moneyFormatter = new Intl.NumberFormat('es-AR', {
@@ -255,6 +267,46 @@ export const getUrgencyTone = (
   if (urgency === 'Mañana') return 'info';
 
   return 'neutral';
+};
+
+export const buildSalesMoneySeries = (
+  chartDays: DashboardCalendarDay[],
+): DashboardMoneyChartPoint[] =>
+  chartDays.map((day) => ({
+    date: day.date,
+    day: formatCompactDate(day.date),
+    value: day.revenue,
+  }));
+
+export const buildPurchaseSpendSeries = (
+  purchases: PurchaseSpendSource[],
+  chartDays: DashboardCalendarDay[],
+): DashboardMoneyChartPoint[] => {
+  const spendByDate = new Map<string, number>();
+
+  purchases
+    .filter((purchase) => !purchase.canceledAt)
+    .forEach((purchase) => {
+      const total = purchase.items.reduce((sum, item) => sum + item.totalPriceCents, 0) / 100;
+      spendByDate.set(purchase.purchaseDate, (spendByDate.get(purchase.purchaseDate) ?? 0) + total);
+    });
+
+  const dates =
+    chartDays.length > 0
+      ? chartDays.map((day) => day.date)
+      : [...spendByDate.keys()].sort((left, right) => left.localeCompare(right));
+
+  return dates.map((date) => ({
+    date,
+    day: formatCompactDate(date),
+    value: spendByDate.get(date) ?? 0,
+  }));
+};
+
+export const getMoneyAxisTicks = (maxValue: number): number[] => {
+  const safeMaxValue = Math.max(Math.round(maxValue), 0);
+
+  return [safeMaxValue, Math.round(safeMaxValue / 2), 0];
 };
 
 // ── Mappers ────────────────────────────────────────────────────────────────────

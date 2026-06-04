@@ -1,15 +1,145 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, BarChart3, ShoppingBag, Users } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
-import { formatMoney } from '../dashboard-utils';
+import { formatMoney, getMoneyAxisTicks, type DashboardMoneyChartPoint } from '../dashboard-utils';
 import type {
   DashboardCustomerSummary,
   DashboardVarietySale,
   DashboardWeeklySale,
 } from '../dashboard.mock';
 import { EmptyState, SectionCard, StatusBadge } from './shared';
+
+type MoneyChartMode = 'sales' | 'purchases';
+
+type MoneyChartConfig = {
+  label: string;
+  eyebrow: string;
+  totalLabel: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  toneClassName: string;
+  points: DashboardMoneyChartPoint[];
+};
+
+const MoneyChart = ({ config }: { config: MoneyChartConfig }) => {
+  const total = config.points.reduce((sum, point) => sum + point.value, 0);
+  const maxValue = Math.max(...config.points.map((point) => point.value), 0);
+  const axisTicks = getMoneyAxisTicks(maxValue);
+  const peak = config.points.reduce<DashboardMoneyChartPoint | null>(
+    (best, point) => (!best || point.value > best.value ? point : best),
+    null,
+  );
+
+  if (config.points.length === 0 || total === 0) {
+    return <EmptyState title={config.emptyTitle} description={config.emptyDescription} />;
+  }
+
+  return (
+    <>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <p className="rounded-2xl bg-background px-3 py-2 text-sm font-black text-sidebar ring-1 ring-border/70">
+          {config.totalLabel}: {formatMoney(total)}
+        </p>
+        <p className="rounded-2xl bg-muted px-3 py-2 text-sm font-black text-muted-foreground ring-1 ring-border/70">
+          Pico: {peak?.day ?? 'Sin dato'} · {formatMoney(peak?.value ?? 0)}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-[4.25rem_minmax(0,1fr)] gap-3 rounded-[1.35rem] border border-border/70 bg-gradient-to-br from-white to-crema-maiz/55 p-4">
+        <div className="flex h-72 flex-col justify-between text-right text-[0.7rem] font-black tabular-nums text-muted-foreground sm:h-56">
+          {axisTicks.map((tick) => (
+            <span key={tick}>{formatMoney(tick)}</span>
+          ))}
+        </div>
+        <div className="flex h-72 min-w-0 items-end gap-1.5 sm:h-56 sm:gap-3">
+          {config.points.map((point) => (
+            <div className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2" key={point.date}>
+              <div className="flex min-h-0 items-end">
+                <div
+                  aria-label={`${point.day}: ${formatMoney(point.value)} en ${config.label.toLowerCase()}`}
+                  className={cn('w-full rounded-t-2xl', config.toneClassName)}
+                  style={{ height: `${Math.max((point.value / Math.max(maxValue, 1)) * 100, 8)}%` }}
+                />
+              </div>
+              <span className="truncate text-center text-[0.65rem] font-black uppercase text-muted-foreground sm:text-[0.7rem]">
+                {point.day}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export const GeneralSummaryChart = ({
+  purchaseSeries,
+  salesSeries,
+}: {
+  purchaseSeries: DashboardMoneyChartPoint[];
+  salesSeries: DashboardMoneyChartPoint[];
+}) => {
+  const [mode, setMode] = useState<MoneyChartMode>('sales');
+  const configs: Record<MoneyChartMode, MoneyChartConfig> = {
+    sales: {
+      label: 'Ventas',
+      eyebrow: 'Ingresos',
+      totalLabel: 'Ventas registradas',
+      emptyTitle: 'No hay ventas en el período',
+      emptyDescription: 'El gráfico se completa con ventas por fecha de entrega.',
+      toneClassName: 'bg-primary',
+      points: salesSeries,
+    },
+    purchases: {
+      label: 'Compras',
+      eyebrow: 'Gastos',
+      totalLabel: 'Compras registradas',
+      emptyTitle: 'No hay compras en el período',
+      emptyDescription: 'El gráfico toma compras activas registradas en Gestión y excluye anuladas.',
+      toneClassName: 'bg-accent/80',
+      points: purchaseSeries,
+    },
+  };
+  const activeConfig = configs[mode];
+
+  return (
+    <SectionCard className="order-4" aria-label="Resumen general">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
+            <BarChart3 className="size-4" aria-hidden /> {activeConfig.eyebrow}
+          </p>
+          <h2 className="mt-1 text-xl font-black text-foreground">Resumen general</h2>
+        </div>
+        <div className="inline-flex rounded-full bg-muted p-1 ring-1 ring-border/70">
+          {(['sales', 'purchases'] as const).map((option) => {
+            const isActive = mode === option;
+
+            return (
+              <button
+                aria-pressed={isActive}
+                className={cn(
+                  'rounded-full px-3 py-2 text-xs font-black transition-colors',
+                  isActive ? 'bg-sidebar text-white shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+                key={option}
+                onClick={() => setMode(option)}
+                type="button"
+              >
+                {configs[option].label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <MoneyChart config={activeConfig} />
+    </SectionCard>
+  );
+};
 
 export const VarietySalesChart = ({ varieties }: { varieties: DashboardVarietySale[] }) => {
   const bestSeller = varieties.reduce<DashboardVarietySale | null>(

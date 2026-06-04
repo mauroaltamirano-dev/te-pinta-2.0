@@ -5,9 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createQueryClient } from '@/lib/query-client';
 
+import { listFinancePurchases } from '../finance/api';
+import type { FinancePurchaseDetail } from '../finance/types';
 import { listOrders, type OrderListResponse } from '../orders/orders-api';
 import { getDailyDashboard, type DailyDashboard } from './dashboard-api';
 import { DashboardPage } from './DashboardPage';
+
+vi.mock('../finance/api', () => ({
+  listFinancePurchases: vi.fn(),
+}));
 
 vi.mock('../orders/orders-api', () => ({
   listOrders: vi.fn(),
@@ -55,6 +61,81 @@ const chartDays = [
   { date: '2026-06-05', count: 2, revenue: 24000, estimatedProfit: 7200 },
   { date: '2026-06-06', count: 2, revenue: 38000, estimatedProfit: 11400 },
   { date: '2026-06-07', count: 1, revenue: 25000, estimatedProfit: 7500 },
+];
+
+const financePurchases: FinancePurchaseDetail[] = [
+  {
+    id: 'purchase-1',
+    purchaseDate: '2026-06-02',
+    supplier: 'Molino norte',
+    receiptNumber: 'A-001',
+    notes: null,
+    canceledAt: null,
+    canceledReason: null,
+    items: [
+      {
+        id: 'purchase-item-1',
+        purchaseId: 'purchase-1',
+        productId: 'product-1',
+        purchaseUnit: 'kg',
+        purchaseQuantity: 2,
+        unitsPerPackage: 1,
+        totalBaseUnits: 2,
+        unitPriceCents: 600000,
+        totalPriceCents: 1200000,
+        costPerBaseUnitCents: 600000,
+        notes: null,
+      },
+    ],
+  },
+  {
+    id: 'purchase-2',
+    purchaseDate: '2026-06-04',
+    supplier: 'Verdulería centro',
+    receiptNumber: 'B-014',
+    notes: null,
+    canceledAt: null,
+    canceledReason: null,
+    items: [
+      {
+        id: 'purchase-item-2',
+        purchaseId: 'purchase-2',
+        productId: 'product-2',
+        purchaseUnit: 'kg',
+        purchaseQuantity: 3,
+        unitsPerPackage: 1,
+        totalBaseUnits: 3,
+        unitPriceCents: 200000,
+        totalPriceCents: 600000,
+        costPerBaseUnitCents: 200000,
+        notes: null,
+      },
+    ],
+  },
+  {
+    id: 'purchase-canceled',
+    purchaseDate: '2026-06-04',
+    supplier: 'Compra anulada',
+    receiptNumber: null,
+    notes: null,
+    canceledAt: '2026-06-04T12:00:00.000Z',
+    canceledReason: 'Duplicada',
+    items: [
+      {
+        id: 'purchase-item-canceled',
+        purchaseId: 'purchase-canceled',
+        productId: 'product-3',
+        purchaseUnit: 'kg',
+        purchaseQuantity: 1,
+        unitsPerPackage: 1,
+        totalBaseUnits: 1,
+        unitPriceCents: 999000,
+        totalPriceCents: 999000,
+        costPerBaseUnitCents: 999000,
+        notes: null,
+      },
+    ],
+  },
 ];
 
 const dashboardResponse: DailyDashboard = {
@@ -217,6 +298,7 @@ describe('DashboardPage', () => {
     vi.resetAllMocks();
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
     vi.mocked(listOrders).mockResolvedValue(ordersResponse);
+    vi.mocked(listFinancePurchases).mockResolvedValue(financePurchases);
   });
 
   it('shows the operational dashboard structure with real dashboard and order data', async () => {
@@ -275,6 +357,32 @@ describe('DashboardPage', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/ventas semanales/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /ritmo de venta/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a readable general chart with purchases instead of the old profit toggle', async () => {
+    renderDashboardPage();
+
+    const generalSummary = await screen.findByRole('region', { name: /resumen general/i });
+
+    expect(within(generalSummary).getByRole('heading', { name: /resumen general/i })).toBeInTheDocument();
+    expect(within(generalSummary).getByRole('button', { name: /ventas/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(generalSummary).getByRole('button', { name: /compras/i })).toBeInTheDocument();
+    expect(within(generalSummary).queryByRole('button', { name: /ganancias/i })).not.toBeInTheDocument();
+    expect(await within(generalSummary).findByText('$38.000')).toBeInTheDocument();
+    expect(within(generalSummary).getByText('$0')).toBeInTheDocument();
+
+    fireEvent.click(within(generalSummary).getByRole('button', { name: /compras/i }));
+
+    expect(within(generalSummary).getByRole('button', { name: /compras/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(await within(generalSummary).findByText(/compras registradas/i)).toHaveTextContent('$18.000');
+    expect(within(generalSummary).getByText('$12.000')).toBeInTheDocument();
+    expect(within(generalSummary).queryByText('$9.990')).not.toBeInTheDocument();
   });
 
   it('requests custom range analytics with explicit from and to dates', async () => {
