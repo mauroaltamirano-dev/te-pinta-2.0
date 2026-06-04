@@ -15,14 +15,16 @@ Desde este repo en el desktop:
 ./scripts/te-pinta-notebook-up.sh
 ```
 
-Ese único comando entra por SSH a la notebook, intenta arrancar Docker Desktop si hace falta, levanta el stack Docker y muestra la URL pública actual.
+Ese único comando entra por SSH a la notebook, actualiza `main`, crea un backup de PostgreSQL,
+reconstruye web/API, aplica migraciones, levanta el stack Docker y muestra la URL pública actual.
+Si el Quick Tunnel gratuito expiró, lo recrea.
 
 ## Si estoy en la notebook
 
 Ejecutar:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Users\m_e_a\te-pinta-public-url.ps1
+powershell -ExecutionPolicy Bypass -File C:\Users\m_e_a\te-pinta-2.0\scripts\te-pinta-public-url.ps1
 ```
 
 ## URLs
