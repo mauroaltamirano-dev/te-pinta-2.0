@@ -21,6 +21,7 @@ import {
   type FinanceProductCategory,
   type FinanceProductFilters,
   type FinanceProductCostHistoryItem,
+  type FinancePurchaseFundingSource,
   type FinancePurchaseItemImpact,
   type FinancePurchaseFilters,
   type FinanceRecipeCostItem,
@@ -93,6 +94,7 @@ export type PersistFinancePurchaseInput = {
   supplier: string | null;
   receiptNumber: string | null;
   notes: string | null;
+  fundingSource: FinancePurchaseFundingSource;
   items: PersistFinancePurchaseItem[];
   stockMovements: PersistFinanceStockMovement[];
 };
@@ -103,6 +105,7 @@ export type FinancePurchaseDetail = {
   supplier: string | null;
   receiptNumber: string | null;
   notes: string | null;
+  fundingSource: FinancePurchaseFundingSource;
   canceledAt: Date | null;
   canceledReason: string | null;
   items: PersistFinancePurchaseItem[];
@@ -385,6 +388,7 @@ export const createFinancePurchase = async (
     supplier: normalizeOptionalText(input.supplier),
     receiptNumber: normalizeOptionalText(input.receiptNumber),
     notes: normalizeOptionalText(input.notes),
+    fundingSource: input.fundingSource,
     items,
     stockMovements,
   });

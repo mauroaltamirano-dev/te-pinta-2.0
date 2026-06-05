@@ -41,6 +41,7 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
     supplier: input.supplier,
     receiptNumber: input.receiptNumber,
     notes: input.notes,
+    fundingSource: input.fundingSource,
     canceledAt: null,
     canceledReason: null,
     items: input.items,
@@ -223,6 +224,7 @@ describe('finance routes', () => {
         supplier: 'Molino norte',
         receiptNumber: null,
         notes: null,
+        fundingSource: 'profit',
         canceledAt: null,
         canceledReason: null,
         items: [],
@@ -235,6 +237,7 @@ describe('finance routes', () => {
       supplier: 'Molino norte',
       receiptNumber: null,
       notes: null,
+      fundingSource: 'profit',
       canceledAt: null,
       canceledReason: null,
       items: [],
@@ -246,6 +249,7 @@ describe('finance routes', () => {
       supplier: 'Molino norte',
       receiptNumber: null,
       notes: null,
+      fundingSource: 'profit',
       canceledAt: new Date('2026-05-29T12:00:00.000Z'),
       canceledReason: 'duplicada',
       items: [],
@@ -257,7 +261,10 @@ describe('finance routes', () => {
       .get('/api/v1/finance/purchases')
       .set('Authorization', `Bearer ${accessToken}`);
     expect(listResponse.status).toBe(200);
-    expect(listResponse.body.purchases[0]).toMatchObject({ id: 'purchase-1' });
+    expect(listResponse.body.purchases[0]).toMatchObject({
+      id: 'purchase-1',
+      fundingSource: 'profit',
+    });
 
     const cancelResponse = await request(app)
       .delete('/api/v1/finance/purchases/purchase-1')
@@ -352,6 +359,7 @@ describe('finance routes', () => {
           supplier: 'Molino norte',
           receiptNumber: null,
           notes: null,
+          fundingSource: 'production_cost',
           canceledAt: null,
           canceledReason: null,
           items: [

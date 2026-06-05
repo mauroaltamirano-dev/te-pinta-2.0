@@ -33,6 +33,11 @@ export const financeBaseUnitEnum = pgEnum('finance_base_unit', [
   'l',
   'pack',
 ]);
+export const financePurchaseFundingSourceEnum = pgEnum('finance_purchase_funding_source', [
+  'production_cost',
+  'profit',
+  'services',
+]);
 export const financeStockMovementTypeEnum = pgEnum('finance_stock_movement_type', [
   'purchase_in',
   'manual_in',
@@ -190,6 +195,9 @@ export const financePurchases = pgTable(
     supplier: varchar('supplier', { length: 180 }),
     receiptNumber: varchar('receipt_number', { length: 120 }),
     notes: text('notes'),
+    fundingSource: financePurchaseFundingSourceEnum('funding_source')
+      .notNull()
+      .default('production_cost'),
     canceledAt: timestamp('canceled_at', { withTimezone: true }),
     canceledReason: text('canceled_reason'),
     ...timestamps,

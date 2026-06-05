@@ -152,6 +152,7 @@ describe('FinancePage', () => {
         supplier: 'Molino norte',
         receiptNumber: null,
         notes: null,
+        fundingSource: 'production_cost',
         canceledAt: null,
         canceledReason: null,
         items: [
@@ -190,6 +191,7 @@ describe('FinancePage', () => {
       supplier: 'Molino norte',
       receiptNumber: null,
       notes: null,
+      fundingSource: 'production_cost',
       canceledAt: null,
       canceledReason: null,
       items: [],
@@ -200,6 +202,7 @@ describe('FinancePage', () => {
       supplier: 'Molino norte',
       receiptNumber: null,
       notes: null,
+      fundingSource: 'production_cost',
       canceledAt: '2026-05-29T12:00:00.000Z',
       canceledReason: 'Anulación manual desde Gestión',
       items: [],
@@ -435,8 +438,10 @@ describe('FinancePage', () => {
     await userEvent.click(screen.getByRole('button', { name: /registrar compra/i }));
     const dialog = screen.getByRole('dialog', { name: /registrar compra/i });
     expect(within(dialog).getByText(/costo unitario base/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/asignar compra a/i)).toHaveValue('production_cost');
     expect(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i)).toBeInTheDocument();
 
+    await userEvent.selectOptions(within(dialog).getByLabelText(/asignar compra a/i), 'services');
     await userEvent.clear(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i));
     await userEvent.type(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i), '2.475');
     await userEvent.clear(within(dialog).getByLabelText(/precio por kg/i));
@@ -446,6 +451,7 @@ describe('FinancePage', () => {
     await waitFor(() => expect(createFinancePurchase).toHaveBeenCalled());
     expect(vi.mocked(createFinancePurchase).mock.calls[0]?.[0]).toEqual({
       purchaseDate: expect.any(String),
+      fundingSource: 'services',
       supplier: undefined,
       receiptNumber: undefined,
       notes: undefined,

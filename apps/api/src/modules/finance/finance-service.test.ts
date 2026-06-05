@@ -37,6 +37,7 @@ const purchaseDetail = (overrides: Partial<FinancePurchaseDetail> = {}): Finance
   supplier: 'Mayorista Centro',
   receiptNumber: null,
   notes: null,
+  fundingSource: 'production_cost',
   canceledAt: null,
   canceledReason: null,
   items: [],
@@ -61,7 +62,8 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   getProductsByIds: async () => [product()],
   listProductPurchaseHistory: async () => new Map(),
   listStockMovementsByProducts: async () => [],
-  createPurchaseWithItems: async (input) => purchaseDetail({ id: input.id, items: input.items }),
+  createPurchaseWithItems: async (input) =>
+    purchaseDetail({ id: input.id, fundingSource: input.fundingSource, items: input.items }),
   listPurchases: async () => [],
   getPurchase: async () => null,
   cancelPurchase: async () => null,
@@ -110,6 +112,7 @@ describe('finance service', () => {
         persisted = input;
         return purchaseDetail({
           id: input.id,
+          fundingSource: input.fundingSource,
           items: input.items,
           stockMovements: input.stockMovements.map((item) =>
             movement({ ...item, createdAt: new Date('2026-05-27T12:00:00.000Z') }),
@@ -122,6 +125,7 @@ describe('finance service', () => {
       {
         purchaseDate: '2026-05-27',
         supplier: 'Mayorista Centro',
+        fundingSource: 'services',
         items: [
           {
             productId: 'product-tapa',
@@ -143,6 +147,7 @@ describe('finance service', () => {
     );
 
     expect(persisted?.items).toHaveLength(2);
+    expect(persisted?.fundingSource).toBe('services');
     expect(persisted?.items[0]).toMatchObject({
       productId: 'product-tapa',
       totalBaseUnits: 288,

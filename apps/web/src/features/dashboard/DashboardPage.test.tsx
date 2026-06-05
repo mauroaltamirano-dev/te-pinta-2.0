@@ -15,6 +15,15 @@ vi.mock('../finance/api', () => ({
   listFinancePurchases: vi.fn(),
 }));
 
+vi.mock('../finance/hooks/useFinanceAssumptions', () => ({
+  useFinanceAssumptions: vi.fn(() => ({
+    assumptions: { servicePercent: 10, targetMarginPercent: 50 },
+    isLoading: false,
+    isUpdating: false,
+    updateAssumption: vi.fn(),
+  })),
+}));
+
 vi.mock('../orders/orders-api', () => ({
   listOrders: vi.fn(),
 }));
@@ -70,6 +79,7 @@ const financePurchases: FinancePurchaseDetail[] = [
     supplier: 'Molino norte',
     receiptNumber: 'A-001',
     notes: null,
+    fundingSource: 'production_cost',
     canceledAt: null,
     canceledReason: null,
     items: [
@@ -94,6 +104,7 @@ const financePurchases: FinancePurchaseDetail[] = [
     supplier: 'Verdulería centro',
     receiptNumber: 'B-014',
     notes: null,
+    fundingSource: 'services',
     canceledAt: null,
     canceledReason: null,
     items: [
@@ -118,6 +129,7 @@ const financePurchases: FinancePurchaseDetail[] = [
     supplier: 'Compra anulada',
     receiptNumber: null,
     notes: null,
+    fundingSource: 'production_cost',
     canceledAt: '2026-06-04T12:00:00.000Z',
     canceledReason: 'Duplicada',
     items: [
@@ -357,6 +369,23 @@ describe('DashboardPage', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/ventas semanales/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /ritmo de venta/i })).not.toBeInTheDocument();
+  });
+
+  it('derives internal wallets from purchase funding source and service percentage', async () => {
+    renderDashboardPage();
+
+    const heading = await screen.findByRole('heading', { name: /dinero asignado/i });
+    const walletsSection = heading.closest('section');
+    expect(walletsSection).not.toBeNull();
+    const wallets = within(walletsSection!);
+
+    expect(wallets.getByRole('heading', { name: /costo base/i })).toBeInTheDocument();
+    expect(wallets.getByRole('heading', { name: /servicios/i })).toBeInTheDocument();
+    expect(wallets.getByRole('heading', { name: /ganancia/i })).toBeInTheDocument();
+    expect(await wallets.findByText('$118.500')).toBeInTheDocument();
+    expect(await wallets.findByText('$12.500')).toBeInTheDocument();
+    expect(await wallets.findByText('$36.000')).toBeInTheDocument();
+    expect(wallets.getByText(/objetivo: 10% de ventas/i)).toHaveTextContent('$18.500');
   });
 
   it('shows a readable general chart with purchases instead of the old profit toggle', async () => {

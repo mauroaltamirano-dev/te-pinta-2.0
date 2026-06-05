@@ -102,6 +102,7 @@ const toPurchaseValues = (
   supplier: input.supplier,
   receiptNumber: input.receiptNumber,
   notes: input.notes,
+  fundingSource: input.fundingSource,
   updatedAt: new Date(),
 });
 
@@ -155,6 +156,7 @@ const mapPurchaseDetail = (
   supplier: purchase.supplier,
   receiptNumber: purchase.receiptNumber,
   notes: purchase.notes,
+  fundingSource: purchase.fundingSource,
   canceledAt: purchase.canceledAt,
   canceledReason: purchase.canceledReason,
   items: items.map(mapPurchaseItem),

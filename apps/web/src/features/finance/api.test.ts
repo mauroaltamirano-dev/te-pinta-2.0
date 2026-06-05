@@ -235,6 +235,7 @@ describe('finance api client', () => {
             supplier: 'Molino norte',
             receiptNumber: null,
             notes: null,
+            fundingSource: 'production_cost',
             canceledAt: null,
             canceledReason: null,
             items: [],
@@ -305,6 +306,7 @@ describe('finance api client', () => {
       createFinancePurchase({
         purchaseDate: '2026-05-27',
         supplier: 'Molino norte',
+        fundingSource: 'production_cost',
         items: [
           {
             productId: 'product-1',
@@ -369,6 +371,7 @@ describe('finance api client', () => {
       supplier: 'Molino norte',
       receiptNumber: null,
       notes: null,
+      fundingSource: 'production_cost',
       canceledAt: null,
       canceledReason: null,
       items: [],

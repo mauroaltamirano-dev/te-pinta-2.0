@@ -68,6 +68,7 @@ const purchases: FinancePurchaseDetail[] = [
     supplier: 'Molino norte',
     receiptNumber: 'A-0001',
     notes: 'Compra mensual',
+    fundingSource: 'production_cost',
     canceledAt: null,
     canceledReason: null,
     items: [

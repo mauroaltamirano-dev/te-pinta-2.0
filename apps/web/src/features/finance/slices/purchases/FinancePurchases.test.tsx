@@ -45,6 +45,7 @@ const purchases: FinancePurchaseDetail[] = [
     supplier: 'Molino norte',
     receiptNumber: 'A-0001',
     notes: 'Compra mensual',
+    fundingSource: 'production_cost',
     canceledAt: null,
     canceledReason: null,
     items: [
@@ -81,6 +82,7 @@ const purchases: FinancePurchaseDetail[] = [
     supplier: 'Lácteos sur',
     receiptNumber: 'B-200',
     notes: null,
+    fundingSource: 'services',
     canceledAt: null,
     canceledReason: null,
     items: [
@@ -117,6 +119,7 @@ const purchases: FinancePurchaseDetail[] = [
     supplier: 'Proveedor anulado',
     receiptNumber: 'X-999',
     notes: 'No debe verse en compras',
+    fundingSource: 'profit',
     canceledAt: '2026-05-24T12:00:00.000Z',
     canceledReason: 'Carga duplicada',
     items: [
@@ -220,6 +223,7 @@ describe('FinancePurchases', () => {
       supplier: 'Molino norte',
       receiptNumber: undefined,
       notes: undefined,
+      fundingSource: 'production_cost',
       items: [
         {
           productId: 'flour',

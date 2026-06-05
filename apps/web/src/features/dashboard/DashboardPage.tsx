@@ -22,9 +22,12 @@ import {
   dashboardWeeklySalesMock,
 } from './dashboard.mock';
 import { useFinancePurchases } from '../finance/hooks';
+import { summarizePurchaseFundingSources } from '../finance/helpers/purchaseImpact';
+import { useFinanceAssumptions } from '../finance/hooks/useFinanceAssumptions';
 import { useOrders } from '../orders/orders-hooks';
 
 import {
+  buildDashboardWallets,
   buildPurchaseSpendSeries,
   buildCriticalAlerts,
   buildCustomerSummary,
@@ -49,7 +52,6 @@ import {
 
 import { DashboardHeader } from './components/DashboardHeader';
 import { KpiCard } from './components/KpiCard';
-import { CriticalAlertsBar } from './components/CriticalAlertsBar';
 import { UpcomingOrdersCard } from './components/UpcomingOrdersCard';
 import { ProductionPendingCard } from './components/ProductionPendingCard';
 import { WalletsSummary } from './components/WalletsSummary';
@@ -88,6 +90,7 @@ export const DashboardPage = () => {
     from: periodRange.startDate,
     to: periodRange.endDate,
   });
+  const { assumptions } = useFinanceAssumptions();
   const dashboard = dashboardQuery.data;
   const selectedRangeAnalytics = dashboard?.selectedRangeAnalytics;
   const selectedTotals = selectedRangeAnalytics?.totals;
@@ -150,7 +153,9 @@ export const DashboardPage = () => {
       }));
     }
 
-    return buildSalesMoneySeries(selectedRangeAnalytics?.chartDays ?? dashboard?.lastSevenDays ?? []);
+    return buildSalesMoneySeries(
+      selectedRangeAnalytics?.chartDays ?? dashboard?.lastSevenDays ?? [],
+    );
   }, [dashboard?.lastSevenDays, selectedRangeAnalytics?.chartDays, useMockDashboardData]);
 
   const purchaseSeries = useMemo(
@@ -161,6 +166,31 @@ export const DashboardPage = () => {
       ),
     [dashboard?.lastSevenDays, purchasesQuery.data, selectedRangeAnalytics?.chartDays],
   );
+
+  const purchaseFundingSummary = useMemo(
+    () => summarizePurchaseFundingSources(purchasesQuery.data ?? []),
+    [purchasesQuery.data],
+  );
+
+  const wallets = useMemo(() => {
+    const walletTotals = selectedTotals ?? dashboard?.totals;
+
+    if (!walletTotals || useMockDashboardData) {
+      return dashboardWalletsMock;
+    }
+
+    return buildDashboardWallets({
+      totals: walletTotals,
+      servicePercent: assumptions.servicePercent,
+      purchaseSummary: purchaseFundingSummary,
+    });
+  }, [
+    assumptions.servicePercent,
+    dashboard?.totals,
+    purchaseFundingSummary,
+    selectedTotals,
+    useMockDashboardData,
+  ]);
 
   const criticalAlerts = useMemo(
     () =>
@@ -285,10 +315,9 @@ export const DashboardPage = () => {
           ))}
         </section>
 
-        <CriticalAlertsBar alerts={criticalAlerts} />
         <UpcomingOrdersCard orders={orders} />
         <ProductionPendingCard summary={productionSummary} />
-        <WalletsSummary wallets={dashboardWalletsMock} />
+        <WalletsSummary wallets={wallets} />
         <GeneralSummaryChart purchaseSeries={purchaseSeries} salesSeries={salesSeries} />
         <CommercialAnalyticsSection summary={customerSummary} varieties={varietySales} />
         <AlertsPanel alerts={secondaryAlerts} />

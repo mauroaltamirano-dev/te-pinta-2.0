@@ -115,6 +115,20 @@ describe('database schema', () => {
     );
   });
 
+  it('adds finance purchase funding source in migration 0009', async () => {
+    const migration = await readFile(
+      join(currentDir, 'migrations', '0009_finance_purchase_funding_source.sql'),
+      'utf8',
+    );
+
+    expect(migration).toContain(
+      'CREATE TYPE "public"."finance_purchase_funding_source" AS ENUM',
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "finance_purchases" ADD COLUMN "funding_source" "finance_purchase_funding_source" DEFAULT',
+    );
+  });
+
   it('registers latest migrations in the Drizzle journal', async () => {
     const journal = JSON.parse(
       await readFile(join(currentDir, 'migrations', 'meta', '_journal.json'), 'utf8'),
@@ -127,22 +141,28 @@ describe('database schema', () => {
       }>;
     };
 
-    expect(journal.entries.at(-3)).toMatchObject({
+    expect(journal.entries.at(-4)).toMatchObject({
       idx: 6,
       version: '7',
       tag: '0006_finance_mvp',
       breakpoints: true,
     });
-    expect(journal.entries.at(-2)).toMatchObject({
+    expect(journal.entries.at(-3)).toMatchObject({
       idx: 7,
       version: '7',
       tag: '0007_finance_purchase_cancellation',
       breakpoints: true,
     });
-    expect(journal.entries.at(-1)).toMatchObject({
+    expect(journal.entries.at(-2)).toMatchObject({
       idx: 8,
       version: '7',
       tag: '0008_menu_item_archival',
+      breakpoints: true,
+    });
+    expect(journal.entries.at(-1)).toMatchObject({
+      idx: 9,
+      version: '7',
+      tag: '0009_finance_purchase_funding_source',
       breakpoints: true,
     });
   });

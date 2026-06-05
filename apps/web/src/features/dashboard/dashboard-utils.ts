@@ -8,6 +8,7 @@ import {
 
 import type {
   DashboardCalendarDay,
+  DashboardTotals,
   DashboardTopClient,
   DashboardTopVariety,
 } from './dashboard-api';
@@ -17,6 +18,8 @@ import {
   dashboardSecondaryAlertsMock,
   type DashboardAlert,
   type DashboardCustomerSummary,
+  type DashboardWallet,
+  type DashboardWalletStatus,
   type DashboardMockOrder,
   type DashboardPaymentStatus,
   type DashboardProductionStatus,
@@ -67,6 +70,12 @@ type PurchaseSpendSource = {
   purchaseDate: string;
   canceledAt: string | Date | null;
   items: Array<{ totalPriceCents: number }>;
+};
+
+type PurchaseFundingSummary = {
+  productionCostCents: number;
+  profitCents: number;
+  servicesCents: number;
 };
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
@@ -307,6 +316,97 @@ export const getMoneyAxisTicks = (maxValue: number): number[] => {
   const safeMaxValue = Math.max(Math.round(maxValue), 0);
 
   return [safeMaxValue, Math.round(safeMaxValue / 2), 0];
+};
+
+const purchaseCentsToMoney = (cents: number): number => Math.round(cents / 100);
+
+const calculateWalletStatus = (amount: number, objective: number): DashboardWalletStatus => {
+  if (amount < 0) return 'critical';
+  if (objective > 0 && amount < objective * 0.2) return 'low';
+
+  return 'correct';
+};
+
+const calculateWalletProgress = (amount: number, objective: number): number => {
+  if (objective <= 0) return amount > 0 ? 100 : 0;
+
+  return Math.round((amount / objective) * 100);
+};
+
+const calculateWalletPercent = (amount: number, totalAssigned: number): number =>
+  totalAssigned > 0 ? Math.round((amount / totalAssigned) * 100) : 0;
+
+const reserveDifferenceLabel = (amount: number, positiveLabel: string, negativeLabel: string) =>
+  amount < 0
+    ? `${negativeLabel}: ${formatMoney(Math.abs(amount))}`
+    : `${positiveLabel}: ${formatMoney(amount)}`;
+
+export const buildDashboardWallets = ({
+  totals,
+  servicePercent,
+  purchaseSummary,
+}: {
+  totals: DashboardTotals;
+  servicePercent: number;
+  purchaseSummary: PurchaseFundingSummary;
+}): DashboardWallet[] => {
+  const grossRevenue = Math.max(totals.grossRevenue, 0);
+  const serviceObjective = Math.round(grossRevenue * (Math.max(servicePercent, 0) / 100));
+  const productionObjective = Math.max(Math.round(totals.estimatedCosts), 0);
+  const profitObjective = Math.max(Math.round(totals.estimatedProfit - serviceObjective), 0);
+  const productionAmount =
+    productionObjective - purchaseCentsToMoney(purchaseSummary.productionCostCents);
+  const servicesAmount = serviceObjective - purchaseCentsToMoney(purchaseSummary.servicesCents);
+  const profitAmount = profitObjective - purchaseCentsToMoney(purchaseSummary.profitCents);
+  const totalAssigned = grossRevenue || productionObjective + serviceObjective + profitObjective;
+
+  return [
+    {
+      id: 'base-cost',
+      title: 'Costo base',
+      amount: productionAmount,
+      percent: calculateWalletPercent(productionAmount, totalAssigned),
+      objectiveLabel: `Reserva estimada: ${formatMoney(productionObjective)}`,
+      differenceLabel: reserveDifferenceLabel(
+        productionAmount,
+        'Disponible para producción',
+        'Sobregiro de producción',
+      ),
+      status: calculateWalletStatus(productionAmount, productionObjective),
+      progress: calculateWalletProgress(productionAmount, productionObjective),
+      description: 'Ventas reservadas para relleno, tapas, packaging y compras de producción.',
+    },
+    {
+      id: 'services',
+      title: 'Servicios',
+      amount: servicesAmount,
+      percent: calculateWalletPercent(servicesAmount, totalAssigned),
+      objectiveLabel: `Objetivo: ${servicePercent}% de ventas (${formatMoney(serviceObjective)})`,
+      differenceLabel: reserveDifferenceLabel(
+        servicesAmount,
+        'Disponible para servicios',
+        'Sobregiro de servicios',
+      ),
+      status: calculateWalletStatus(servicesAmount, serviceObjective),
+      progress: calculateWalletProgress(servicesAmount, serviceObjective),
+      description: 'Reserva para luz, gas, agua, combustible, comisiones y gastos operativos.',
+    },
+    {
+      id: 'profit',
+      title: 'Ganancia',
+      amount: profitAmount,
+      percent: calculateWalletPercent(profitAmount, totalAssigned),
+      objectiveLabel: `Ganancia libre objetivo: ${formatMoney(profitObjective)}`,
+      differenceLabel: reserveDifferenceLabel(
+        profitAmount,
+        'Ganancia libre disponible',
+        'Sobregiro de ganancia',
+      ),
+      status: calculateWalletStatus(profitAmount, profitObjective),
+      progress: calculateWalletProgress(profitAmount, profitObjective),
+      description: 'Utilidad disponible luego de reservar costos, servicios y compras asignadas.',
+    },
+  ];
 };
 
 // ── Mappers ────────────────────────────────────────────────────────────────────

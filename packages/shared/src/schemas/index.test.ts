@@ -16,6 +16,7 @@ import {
   financeBaseUnitSchema,
   financeCostingPreviewOrderSchema,
   financeProductCategorySchema,
+  financePurchaseFundingSourceSchema,
   financePurchaseItemImpactSchema,
   orderStatusSchema,
   updateFinanceBaseCostRuleSchema,
@@ -118,6 +119,27 @@ describe('shared domain schemas', () => {
       unitsPerPackage: 12,
       unitPriceCents: 160_000,
     });
+    expect(purchase.fundingSource).toBe('production_cost');
+    expect(financePurchaseFundingSourceSchema.options).toEqual([
+      'production_cost',
+      'profit',
+      'services',
+    ]);
+    expect(
+      createFinancePurchaseSchema.parse({
+        purchaseDate: '2026-05-27',
+        fundingSource: 'services',
+        items: [
+          {
+            productId: 'product-tapa',
+            purchaseUnit: 'pack',
+            purchaseQuantity: 1,
+            unitsPerPackage: 12,
+            totalPriceCents: 12_000,
+          },
+        ],
+      }).fundingSource,
+    ).toBe('services');
 
     expect(
       createFinancePurchaseSchema.safeParse({

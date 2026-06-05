@@ -26,6 +26,7 @@ import type {
   financeManualStockMovementTypeSchema,
   financeProductCategorySchema,
   financeProductFiltersSchema,
+  financePurchaseFundingSourceSchema,
   financePurchaseItemImpactSchema,
   financePurchaseFiltersSchema,
   financePurchaseUnitSchema,
@@ -57,6 +58,7 @@ export type IngredientUnit = z.infer<typeof ingredientUnitSchema>;
 export type FinanceProductCategory = z.infer<typeof financeProductCategorySchema>;
 export type FinanceBaseUnit = z.infer<typeof financeBaseUnitSchema>;
 export type FinancePurchaseUnit = z.infer<typeof financePurchaseUnitSchema>;
+export type FinancePurchaseFundingSource = z.infer<typeof financePurchaseFundingSourceSchema>;
 export type FinanceStockMovementType = z.infer<typeof financeStockMovementTypeSchema>;
 export type FinanceManualStockMovementType = z.infer<typeof financeManualStockMovementTypeSchema>;
 export type FinanceCostComponentType = z.infer<typeof financeCostComponentTypeSchema>;

@@ -25,6 +25,11 @@ export const financeProductCategorySchema = z.enum([
 ]);
 export const financeBaseUnitSchema = z.enum(['unit', 'g', 'kg', 'ml', 'l', 'pack']);
 export const financePurchaseUnitSchema = financeBaseUnitSchema;
+export const financePurchaseFundingSourceSchema = z.enum([
+  'production_cost',
+  'profit',
+  'services',
+]);
 export const financeStockMovementTypeSchema = z.enum([
   'purchase_in',
   'manual_in',
@@ -184,6 +189,7 @@ export const createFinancePurchaseSchema = z.object({
   supplier: z.string().trim().optional(),
   receiptNumber: z.string().trim().optional(),
   notes: z.string().trim().optional(),
+  fundingSource: financePurchaseFundingSourceSchema.default('production_cost'),
   items: z.array(createFinancePurchaseItemSchema).min(1),
 });
 

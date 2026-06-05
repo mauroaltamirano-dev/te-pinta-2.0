@@ -13,6 +13,7 @@ import type {
   FinanceProductCategory,
   FinanceProductCostHistoryItem,
   FinanceProductFilters,
+  FinancePurchaseFundingSource,
   FinancePurchaseFilters,
   FinanceRoundingMode,
   FinanceStockFilters,
@@ -38,6 +39,7 @@ export type {
   FinanceProductCategory,
   FinanceProductCostHistoryItem,
   FinanceProductFilters,
+  FinancePurchaseFundingSource,
   FinancePurchaseFilters,
   FinanceRoundingMode,
   FinanceStockFilters,
@@ -87,6 +89,7 @@ export type FinancePurchaseDetail = {
   supplier: string | null;
   receiptNumber: string | null;
   notes: string | null;
+  fundingSource: FinancePurchaseFundingSource;
   canceledAt: string | Date | null;
   canceledReason: string | null;
   items: FinancePurchaseItem[];

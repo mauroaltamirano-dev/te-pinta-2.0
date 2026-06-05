@@ -33,7 +33,7 @@ const WalletCard = ({ wallet }: { wallet: DashboardWallet }) => (
         {walletStatusLabels[wallet.status]}
       </StatusBadge>
     </div>
-    <p className="mt-4 font-display text-3xl font-black text-foreground tabular-nums">
+    <p className="mt-4 font-sans text-3xl font-black text-foreground tabular-nums">
       {formatMoney(wallet.amount)}
     </p>
     <p className="mt-1 text-sm font-black text-muted-foreground">
@@ -49,7 +49,7 @@ const WalletCard = ({ wallet }: { wallet: DashboardWallet }) => (
               ? 'bg-warning'
               : 'bg-destructive',
         )}
-        style={{ width: `${Math.min(wallet.progress, 100)}%` }}
+        style={{ width: `${Math.max(Math.min(wallet.progress, 100), 0)}%` }}
       />
     </div>
     <p className="mt-3 text-xs font-black text-foreground">{wallet.objectiveLabel}</p>

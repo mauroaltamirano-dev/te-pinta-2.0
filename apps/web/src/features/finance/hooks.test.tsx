@@ -126,6 +126,7 @@ describe('finance catalog hooks', () => {
       supplier: 'Molino norte',
       receiptNumber: null,
       notes: null,
+      fundingSource: 'production_cost' as const,
       canceledAt: null,
       canceledReason: null,
       items: [],
@@ -161,6 +162,7 @@ describe('finance catalog hooks', () => {
     result.current.createPurchase.mutate({
       purchaseDate: '2026-06-01',
       supplier: 'Molino norte',
+      fundingSource: 'production_cost',
       items: [
         {
           productId: 'product-1',
@@ -181,6 +183,7 @@ describe('finance catalog hooks', () => {
     expect(createFinancePurchase).toHaveBeenCalledWith({
       purchaseDate: '2026-06-01',
       supplier: 'Molino norte',
+      fundingSource: 'production_cost',
       items: [
         {
           productId: 'product-1',

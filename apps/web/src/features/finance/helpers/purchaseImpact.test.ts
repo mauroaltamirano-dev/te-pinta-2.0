@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildPurchaseRows,
+  summarizePurchaseFundingSources,
   getPurchaseItemImpact,
   summarizePriceDelta,
   type PurchaseSortState,
@@ -38,6 +39,7 @@ const purchase = (overrides: Partial<FinancePurchaseDetail>): FinancePurchaseDet
   supplier: 'Molino norte',
   receiptNumber: 'A-0001',
   notes: 'Compra mensual',
+  fundingSource: 'production_cost',
   canceledAt: null,
   canceledReason: null,
   items: [
@@ -110,6 +112,39 @@ describe('purchaseImpact helpers', () => {
       totalCents: 220000,
       totalBaseUnits: 1,
       itemCount: 1,
+    });
+  });
+
+  it('summarizes active purchases by funding source and excludes canceled purchases', () => {
+    const summary = summarizePurchaseFundingSources([
+      purchase({ id: 'cost', fundingSource: 'production_cost' }),
+      purchase({
+        id: 'services',
+        fundingSource: 'services',
+        items: [
+          {
+            id: 'item-services',
+            purchaseId: 'services',
+            productId: 'flour',
+            purchaseUnit: 'kg',
+            purchaseQuantity: 1,
+            unitsPerPackage: 1,
+            totalBaseUnits: 1,
+            unitPriceCents: 90000,
+            totalPriceCents: 90000,
+            costPerBaseUnitCents: 90000,
+            notes: null,
+          },
+        ],
+      }),
+      purchase({ id: 'profit-canceled', fundingSource: 'profit', canceledAt: '2026-05-21T12:00:00.000Z' }),
+    ]);
+
+    expect(summary).toEqual({
+      productionCostCents: 240000,
+      profitCents: 0,
+      servicesCents: 90000,
+      totalCents: 330000,
     });
   });
 

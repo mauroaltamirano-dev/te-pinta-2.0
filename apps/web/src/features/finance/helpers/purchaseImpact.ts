@@ -1,5 +1,6 @@
 import type {
   FinanceProductWithMetrics,
+  FinancePurchaseFundingSource,
   FinancePurchaseDetail,
   FinancePurchaseItem,
   FinancePurchaseItemImpact,
@@ -14,6 +15,19 @@ export type PurchaseSortState = {
 };
 
 export type PurchaseStatusFilter = 'active' | 'canceled' | 'all';
+
+export type PurchaseFundingSourceSummary = {
+  productionCostCents: number;
+  profitCents: number;
+  servicesCents: number;
+  totalCents: number;
+};
+
+export const purchaseFundingSourceLabels: Record<FinancePurchaseFundingSource, string> = {
+  production_cost: 'Costo de producción',
+  profit: 'Ganancia',
+  services: 'Servicios',
+};
 
 export type PurchaseRow = FinancePurchaseDetail & {
   productNames: string[];
@@ -87,6 +101,7 @@ export const buildPurchaseRows = (
           row.receiptNumber,
           row.notes,
           row.status,
+          purchaseFundingSourceLabels[row.fundingSource],
           row.purchaseDate,
           ...row.productNames,
         ].join(' '),
@@ -122,6 +137,40 @@ export const getPurchaseItemImpact = (
   item: FinancePurchaseItem,
 ): FinancePurchaseItemImpact | undefined =>
   purchase.itemImpacts?.find((impact) => impact.purchaseItemId === item.id);
+
+export const summarizePurchaseFundingSources = (
+  purchases: FinancePurchaseDetail[],
+): PurchaseFundingSourceSummary => {
+  const summary: PurchaseFundingSourceSummary = {
+    productionCostCents: 0,
+    profitCents: 0,
+    servicesCents: 0,
+    totalCents: 0,
+  };
+
+  for (const purchase of purchases) {
+    if (purchase.canceledAt) {
+      continue;
+    }
+
+    const totalCents = purchase.items.reduce((total, item) => total + item.totalPriceCents, 0);
+    summary.totalCents += totalCents;
+
+    if (purchase.fundingSource === 'production_cost') {
+      summary.productionCostCents += totalCents;
+      continue;
+    }
+
+    if (purchase.fundingSource === 'profit') {
+      summary.profitCents += totalCents;
+      continue;
+    }
+
+    summary.servicesCents += totalCents;
+  }
+
+  return summary;
+};
 
 export const summarizePriceDelta = (
   impact: FinancePurchaseItemImpact | undefined,

@@ -7,6 +7,7 @@ import { FinanceTable, type FinanceTableColumn } from '../../components/FinanceT
 import {
   buildPurchaseRows,
   getPurchaseItemImpact,
+  purchaseFundingSourceLabels,
   summarizePriceDelta,
   type PurchaseRow,
   type PurchaseSortField,
@@ -18,6 +19,7 @@ import type {
   FinanceBaseUnit,
   FinanceProductWithMetrics,
   FinancePurchaseDetail,
+  FinancePurchaseFundingSource,
   FinancePurchaseItem,
   FinancePurchaseItemImpact,
 } from '../../types';
@@ -34,6 +36,7 @@ type PurchaseFormState = {
   supplier: string;
   receiptNumber: string;
   notes: string;
+  fundingSource: FinancePurchaseFundingSource;
   purchaseUnit: FinanceBaseUnit | '';
   purchaseQuantity: string;
   unitsPerPackage: string;
@@ -58,6 +61,9 @@ const baseUnitLabels: Record<FinanceBaseUnit, string> = {
 };
 
 const baseUnitOptions = Object.keys(baseUnitLabels) as FinanceBaseUnit[];
+const purchaseFundingSourceOptions = Object.keys(
+  purchaseFundingSourceLabels,
+) as FinancePurchaseFundingSource[];
 const purchaseStatusFilters: { id: PurchaseStatusFilter; label: string }[] = [
   { id: 'active', label: 'Activas' },
   { id: 'canceled', label: 'Anuladas' },
@@ -72,6 +78,7 @@ const initialPurchaseForm = (): PurchaseFormState => ({
   supplier: '',
   receiptNumber: '',
   notes: '',
+  fundingSource: 'production_cost',
   purchaseUnit: '',
   purchaseQuantity: '1',
   unitsPerPackage: '1',
@@ -177,6 +184,12 @@ const StatusBadge = ({ purchase }: { purchase: PurchaseRow }) => {
     </span>
   );
 };
+
+const FundingSourceBadge = ({ purchase }: { purchase: PurchaseRow }) => (
+  <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary ring-1 ring-primary/15">
+    {purchaseFundingSourceLabels[purchase.fundingSource]}
+  </span>
+);
 
 const DeltaBadge = ({ impact }: { impact: FinancePurchaseItemImpact | undefined }) => {
   const summary = summarizePriceDelta(impact);
@@ -284,7 +297,10 @@ const PurchaseDetailPanel = ({
           ) : null}
           {purchase.notes ? <p className="mt-1 text-sm font-semibold text-foreground">{purchase.notes}</p> : null}
         </div>
-        <StatusBadge purchase={purchase} />
+        <div className="flex flex-wrap justify-end gap-2">
+          <FundingSourceBadge purchase={purchase} />
+          <StatusBadge purchase={purchase} />
+        </div>
       </div>
       <div className="mt-4 space-y-3">
         {purchase.items.map((item) => (
@@ -344,6 +360,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
         supplier: createForm.supplier || undefined,
         receiptNumber: createForm.receiptNumber || undefined,
         notes: createForm.notes || undefined,
+        fundingSource: createForm.fundingSource,
         items: [
           {
             productId: selectedProductId,
@@ -368,6 +385,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
             ...initialPurchaseForm(),
             productId: current.productId,
             supplier: current.supplier,
+            fundingSource: current.fundingSource,
             purchaseUnit: current.purchaseUnit,
           }));
         },
@@ -438,6 +456,11 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
       sortDirection: sortDirectionFor(sort, 'total'),
       sortLabel: 'Ordenar por total',
       onSort: () => setSort((current) => toggleSort(current, 'total')),
+    },
+    {
+      id: 'funding-source',
+      header: 'Asignación',
+      render: (purchase) => <FundingSourceBadge purchase={purchase} />,
     },
     {
       id: 'status',
@@ -657,6 +680,25 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
                 }
                 value={createForm.receiptNumber}
               />
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Asignar compra a
+              <select
+                className={inputClassName}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    fundingSource: event.target.value as FinancePurchaseFundingSource,
+                  }))
+                }
+                value={createForm.fundingSource}
+              >
+                {purchaseFundingSourceOptions.map((source) => (
+                  <option key={source} value={source}>
+                    {purchaseFundingSourceLabels[source]}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm font-bold text-foreground">
               Unidad de compra
