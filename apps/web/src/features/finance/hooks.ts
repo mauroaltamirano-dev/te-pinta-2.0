@@ -9,6 +9,7 @@ import type {
   FinanceProductFilters,
   FinancePurchaseFilters,
   UpdateFinanceProductInput,
+  UpdateFinancePurchaseInput,
   FinanceStockFilters,
   UpdateFinanceBaseCostRuleInput,
   UpdateFinanceRecipeInput,
@@ -29,6 +30,7 @@ import {
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
   updateFinanceProduct,
+  updateFinancePurchase,
   updateFinanceRecipe,
 } from './api';
 
@@ -114,6 +116,16 @@ export const useCreateFinancePurchase = () => {
 
   return useMutation({
     mutationFn: (input: CreateFinancePurchaseInput) => createFinancePurchase(input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
+  });
+};
+
+export const useUpdateFinancePurchase = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateFinancePurchaseInput }) =>
+      updateFinancePurchase(id, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
   });
 };

@@ -12,6 +12,7 @@ import {
   financeStockFiltersSchema,
   updateFinanceBaseCostRuleSchema,
   updateFinanceProductSchema,
+  updateFinancePurchaseSchema,
   updateFinanceRecipeSchema,
 } from '@te-pinta/shared';
 
@@ -37,6 +38,7 @@ import {
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
   updateFinanceProduct,
+  updateFinancePurchase,
   updateFinanceRecipe,
   type FinanceRepository,
 } from './finance-service';
@@ -145,6 +147,20 @@ export const createFinanceRouter = ({
       next(error);
     }
   });
+
+  router.put(
+    '/purchases/:id',
+    validate({ params: idParamsSchema, body: updateFinancePurchaseSchema }),
+    async (req, res, next) => {
+      try {
+        const { id } = idParamsSchema.parse(req.params);
+        const purchase = await updateFinancePurchase(id, req.body, repository);
+        res.json({ purchase });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.delete(
     '/purchases/:id',

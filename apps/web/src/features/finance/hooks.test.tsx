@@ -11,6 +11,7 @@ import {
   createFinancePurchase,
   getFinanceProductHistory,
   updateFinanceProduct,
+  updateFinancePurchase,
 } from './api';
 import {
   financeQueryKeys,
@@ -19,6 +20,7 @@ import {
   useCreateFinancePurchase,
   useFinanceProductHistory,
   useUpdateFinanceProduct,
+  useUpdateFinancePurchase,
 } from './hooks';
 
 vi.mock('./api', () => ({
@@ -27,6 +29,7 @@ vi.mock('./api', () => ({
   createFinancePurchase: vi.fn(),
   getFinanceProductHistory: vi.fn(),
   updateFinanceProduct: vi.fn(),
+  updateFinancePurchase: vi.fn(),
 }));
 
 const createWrapper = () => {
@@ -104,7 +107,7 @@ describe('finance catalog hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: financeQueryKeys.all });
   });
 
-  it('invalidates the finance workspace after creating products, purchases, and canceling purchases', async () => {
+  it('invalidates the finance workspace after creating, updating, and canceling purchases', async () => {
     const savedProduct = {
       id: 'product-1',
       name: 'Harina',
@@ -134,6 +137,11 @@ describe('finance catalog hooks', () => {
     };
     vi.mocked(createFinanceProduct).mockResolvedValue(savedProduct);
     vi.mocked(createFinancePurchase).mockResolvedValue(savedPurchase);
+    vi.mocked(updateFinancePurchase).mockResolvedValue({
+      ...savedPurchase,
+      supplier: 'Molino sur',
+      fundingSource: 'services',
+    });
     vi.mocked(cancelFinancePurchase).mockResolvedValue({
       ...savedPurchase,
       canceledAt: '2026-06-01T12:00:00.000Z',
@@ -146,6 +154,7 @@ describe('finance catalog hooks', () => {
       () => ({
         createProduct: useCreateFinanceProduct(),
         createPurchase: useCreateFinancePurchase(),
+        updatePurchase: useUpdateFinancePurchase(),
         cancelPurchase: useCancelFinancePurchase(),
       }),
       { wrapper },
@@ -174,6 +183,11 @@ describe('finance catalog hooks', () => {
       ],
     });
     await waitFor(() => expect(createFinancePurchase).toHaveBeenCalled());
+    result.current.updatePurchase.mutate({
+      id: 'purchase-1',
+      input: { supplier: 'Molino sur', fundingSource: 'services' },
+    });
+    await waitFor(() => expect(updateFinancePurchase).toHaveBeenCalled());
     result.current.cancelPurchase.mutate({
       id: 'purchase-1',
       input: { reason: 'duplicada' },
@@ -195,10 +209,15 @@ describe('finance catalog hooks', () => {
       ],
     });
     expect(cancelFinancePurchase).toHaveBeenCalledWith('purchase-1', { reason: 'duplicada' });
-    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    expect(updateFinancePurchase).toHaveBeenCalledWith('purchase-1', {
+      supplier: 'Molino sur',
+      fundingSource: 'services',
+    });
+    expect(invalidateSpy).toHaveBeenCalledTimes(4);
     expect(invalidateSpy).toHaveBeenNthCalledWith(1, { queryKey: financeQueryKeys.all });
     expect(invalidateSpy).toHaveBeenNthCalledWith(2, { queryKey: financeQueryKeys.all });
     expect(invalidateSpy).toHaveBeenNthCalledWith(3, { queryKey: financeQueryKeys.all });
+    expect(invalidateSpy).toHaveBeenNthCalledWith(4, { queryKey: financeQueryKeys.all });
   });
 
 });

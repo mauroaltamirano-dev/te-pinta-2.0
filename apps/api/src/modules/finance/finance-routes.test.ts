@@ -50,6 +50,22 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
       createdAt: new Date('2026-05-27T12:00:00.000Z'),
     })),
   }),
+  updatePurchaseWithItems: async (input) => ({
+    id: input.id,
+    purchaseDate: input.purchaseDate,
+    supplier: input.supplier,
+    receiptNumber: input.receiptNumber,
+    notes: input.notes,
+    fundingSource: input.fundingSource,
+    canceledAt: null,
+    canceledReason: null,
+    items: input.items ?? [],
+    stockMovements:
+      input.stockMovements?.map((item) => ({
+        ...item,
+        createdAt: new Date('2026-05-27T12:00:00.000Z'),
+      })) ?? [],
+  }),
   listPurchases: async () => [],
   getPurchase: async () => null,
   cancelPurchase: async () => null,
@@ -255,7 +271,23 @@ describe('finance routes', () => {
       items: [],
       stockMovements: [],
     });
-    const app = createFinanceApp(createRepository({ listPurchases, getPurchase, cancelPurchase }));
+    const updatePurchaseWithItems = vi
+      .fn<FinanceRepository['updatePurchaseWithItems']>()
+      .mockResolvedValue({
+        id: 'purchase-1',
+        purchaseDate: '2026-05-28',
+        supplier: 'Molino sur',
+        receiptNumber: null,
+        notes: null,
+        fundingSource: 'services',
+        canceledAt: null,
+        canceledReason: null,
+        items: [],
+        stockMovements: [],
+      });
+    const app = createFinanceApp(
+      createRepository({ listPurchases, getPurchase, updatePurchaseWithItems, cancelPurchase }),
+    );
 
     const listResponse = await request(app)
       .get('/api/v1/finance/purchases')
@@ -265,6 +297,23 @@ describe('finance routes', () => {
       id: 'purchase-1',
       fundingSource: 'profit',
     });
+
+    const updateResponse = await request(app)
+      .put('/api/v1/finance/purchases/purchase-1')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        supplier: 'Molino sur',
+        fundingSource: 'services',
+      });
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.purchase).toMatchObject({
+      id: 'purchase-1',
+      supplier: 'Molino sur',
+      fundingSource: 'services',
+    });
+    expect(updatePurchaseWithItems).toHaveBeenCalledWith(
+      expect.objectContaining({ supplier: 'Molino sur', fundingSource: 'services' }),
+    );
 
     const cancelResponse = await request(app)
       .delete('/api/v1/finance/purchases/purchase-1')

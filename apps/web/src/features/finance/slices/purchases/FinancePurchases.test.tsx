@@ -5,13 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createQueryClient } from '@/lib/query-client';
 
-import { cancelFinancePurchase, createFinancePurchase } from '../../api';
+import { cancelFinancePurchase, createFinancePurchase, updateFinancePurchase } from '../../api';
 import type { FinanceProductWithMetrics, FinancePurchaseDetail } from '../../types';
 import { FinancePurchases } from './FinancePurchases';
 
 vi.mock('../../api', () => ({
   cancelFinancePurchase: vi.fn(),
   createFinancePurchase: vi.fn(),
+  updateFinancePurchase: vi.fn(),
 }));
 
 const product = (
@@ -157,6 +158,11 @@ describe('FinancePurchases', () => {
     vi.resetAllMocks();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(createFinancePurchase).mockResolvedValue(purchases[0]!);
+    vi.mocked(updateFinancePurchase).mockResolvedValue({
+      ...purchases[0]!,
+      supplier: 'Molino sur',
+      fundingSource: 'services',
+    });
     vi.mocked(cancelFinancePurchase).mockResolvedValue({
       ...purchases[0]!,
       canceledAt: '2026-05-23T12:00:00.000Z',
@@ -261,6 +267,42 @@ describe('FinancePurchases', () => {
 
     await user.click(within(dialog).getByRole('button', { name: /cerrar detalle de compra/i }));
     expect(screen.queryByRole('dialog', { name: /detalle de compra/i })).not.toBeInTheDocument();
+  });
+
+  it('edits an active purchase from the table and submits recalculated item payload', async () => {
+    const user = userEvent.setup();
+    renderPurchases();
+
+    const row = screen.getByRole('row', { name: /molino norte/i });
+    await user.click(within(row).getByRole('button', { name: /editar compra molino norte/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /editar compra/i });
+    await user.clear(within(dialog).getByLabelText(/proveedor/i));
+    await user.type(within(dialog).getByLabelText(/proveedor/i), 'Molino sur');
+    await user.selectOptions(within(dialog).getByLabelText(/asignar compra a/i), 'services');
+    await user.clear(within(dialog).getByLabelText(/precio por kg/i));
+    await user.type(within(dialog).getByLabelText(/precio por kg/i), '1500');
+    await user.click(within(dialog).getByRole('button', { name: /guardar cambios/i }));
+
+    await waitFor(() => expect(updateFinancePurchase).toHaveBeenCalled());
+    expect(updateFinancePurchase).toHaveBeenCalledWith('purchase-1', {
+      purchaseDate: '2026-05-20',
+      supplier: 'Molino sur',
+      receiptNumber: 'A-0001',
+      notes: 'Compra mensual',
+      fundingSource: 'services',
+      items: [
+        {
+          productId: 'flour',
+          purchaseUnit: 'kg',
+          purchaseQuantity: 2,
+          unitsPerPackage: 1,
+          unitPriceCents: 150000,
+          notes: 'Bolsa sellada',
+        },
+      ],
+    });
+    expect(await within(dialog).findByText(/compra actualizada/i)).toBeInTheDocument();
   });
 
   it('keeps purchase cancel behavior available from the table', async () => {

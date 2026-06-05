@@ -14,7 +14,11 @@ import {
   type PurchaseSortState,
   type PurchaseStatusFilter,
 } from '../../helpers/purchaseImpact';
-import { useCancelFinancePurchase, useCreateFinancePurchase } from '../../hooks';
+import {
+  useCancelFinancePurchase,
+  useCreateFinancePurchase,
+  useUpdateFinancePurchase,
+} from '../../hooks';
 import type {
   FinanceBaseUnit,
   FinanceProductWithMetrics,
@@ -22,6 +26,7 @@ import type {
   FinancePurchaseFundingSource,
   FinancePurchaseItem,
   FinancePurchaseItemImpact,
+  CreateFinancePurchaseInput,
 } from '../../types';
 
 type FinancePurchasesProps = {
@@ -86,6 +91,28 @@ const initialPurchaseForm = (): PurchaseFormState => ({
   price: '0',
   itemNotes: '',
 });
+
+const centsToPesosInput = (cents: number): string =>
+  Number.isInteger(cents / 100) ? String(cents / 100) : String(cents / 100);
+
+const purchaseToForm = (purchase: PurchaseRow): PurchaseFormState => {
+  const item = purchase.items[0];
+
+  return {
+    productId: item?.productId ?? '',
+    purchaseDate: purchase.purchaseDate,
+    supplier: purchase.supplier ?? '',
+    receiptNumber: purchase.receiptNumber ?? '',
+    notes: purchase.notes ?? '',
+    fundingSource: purchase.fundingSource,
+    purchaseUnit: item?.purchaseUnit ?? '',
+    purchaseQuantity: item ? String(item.purchaseQuantity) : '1',
+    unitsPerPackage: item ? String(item.unitsPerPackage) : '1',
+    priceMode: item?.unitPriceCents === null ? 'total' : 'unit',
+    price: centsToPesosInput(item?.unitPriceCents ?? item?.totalPriceCents ?? 0),
+    itemNotes: item?.notes ?? '',
+  };
+};
 
 const moneyFormatter = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -322,10 +349,14 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
   const [statusFilter, setStatusFilter] = useState<PurchaseStatusFilter>('active');
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<PurchaseRow | null>(null);
   const [createForm, setCreateForm] = useState<PurchaseFormState>(() => initialPurchaseForm());
+  const [editForm, setEditForm] = useState<PurchaseFormState>(() => initialPurchaseForm());
   const [createFeedback, setCreateFeedback] = useState<PurchaseFeedback | null>(null);
+  const [editFeedback, setEditFeedback] = useState<PurchaseFeedback | null>(null);
   const [cancelFeedback, setCancelFeedback] = useState<PurchaseFeedback | null>(null);
   const createPurchase = useCreateFinancePurchase();
+  const updatePurchase = useUpdateFinancePurchase();
   const cancelPurchase = useCancelFinancePurchase();
   const productsById = useMemo(() => productMapById(products), [products]);
   const selectedProductId = createForm.productId || products[0]?.id || '';
@@ -342,6 +373,24 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
     previewTotalBaseUnits > 0 && previewTotalPriceCents > 0
       ? Math.round(previewTotalPriceCents / previewTotalBaseUnits)
       : null;
+  const editSelectedProductId = editForm.productId || products[0]?.id || '';
+  const editSelectedProduct = productsById.get(editSelectedProductId);
+  const editPurchaseUnit = editForm.purchaseUnit || editSelectedProduct?.baseUnit || 'unit';
+  const editNeedsConversion = Boolean(
+    editSelectedProduct && editPurchaseUnit !== editSelectedProduct.baseUnit,
+  );
+  const editEffectiveUnitsPerPackage = editNeedsConversion
+    ? toPositiveNumber(editForm.unitsPerPackage)
+    : 1;
+  const editPurchaseQuantity = toPositiveNumber(editForm.purchaseQuantity);
+  const editPriceCents = toCents(editForm.price);
+  const editPreviewTotalBaseUnits = editPurchaseQuantity * editEffectiveUnitsPerPackage;
+  const editPreviewTotalPriceCents =
+    editForm.priceMode === 'total' ? editPriceCents : Math.round(editPriceCents * editPurchaseQuantity);
+  const editPreviewCostPerBaseUnitCents =
+    editPreviewTotalBaseUnits > 0 && editPreviewTotalPriceCents > 0
+      ? Math.round(editPreviewTotalPriceCents / editPreviewTotalBaseUnits)
+      : null;
   const rows = useMemo(
     () => buildPurchaseRows(purchases, products, search, sort, statusFilter),
     [products, purchases, search, sort, statusFilter],
@@ -351,29 +400,40 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
     ? rows.find((purchase) => purchase.id === selectedPurchaseId) ?? null
     : null;
 
+  const buildPurchasePayload = (form: PurchaseFormState): CreateFinancePurchaseInput => {
+    const productId = form.productId || products[0]?.id || '';
+    const product = productsById.get(productId);
+    const formPurchaseUnit = form.purchaseUnit || product?.baseUnit || 'unit';
+    const formNeedsConversion = Boolean(product && formPurchaseUnit !== product.baseUnit);
+    const formPurchaseQuantity = toPositiveNumber(form.purchaseQuantity);
+    const formPriceCents = toCents(form.price);
+
+    return {
+      purchaseDate: form.purchaseDate,
+      supplier: form.supplier || undefined,
+      receiptNumber: form.receiptNumber || undefined,
+      notes: form.notes || undefined,
+      fundingSource: form.fundingSource,
+      items: [
+        {
+          productId,
+          purchaseUnit: formPurchaseUnit,
+          purchaseQuantity: formPurchaseQuantity,
+          unitsPerPackage: formNeedsConversion ? toPositiveNumber(form.unitsPerPackage) : 1,
+          ...(form.priceMode === 'total'
+            ? { totalPriceCents: formPriceCents }
+            : { unitPriceCents: formPriceCents }),
+          notes: form.itemNotes || undefined,
+        },
+      ],
+    };
+  };
+
   const handleCreate = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     createPurchase.mutate(
-      {
-        purchaseDate: createForm.purchaseDate,
-        supplier: createForm.supplier || undefined,
-        receiptNumber: createForm.receiptNumber || undefined,
-        notes: createForm.notes || undefined,
-        fundingSource: createForm.fundingSource,
-        items: [
-          {
-            productId: selectedProductId,
-            purchaseUnit,
-            purchaseQuantity,
-            unitsPerPackage: effectiveUnitsPerPackage,
-            ...(createForm.priceMode === 'total'
-              ? { totalPriceCents: priceCents }
-              : { unitPriceCents: priceCents }),
-            notes: createForm.itemNotes || undefined,
-          },
-        ],
-      },
+      buildPurchasePayload(createForm),
       {
         onSuccess: (purchase) => {
           setCreateFeedback({
@@ -397,6 +457,40 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
           }),
       },
     );
+  };
+
+  const handleEdit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editingPurchase) {
+      return;
+    }
+
+    updatePurchase.mutate(
+      { id: editingPurchase.id, input: buildPurchasePayload(editForm) },
+      {
+        onSuccess: (purchase) => {
+          setEditFeedback({
+            tone: 'success',
+            title: 'Compra actualizada',
+            description: `Se actualizó la compra del ${purchase.purchaseDate}.`,
+          });
+        },
+        onError: (error) =>
+          setEditFeedback({
+            tone: 'error',
+            title: 'No se pudo actualizar la compra',
+            description: getErrorDescription(error),
+          }),
+      },
+    );
+  };
+
+  const openEditPurchase = (purchase: PurchaseRow) => {
+    setEditFeedback(null);
+    setSelectedPurchaseId(null);
+    setEditingPurchase(purchase);
+    setEditForm(purchaseToForm(purchase));
   };
 
   const handleCancel = (purchase: PurchaseRow) => {
@@ -475,6 +569,16 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
       header: 'Acciones',
       render: (purchase) => (
         <div className="flex flex-wrap justify-end gap-2">
+          {purchase.status === 'active' ? (
+            <button
+              aria-label={`Editar compra ${purchase.supplier || formatDate(purchase.purchaseDate)}`}
+              className="rounded-full bg-primary/10 px-3 py-2 text-xs font-black text-primary ring-1 ring-primary/15 transition hover:bg-primary/15"
+              onClick={() => openEditPurchase(purchase)}
+              type="button"
+            >
+              Editar
+            </button>
+          ) : null}
           <button
             aria-label={`Ver detalle de compra ${purchase.supplier || formatDate(purchase.purchaseDate)}`}
             className="rounded-full bg-muted px-3 py-2 text-xs font-black text-foreground transition hover:bg-muted/80"
@@ -615,6 +719,223 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
         {selectedPurchase ? (
           <PurchaseDetailPanel products={products} purchase={selectedPurchase} />
         ) : null}
+      </FinanceActionSheet>
+
+      <FinanceActionSheet
+        closeLabel="Cerrar edición de compra"
+        description={
+          editingPurchase
+            ? `${editingPurchase.supplier || 'Sin proveedor'} · ${formatDate(editingPurchase.purchaseDate)}`
+            : undefined
+        }
+        isOpen={Boolean(editingPurchase)}
+        onClose={() => setEditingPurchase(null)}
+        title="Editar compra"
+      >
+        <form className="space-y-4" onSubmit={handleEdit}>
+          <FeedbackBanner feedback={editFeedback} />
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-bold text-foreground">
+              Producto
+              <select
+                className={inputClassName}
+                disabled={!products.length}
+                onChange={(event) => {
+                  const product = productsById.get(event.target.value);
+                  setEditForm((current) => ({
+                    ...current,
+                    productId: event.target.value,
+                    purchaseUnit: product?.baseUnit ?? current.purchaseUnit,
+                    unitsPerPackage: '1',
+                  }));
+                }}
+                value={editSelectedProductId}
+              >
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Fecha
+              <input
+                className={inputClassName}
+                onChange={(event) =>
+                  setEditForm((current) => ({ ...current, purchaseDate: event.target.value }))
+                }
+                type="date"
+                value={editForm.purchaseDate}
+              />
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Proveedor
+              <input
+                className={inputClassName}
+                onChange={(event) =>
+                  setEditForm((current) => ({ ...current, supplier: event.target.value }))
+                }
+                value={editForm.supplier}
+              />
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Comprobante
+              <input
+                className={inputClassName}
+                onChange={(event) =>
+                  setEditForm((current) => ({ ...current, receiptNumber: event.target.value }))
+                }
+                value={editForm.receiptNumber}
+              />
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Asignar compra a
+              <select
+                className={inputClassName}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    fundingSource: event.target.value as FinancePurchaseFundingSource,
+                  }))
+                }
+                value={editForm.fundingSource}
+              >
+                {purchaseFundingSourceOptions.map((source) => (
+                  <option key={source} value={source}>
+                    {purchaseFundingSourceLabels[source]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Unidad de compra
+              <select
+                className={inputClassName}
+                disabled={!editSelectedProduct}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    purchaseUnit: event.target.value as FinanceBaseUnit,
+                    unitsPerPackage:
+                      event.target.value === editSelectedProduct?.baseUnit
+                        ? '1'
+                        : current.unitsPerPackage,
+                  }))
+                }
+                value={editPurchaseUnit}
+              >
+                {baseUnitOptions.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {baseUnitLabels[unit]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              {editPurchaseUnit === 'pack'
+                ? 'Cantidad de packs/bultos'
+                : `Cantidad comprada (${baseUnitLabels[editPurchaseUnit]})`}
+              <input
+                className={inputClassName}
+                min="0"
+                onChange={(event) =>
+                  setEditForm((current) => ({ ...current, purchaseQuantity: event.target.value }))
+                }
+                step="0.001"
+                type="number"
+                value={editForm.purchaseQuantity}
+              />
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              {editSelectedProduct
+                ? `${baseUnitLabels[editSelectedProduct.baseUnit]} por ${baseUnitLabels[editPurchaseUnit]}`
+                : 'Conversión a unidad base'}
+              <input
+                className={inputClassName}
+                disabled={!editNeedsConversion}
+                min="0"
+                onChange={(event) =>
+                  setEditForm((current) => ({ ...current, unitsPerPackage: event.target.value }))
+                }
+                step="0.001"
+                type="number"
+                value={editNeedsConversion ? editForm.unitsPerPackage : '1'}
+              />
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Cargo precio como
+              <select
+                className={inputClassName}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    priceMode: event.target.value as PurchaseFormState['priceMode'],
+                  }))
+                }
+                value={editForm.priceMode}
+              >
+                <option value="unit">Precio por unidad de compra</option>
+                <option value="total">Precio total pagado</option>
+              </select>
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              {editForm.priceMode === 'total'
+                ? 'Precio total pagado'
+                : `Precio por ${baseUnitLabels[editPurchaseUnit]}`}
+              <input
+                className={inputClassName}
+                min="0"
+                onChange={(event) => setEditForm((current) => ({ ...current, price: event.target.value }))}
+                step="0.01"
+                type="number"
+                value={editForm.price}
+              />
+            </label>
+            <label className="text-sm font-bold text-foreground">
+              Notas del ítem
+              <input
+                className={inputClassName}
+                onChange={(event) =>
+                  setEditForm((current) => ({ ...current, itemNotes: event.target.value }))
+                }
+                value={editForm.itemNotes}
+              />
+            </label>
+          </div>
+          <label className="block text-sm font-bold text-foreground">
+            Notas de la compra
+            <textarea
+              className={inputClassName}
+              onChange={(event) => setEditForm((current) => ({ ...current, notes: event.target.value }))}
+              rows={3}
+              value={editForm.notes}
+            />
+          </label>
+          <div className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground">
+            <p>
+              Al editar una compra activa, se recalcula el costo del ítem y se reemplaza el
+              movimiento de stock asociado.
+            </p>
+            <p className="mt-2 font-black text-foreground">
+              Preview: {formatQuantity(editPreviewTotalBaseUnits, editSelectedProduct?.baseUnit ?? 'unit')} · costo
+              unitario base {formatMoneyFromCents(editPreviewCostPerBaseUnitCents)}
+            </p>
+          </div>
+          <button
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+            disabled={
+              updatePurchase.isPending ||
+              !editSelectedProductId ||
+              editPurchaseQuantity <= 0 ||
+              editPriceCents <= 0
+            }
+            type="submit"
+          >
+            <CheckCircle2 className="h-4 w-4" aria-hidden={true} />
+            {updatePurchase.isPending ? 'Guardando cambios...' : 'Guardar cambios'}
+          </button>
+        </form>
       </FinanceActionSheet>
 
       <FinanceActionSheet

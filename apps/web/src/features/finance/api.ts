@@ -7,6 +7,7 @@ import {
   createFinanceStockAdjustmentSchema,
   financeCostingPreviewOrderSchema,
   updateFinanceBaseCostRuleSchema,
+  updateFinancePurchaseSchema,
   updateFinanceRecipeSchema,
 } from '@te-pinta/shared';
 
@@ -32,6 +33,7 @@ import type {
   FinanceStockMovement,
   UpdateFinanceBaseCostRuleInput,
   UpdateFinanceProductInput,
+  UpdateFinancePurchaseInput,
   UpdateFinanceRecipeInput,
 } from './types';
 
@@ -88,6 +90,19 @@ export const createFinancePurchase = async (
   const payload = createFinancePurchaseSchema.parse(input);
   const response = await apiClient.post<{ purchase: FinancePurchaseDetail }>(
     '/finance/purchases',
+    payload,
+  );
+
+  return response.data.purchase;
+};
+
+export const updateFinancePurchase = async (
+  id: string,
+  input: UpdateFinancePurchaseInput,
+): Promise<FinancePurchaseDetail> => {
+  const payload = updateFinancePurchaseSchema.parse(input);
+  const response = await apiClient.put<{ purchase: FinancePurchaseDetail }>(
+    `/finance/purchases/${id}`,
     payload,
   );
 

@@ -30,6 +30,7 @@ import {
   type FinanceStockMovementType,
   type UpdateFinanceBaseCostRuleInput,
   type UpdateFinanceProductInput,
+  type UpdateFinancePurchaseInput,
   type UpdateFinanceRecipeInput,
 } from '@te-pinta/shared';
 
@@ -97,6 +98,17 @@ export type PersistFinancePurchaseInput = {
   fundingSource: FinancePurchaseFundingSource;
   items: PersistFinancePurchaseItem[];
   stockMovements: PersistFinanceStockMovement[];
+};
+
+export type PersistFinancePurchaseUpdateInput = {
+  id: string;
+  purchaseDate: string;
+  supplier: string | null;
+  receiptNumber: string | null;
+  notes: string | null;
+  fundingSource: FinancePurchaseFundingSource;
+  items?: PersistFinancePurchaseItem[];
+  stockMovements?: PersistFinanceStockMovement[];
 };
 
 export type FinancePurchaseDetail = {
@@ -198,6 +210,9 @@ export type FinanceRepository = {
   ): Promise<Map<string, FinanceProductCostHistoryItem[]>>;
   listStockMovementsByProducts(productIds: string[]): Promise<FinanceStockMovement[]>;
   createPurchaseWithItems(input: PersistFinancePurchaseInput): Promise<FinancePurchaseDetail>;
+  updatePurchaseWithItems(
+    input: PersistFinancePurchaseUpdateInput,
+  ): Promise<FinancePurchaseDetail | null>;
   listPurchases(filters?: FinancePurchaseFilters): Promise<FinancePurchaseDetail[]>;
   getPurchase(id: string): Promise<FinancePurchaseDetail | null>;
   cancelPurchase(input: {
@@ -328,16 +343,16 @@ export const getFinanceProductHistory = async (
   return historyByProduct.get(productId) ?? [];
 };
 
-export const createFinancePurchase = async (
-  input: CreateFinancePurchaseInput,
+const buildPurchaseItemsAndMovements = async (
+  purchaseId: string,
+  itemsInput: CreateFinancePurchaseInput['items'],
   repository: FinanceRepository,
-): Promise<FinancePurchaseDetail> => {
+): Promise<Pick<PersistFinancePurchaseInput, 'items' | 'stockMovements'>> => {
   const productsById = await getProductsById(
     repository,
-    input.items.map((item) => item.productId),
+    itemsInput.map((item) => item.productId),
   );
-  const purchaseId = randomUUID();
-  const items = input.items.map<PersistFinancePurchaseItem>((item) => {
+  const items = itemsInput.map<PersistFinancePurchaseItem>((item) => {
     const product = productsById.get(item.productId);
     if (!product) {
       throw new ApiError(404, 'Finance product not found', 'FINANCE_PRODUCT_NOT_FOUND');
@@ -382,6 +397,20 @@ export const createFinancePurchase = async (
     ];
   });
 
+  return { items, stockMovements };
+};
+
+export const createFinancePurchase = async (
+  input: CreateFinancePurchaseInput,
+  repository: FinanceRepository,
+): Promise<FinancePurchaseDetail> => {
+  const purchaseId = randomUUID();
+  const { items, stockMovements } = await buildPurchaseItemsAndMovements(
+    purchaseId,
+    input.items,
+    repository,
+  );
+
   return repository.createPurchaseWithItems({
     id: purchaseId,
     purchaseDate: input.purchaseDate,
@@ -392,6 +421,47 @@ export const createFinancePurchase = async (
     items,
     stockMovements,
   });
+};
+
+export const updateFinancePurchase = async (
+  id: string,
+  input: UpdateFinancePurchaseInput,
+  repository: FinanceRepository,
+): Promise<FinancePurchaseDetail> => {
+  const purchase = await repository.getPurchase(id);
+  if (!purchase) {
+    throw new ApiError(404, 'Finance purchase not found', 'FINANCE_PURCHASE_NOT_FOUND');
+  }
+  if (purchase.canceledAt) {
+    throw new ApiError(
+      409,
+      'Canceled finance purchases cannot be edited',
+      'FINANCE_PURCHASE_CANCELED',
+    );
+  }
+
+  const itemUpdates =
+    input.items === undefined
+      ? {}
+      : await buildPurchaseItemsAndMovements(id, input.items, repository);
+  const updated = await repository.updatePurchaseWithItems({
+    id,
+    purchaseDate: input.purchaseDate ?? purchase.purchaseDate,
+    supplier:
+      input.supplier !== undefined ? normalizeOptionalText(input.supplier) : purchase.supplier,
+    receiptNumber:
+      input.receiptNumber !== undefined
+        ? normalizeOptionalText(input.receiptNumber)
+        : purchase.receiptNumber,
+    notes: input.notes !== undefined ? normalizeOptionalText(input.notes) : purchase.notes,
+    fundingSource: input.fundingSource ?? purchase.fundingSource,
+    ...itemUpdates,
+  });
+  if (!updated) {
+    throw new ApiError(404, 'Finance purchase not found', 'FINANCE_PURCHASE_NOT_FOUND');
+  }
+
+  return enrichPurchaseDetailWithImpacts(updated, repository);
 };
 
 export const listFinancePurchases = async (

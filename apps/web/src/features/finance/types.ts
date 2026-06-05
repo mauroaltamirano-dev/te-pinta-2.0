@@ -21,6 +21,7 @@ import type {
   FinanceStockMovementType,
   UpdateFinanceBaseCostRuleInput,
   UpdateFinanceProductInput,
+  UpdateFinancePurchaseInput,
   UpdateFinanceRecipeInput,
 } from '@te-pinta/shared';
 
@@ -47,6 +48,7 @@ export type {
   FinanceStockMovementType,
   UpdateFinanceBaseCostRuleInput,
   UpdateFinanceProductInput,
+  UpdateFinancePurchaseInput,
   UpdateFinanceRecipeInput,
 };
 

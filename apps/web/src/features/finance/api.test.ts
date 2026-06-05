@@ -18,6 +18,7 @@ import {
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
   updateFinanceProduct,
+  updateFinancePurchase,
   updateFinanceRecipe,
 } from './api';
 import type {
@@ -364,7 +365,7 @@ describe('finance api client', () => {
     });
   });
 
-  it('lists and cancels finance purchases through validated endpoints', async () => {
+  it('lists, updates, and cancels finance purchases through validated endpoints', async () => {
     const purchase = {
       id: 'purchase-1',
       purchaseDate: '2026-05-27',
@@ -388,6 +389,9 @@ describe('finance api client', () => {
       ],
     };
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { purchases: [purchase] } });
+    vi.mocked(apiClient.put).mockResolvedValueOnce({
+      data: { purchase: { ...purchase, supplier: 'Molino sur', fundingSource: 'services' } },
+    });
     vi.mocked(apiClient.delete).mockResolvedValueOnce({
       data: { purchase: { ...purchase, canceledAt: '2026-05-29T12:00:00.000Z' } },
     });
@@ -399,12 +403,25 @@ describe('finance api client', () => {
       }),
     ]);
     await expect(
+      updateFinancePurchase('purchase-1', {
+        supplier: 'Molino sur',
+        fundingSource: 'services',
+      }),
+    ).resolves.toMatchObject({
+      supplier: 'Molino sur',
+      fundingSource: 'services',
+    });
+    await expect(
       cancelFinancePurchase('purchase-1', { reason: 'duplicada' }),
     ).resolves.toMatchObject({
       id: 'purchase-1',
     });
 
     expect(apiClient.get).toHaveBeenCalledWith('/finance/purchases', { params: {} });
+    expect(apiClient.put).toHaveBeenCalledWith('/finance/purchases/purchase-1', {
+      supplier: 'Molino sur',
+      fundingSource: 'services',
+    });
     expect(apiClient.delete).toHaveBeenCalledWith('/finance/purchases/purchase-1', {
       data: { reason: 'duplicada' },
     });

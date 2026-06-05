@@ -35,6 +35,7 @@ import type {
   PersistFinanceBaseCostRuleInput,
   PersistFinancePurchaseInput,
   PersistFinancePurchaseItem,
+  PersistFinancePurchaseUpdateInput,
   PersistFinanceRecipeInput,
   PersistFinanceStockMovement,
 } from './finance-service';
@@ -98,6 +99,17 @@ const toPurchaseValues = (
   input: PersistFinancePurchaseInput,
 ): typeof financePurchases.$inferInsert => ({
   id: input.id,
+  purchaseDate: input.purchaseDate,
+  supplier: input.supplier,
+  receiptNumber: input.receiptNumber,
+  notes: input.notes,
+  fundingSource: input.fundingSource,
+  updatedAt: new Date(),
+});
+
+const toPurchaseUpdateValues = (
+  input: PersistFinancePurchaseUpdateInput,
+): Partial<typeof financePurchases.$inferInsert> => ({
   purchaseDate: input.purchaseDate,
   supplier: input.supplier,
   receiptNumber: input.receiptNumber,
@@ -648,6 +660,49 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
     }
 
     return purchase;
+  },
+
+  async updatePurchaseWithItems(input): Promise<FinancePurchaseDetail | null> {
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(financePurchases)
+        .set(toPurchaseUpdateValues(input))
+        .where(and(eq(financePurchases.id, input.id), isNull(financePurchases.canceledAt)))
+        .returning({ id: financePurchases.id });
+
+      if (!row) {
+        return;
+      }
+
+      if (!input.items) {
+        return;
+      }
+
+      const oldItems = await tx
+        .select({ id: financePurchaseItems.id })
+        .from(financePurchaseItems)
+        .where(eq(financePurchaseItems.purchaseId, input.id));
+      const oldItemIds = oldItems.map((item) => item.id);
+
+      if (oldItemIds.length > 0) {
+        await tx
+          .delete(financeStockMovements)
+          .where(inArray(financeStockMovements.sourcePurchaseItemId, oldItemIds));
+      }
+
+      await tx.delete(financePurchaseItems).where(eq(financePurchaseItems.purchaseId, input.id));
+
+      if (input.items.length > 0) {
+        await tx.insert(financePurchaseItems).values(input.items.map(toPurchaseItemValues));
+      }
+      if (input.stockMovements && input.stockMovements.length > 0) {
+        await tx
+          .insert(financeStockMovements)
+          .values(input.stockMovements.map(toStockMovementValues));
+      }
+    });
+
+    return getPurchaseDetail(db, input.id);
   },
 
   async listPurchases(filters = {}): Promise<FinancePurchaseDetail[]> {

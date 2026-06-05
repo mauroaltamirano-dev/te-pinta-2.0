@@ -17,6 +17,7 @@ import {
   listFinancePurchases,
   previewFinanceOrderCost,
   updateFinanceProduct,
+  updateFinancePurchase,
   updateFinanceRecipe,
 } from './finance-service';
 
@@ -64,6 +65,19 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   listStockMovementsByProducts: async () => [],
   createPurchaseWithItems: async (input) =>
     purchaseDetail({ id: input.id, fundingSource: input.fundingSource, items: input.items }),
+  updatePurchaseWithItems: async (input) =>
+    purchaseDetail({
+      id: input.id,
+      purchaseDate: input.purchaseDate,
+      supplier: input.supplier,
+      receiptNumber: input.receiptNumber,
+      notes: input.notes,
+      fundingSource: input.fundingSource,
+      items: input.items ?? [],
+      stockMovements: input.stockMovements?.map((item) =>
+        movement({ ...item, createdAt: new Date('2026-05-27T12:00:00.000Z') }),
+      ),
+    }),
   listPurchases: async () => [],
   getPurchase: async () => null,
   cancelPurchase: async () => null,
@@ -113,7 +127,7 @@ describe('finance service', () => {
         return purchaseDetail({
           id: input.id,
           fundingSource: input.fundingSource,
-          items: input.items,
+          items: input.items ?? [],
           stockMovements: input.stockMovements.map((item) =>
             movement({ ...item, createdAt: new Date('2026-05-27T12:00:00.000Z') }),
           ),
@@ -168,6 +182,81 @@ describe('finance service', () => {
       sourcePurchaseItemId: persisted?.items[0]?.id,
     });
     expect(result.stockMovements).toHaveLength(1);
+  });
+
+  it('updates active purchases with replacement item costs and funding source', async () => {
+    let persisted: Parameters<FinanceRepository['updatePurchaseWithItems']>[0] | undefined;
+    const repository = createRepository({
+      getPurchase: async () =>
+        purchaseDetail({
+          id: 'purchase-1',
+          supplier: 'Molino norte',
+          items: [
+            {
+              id: 'old-item',
+              purchaseId: 'purchase-1',
+              productId: 'product-tapa',
+              purchaseUnit: 'pack',
+              purchaseQuantity: 1,
+              unitsPerPackage: 12,
+              totalBaseUnits: 12,
+              unitPriceCents: 120_000,
+              totalPriceCents: 120_000,
+              costPerBaseUnitCents: 10_000,
+              notes: null,
+            },
+          ],
+        }),
+      updatePurchaseWithItems: async (input) => {
+        persisted = input;
+        return purchaseDetail({
+          id: input.id,
+          purchaseDate: input.purchaseDate,
+          supplier: input.supplier,
+          fundingSource: input.fundingSource,
+          items: input.items,
+          stockMovements: input.stockMovements?.map((item) =>
+            movement({ ...item, createdAt: new Date('2026-05-27T12:00:00.000Z') }),
+          ),
+        });
+      },
+      getProductsByIds: async () => [product({ id: 'product-tapa', stockTracking: true })],
+    });
+
+    const result = await updateFinancePurchase(
+      'purchase-1',
+      {
+        purchaseDate: '2026-05-28',
+        supplier: 'Molino sur',
+        fundingSource: 'profit',
+        items: [
+          {
+            productId: 'product-tapa',
+            purchaseUnit: 'pack',
+            purchaseQuantity: 2,
+            unitsPerPackage: 12,
+            totalPriceCents: 360_000,
+          },
+        ],
+      },
+      repository,
+    );
+
+    expect(persisted).toMatchObject({
+      id: 'purchase-1',
+      purchaseDate: '2026-05-28',
+      supplier: 'Molino sur',
+      fundingSource: 'profit',
+    });
+    expect(persisted?.items).toHaveLength(1);
+    expect(persisted?.items?.[0]).toMatchObject({
+      productId: 'product-tapa',
+      totalBaseUnits: 24,
+      totalPriceCents: 360_000,
+      costPerBaseUnitCents: 15_000,
+    });
+    expect(persisted?.stockMovements).toHaveLength(1);
+    expect(result.fundingSource).toBe('profit');
   });
 
   it('cancels purchases with reversing stock movements and excludes repeated cancellation', async () => {
