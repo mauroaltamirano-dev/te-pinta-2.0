@@ -34,7 +34,7 @@ export const CustomerSummaryCard = ({ summary }: { summary: DashboardCustomerSum
             <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
               Clientes nuevos
             </dt>
-            <dd className="mt-1 font-display text-3xl font-black text-primary">
+            <dd className="mt-1 font-sans text-3xl font-black text-primary">
               {summary.newCustomers}
             </dd>
           </div>
@@ -42,7 +42,7 @@ export const CustomerSummaryCard = ({ summary }: { summary: DashboardCustomerSum
             <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
               Recurrentes
             </dt>
-            <dd className="mt-1 font-display text-3xl font-black text-success">
+            <dd className="mt-1 font-sans text-3xl font-black text-success">
               {summary.recurringCustomers}
             </dd>
           </div>

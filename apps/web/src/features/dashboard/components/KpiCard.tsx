@@ -65,7 +65,7 @@ export const KpiCard = ({ kpi, className }: { kpi: KpiCardData; className?: stri
       <h3 className="relative mt-5 text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">
         {kpi.title}
       </h3>
-      <p className="relative mt-2 font-display text-3xl font-black tracking-tight text-foreground tabular-nums">
+      <p className="relative mt-2 font-sans text-3xl font-black tracking-tight text-foreground tabular-nums">
         {kpi.value}
       </p>
       <p className="relative mt-2 text-xs font-bold text-muted-foreground">

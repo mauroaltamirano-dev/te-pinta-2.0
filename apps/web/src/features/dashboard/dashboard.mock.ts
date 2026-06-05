@@ -81,9 +81,14 @@ export type DashboardAlert = {
 
 export const dashboardTotalsMock = {
   grossRevenue: 185_000,
+  paidRevenue: 153_000,
   estimatedProfit: 54_500,
+  estimatedCosts: 130_500,
   orderCount: 13,
+  activeOrderCount: 10,
+  finalizedOrderCount: 3,
   soldDozens: 17,
+  totalUnits: 204,
   averageTicket: 14_230,
   pendingRevenue: 32_000,
   unpaidOrderCount: 3,

@@ -31,7 +31,7 @@ export const ProductionPendingCard = ({ summary }: { summary: DashboardProductio
         <p className="text-xs font-black uppercase tracking-wide text-sidebar-muted">
           Total pendiente
         </p>
-        <p className="font-display text-3xl font-black tabular-nums">
+        <p className="font-sans text-3xl font-black tabular-nums">
           {formatDozens(summary.totalDozens)}
         </p>
       </div>
@@ -50,7 +50,7 @@ export const ProductionPendingCard = ({ summary }: { summary: DashboardProductio
               <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
                 Hoy
               </dt>
-              <dd className="mt-1 font-display text-3xl font-black text-primary">
+              <dd className="mt-1 font-sans text-3xl font-black text-primary">
                 {formatDozens(summary.todayDozens)}
               </dd>
             </div>
@@ -58,7 +58,7 @@ export const ProductionPendingCard = ({ summary }: { summary: DashboardProductio
               <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
                 Mañana
               </dt>
-              <dd className="mt-1 font-display text-3xl font-black text-success">
+              <dd className="mt-1 font-sans text-3xl font-black text-success">
                 {formatDozens(summary.tomorrowDozens)}
               </dd>
             </div>
