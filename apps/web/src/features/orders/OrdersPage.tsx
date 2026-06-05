@@ -634,7 +634,7 @@ const OrderDetailPanel = ({
     <div
       aria-label="Acciones principales del pedido"
       className={[
-        'grid grid-cols-2 gap-2 border-t border-border bg-card/95 p-4 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur',
+        'grid grid-cols-2 gap-2 border-t border-border bg-card p-4 shadow-[0_-8px_20px_rgba(15,23,42,0.06)]',
         isMobile
           ? 'fixed inset-x-0 bottom-0 z-[60] pb-[calc(env(safe-area-inset-bottom)+0.75rem)]'
           : 'sticky bottom-0',
@@ -667,7 +667,7 @@ const OrderDetailPanel = ({
 
   return (
     <div className={['flex min-h-full flex-col', isMobile ? 'pb-40' : ''].join(' ')}>
-      <header className="sticky top-0 z-10 bg-card/95 px-5 py-4 backdrop-blur">
+      <header className="sticky top-0 z-10 bg-card px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -719,7 +719,7 @@ const OrderDetailPanel = ({
       <nav
         aria-label="Secciones del detalle"
         className={[
-          'grid grid-cols-3 border-b border-border bg-card/95 px-5 backdrop-blur',
+          'grid grid-cols-3 border-b border-border bg-card px-5',
           isMobile ? 'sticky top-[105px] z-10' : 'sticky top-[105px] z-10',
         ].join(' ')}
       >
@@ -3284,7 +3284,7 @@ export const OrdersPage = () => {
         )}
       </div>
 
-      <div className="sticky bottom-0 z-10 border-t border-[#E8D3BF] bg-[#FCF8F2]/95 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-0 z-10 border-t border-[#E8D3BF] bg-[#FCF8F2] px-4 py-3 shadow-[0_-8px_20px_rgba(15,23,42,0.06)]">
         {mobileOrderStep < 3 ? (
           <div className="flex items-center justify-between gap-3">
             {mobileOrderStep > 1 && (
@@ -3839,7 +3839,7 @@ export const OrdersPage = () => {
             parte inferior de la pantalla.
           */
           <div
-            className="fixed inset-0 z-50 flex items-end bg-black/50 backdrop-blur-[2px] sm:items-center sm:justify-center"
+            className="fixed inset-0 z-50 flex items-end bg-black/45 sm:items-center sm:justify-center"
             onClick={(e) => {
               if (e.target === e.currentTarget) resetAndCloseCreateDialog();
             }}
@@ -3847,8 +3847,9 @@ export const OrdersPage = () => {
             <section
               aria-label={mobileDialogTitle}
               aria-modal="true"
-              className="animate-modal-enter flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-[#E8D3BF] bg-[#FCF8F2] shadow-2xl sm:max-h-[92dvh] sm:max-w-7xl sm:rounded-3xl"
+              className="animate-modal-enter flex max-h-[94dvh] w-full transform-gpu flex-col overflow-hidden rounded-t-3xl border border-[#E8D3BF] bg-[#FCF8F2] shadow-xl will-change-transform sm:max-h-[92dvh] sm:max-w-7xl sm:rounded-3xl"
               role="dialog"
+              style={{ contain: 'layout paint style' }}
             >
               {/* Header del modal — sticky */}
               <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E8D3BF] bg-[#FFFDF9] px-4 py-3.5 sm:px-6">

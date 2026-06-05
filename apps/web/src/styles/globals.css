@@ -109,8 +109,8 @@
   */
   --transition-fast: 120ms cubic-bezier(0.16, 1, 0.3, 1);
   --transition-base: 200ms cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-slow: 350ms cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-spring: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-slow: 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-spring: 180ms cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ── Spacing base (complementa Tailwind, útil en CSS manual) ── */
   --space-1: 0.25rem;

@@ -36,6 +36,7 @@ describe('Finance shared primitives', () => {
 
     const dialog = screen.getByRole('dialog', { name: /nuevo producto/i });
 
+    expect(document.body.style.overflow).toBe('hidden');
     expect(dialog).toHaveAccessibleDescription(/cargá productos/i);
     expect(within(dialog).getByRole('button', { name: /guardar producto/i })).toBeInTheDocument();
 
@@ -44,6 +45,7 @@ describe('Finance shared primitives', () => {
 
     await user.click(within(dialog).getByRole('button', { name: /cerrar creación/i }));
     expect(screen.queryByRole('dialog', { name: /nuevo producto/i })).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
   });
 
   it('renders an accessible finance table and calls sortable header callbacks', async () => {

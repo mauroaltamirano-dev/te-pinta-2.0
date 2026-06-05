@@ -35,11 +35,14 @@ export const CustomerDrawerOverlay = ({
     <div className="fixed inset-0 z-50 hidden lg:flex lg:items-stretch lg:justify-end">
       <button
         aria-label="Cerrar panel"
-        className="absolute inset-0 animate-backdrop-fade-in bg-black/40 backdrop-blur-[2px]"
+        className="absolute inset-0 animate-backdrop-fade-in bg-black/40"
         onClick={onClose}
         type="button"
       />
-      <div className="relative z-10 flex h-dvh w-full max-w-md animate-drawer-in-right flex-col overflow-hidden border-l border-border/70 bg-card shadow-2xl 2xl:max-w-lg">
+      <div
+        className="relative z-10 flex h-dvh w-full max-w-md transform-gpu animate-drawer-in-right flex-col overflow-hidden border-l border-border/70 bg-card shadow-xl will-change-transform 2xl:max-w-lg"
+        style={{ contain: 'layout paint style' }}
+      >
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </div>
     </div>,
