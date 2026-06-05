@@ -99,21 +99,21 @@ describe('FinanceDashboard', () => {
     expect(
       await screen.findByRole('heading', { name: /rentabilidad por variedad/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('article', { name: /margen promedio: 87,8%/i })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: /margen promedio: 71,9%/i })).toBeInTheDocument();
     expect(
-      screen.getByRole('article', { name: /costo promedio: \$\s*1\.464/i }),
+      screen.getByRole('article', { name: /costo promedio: \$\s*1\.220/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('article', { name: /precio promedio: \$\s*12\.000/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('article', { name: /ganancia promedio: \$\s*10\.536/i }),
+      screen.getByRole('article', { name: /ganancia promedio: \$\s*8\.624/i }),
     ).toBeInTheDocument();
 
     expect(screen.getByRole('article', { name: /variedad humita/i })).toBeInTheDocument();
-    expect(screen.getByText(/margen actual 87,8%/i)).toBeInTheDocument();
+    expect(screen.getByText(/margen actual 71,9%/i)).toBeInTheDocument();
     expect(screen.getByText(/precio para 50%/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$\s*2\.928/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$\s*3\.253/i)).toBeInTheDocument();
     expect(screen.queryByText(/^catálogo$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^stock$/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^compras$/i)).not.toBeInTheDocument();
@@ -137,7 +137,7 @@ describe('FinanceDashboard', () => {
       { key: 'finance_dashboard_target_margin_percent', value: '40' },
     ]);
     expect(await screen.findByText(/precio para 40%/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$\s*2\.542/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$\s*2\.614/i)).toBeInTheDocument();
   });
 
   it('keeps scenario margins collapsed and simulates all values for edited docenas', async () => {
@@ -154,6 +154,6 @@ describe('FinanceDashboard', () => {
     expect(within(variety).getByText(/cruda retiro/i)).toBeInTheDocument();
     expect(within(variety).getByText(/cocinada con envío/i)).toBeInTheDocument();
     expect(within(variety).getByText(/venta\s+\$\s*29\.500/i)).toBeInTheDocument();
-    expect(within(variety).getByText(/ganancia\s+\$\s*26\.572/i)).toBeInTheDocument();
+    expect(within(variety).getByText(/ganancia\s+\$\s*21\.648/i)).toBeInTheDocument();
   });
 });

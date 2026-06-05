@@ -63,9 +63,10 @@ const VarietyCard = ({ variety }: { variety: DashboardVarietyMetrics }) => {
   const scenarios = calculateDozenSimulatorScenarios({
     dozens,
     priceDozenCents: variety.priceDozenCents,
-    totalCostPerDozenCents: variety.totalCostCents,
+    totalCostPerDozenCents: variety.directCostCents,
     cookingFeePerDozenCents: variety.cookingFeePerDozenCents,
     deliveryFeeCents: variety.deliveryFeeCents,
+    servicePercent: variety.servicePercent,
   });
 
   return (
@@ -92,9 +93,12 @@ const VarietyCard = ({ variety }: { variety: DashboardVarietyMetrics }) => {
       </div>
 
       <dl className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <CompactMetric label="Costo" value={formatMoneyFromCents(variety.totalCostCents)} />
+        <CompactMetric
+          label="Costo producción"
+          value={formatMoneyFromCents(variety.directCostCents)}
+        />
         <CompactMetric label="Precio" value={formatMoneyFromCents(variety.priceDozenCents)} />
-        <CompactMetric label="Ganancia" value={formatMoneyFromCents(variety.profitCents)} />
+        <CompactMetric label="Ganancia neta" value={formatMoneyFromCents(variety.profitCents)} />
         <CompactMetric
           label={`Servicio ${formatPercent(variety.servicePercent)}`}
           value={formatMoneyFromCents(variety.serviceCostCents)}
@@ -282,7 +286,7 @@ export const FinanceDashboard = ({ data }: { data: FinanceWorkspaceData }) => {
           icon={<Calculator className="h-5 w-5" />}
           label="Costo promedio"
           value={formatMoneyFromCents(averages.averageCostCents)}
-          helpText="Costo de venta por docena con servicios."
+          helpText="Costo de producción por docena, sin descontar servicios."
         />
         <MetricCard
           icon={<CircleDollarSign className="h-5 w-5" />}
@@ -295,7 +299,7 @@ export const FinanceDashboard = ({ data }: { data: FinanceWorkspaceData }) => {
           icon={<Sparkles className="h-5 w-5" />}
           label="Ganancia promedio"
           value={formatMoneyFromCents(averages.averageProfitCents)}
-          helpText="Resultado promedio antes de escenarios."
+          helpText="Resultado promedio después de descontar servicios."
         />
       </div>
 

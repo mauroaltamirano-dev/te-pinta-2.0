@@ -28,18 +28,18 @@ const baseVariety = {
 };
 
 describe('dashboardMath', () => {
-  it('calculates current margin, profit, target sale price, and service-loaded cost', () => {
+  it('deducts services from dozen profit instead of loading them over direct cost', () => {
     const metrics = calculateVarietyMetrics(baseVariety);
 
     expect(metrics.directCostCents).toBe(122_000);
-    expect(metrics.serviceCostCents).toBe(24_400);
-    expect(metrics.totalCostCents).toBe(146_400);
-    expect(metrics.profitCents).toBe(1_053_600);
-    expect(metrics.marginPercent).toBe(87.8);
-    expect(metrics.targetSalePriceCents).toBe(292_800);
-    expect(calculateProfitCents(1_200_000, 146_400)).toBe(1_053_600);
-    expect(calculateMarginPercent(1_053_600, 1_200_000)).toBe(87.8);
-    expect(calculateTargetSalePriceCents(146_400, 50)).toBe(292_800);
+    expect(metrics.serviceCostCents).toBe(215_600);
+    expect(metrics.totalCostCents).toBe(337_600);
+    expect(metrics.profitCents).toBe(862_400);
+    expect(metrics.marginPercent).toBe(71.9);
+    expect(metrics.targetSalePriceCents).toBe(325_333);
+    expect(calculateProfitCents(1_200_000, 337_600)).toBe(862_400);
+    expect(calculateMarginPercent(862_400, 1_200_000)).toBe(71.9);
+    expect(calculateTargetSalePriceCents(122_000, 50, 20)).toBe(325_333);
   });
 
   it('averages dashboard KPIs across varieties and returns zeros for empty input', () => {
@@ -52,15 +52,15 @@ describe('dashboardMath', () => {
       priceDozenCents: 900_000,
     });
 
-    expect(calculateAverageMarginPercent([humita, carne])).toBe(75.8);
-    expect(calculateAverageCostCents([humita, carne])).toBe(236_400);
+    expect(calculateAverageMarginPercent([humita, carne])).toBe(63.9);
+    expect(calculateAverageCostCents([humita, carne])).toBe(197_000);
     expect(calculateAverageSalePriceCents([humita, carne])).toBe(1_050_000);
-    expect(calculateAverageProfitCents([humita, carne])).toBe(813_600);
+    expect(calculateAverageProfitCents([humita, carne])).toBe(682_400);
     expect(calculateDashboardAverages([humita, carne])).toEqual({
-      averageMarginPercent: 75.8,
-      averageCostCents: 236_400,
+      averageMarginPercent: 63.9,
+      averageCostCents: 197_000,
       averageSalePriceCents: 1_050_000,
-      averageProfitCents: 813_600,
+      averageProfitCents: 682_400,
     });
     expect(calculateDashboardAverages([])).toEqual({
       averageMarginPercent: 0,

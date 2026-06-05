@@ -65,16 +65,22 @@ export const calculateMarginPercent = (profitCents: number, salePriceCents: numb
   salePriceCents > 0 ? roundPercent((profitCents / salePriceCents) * 100) : 0;
 
 export const calculateTargetSalePriceCents = (
-  totalCostCents: number,
+  directCostCents: number,
   targetMarginPercent: number,
+  servicePercent = 0,
 ): number | null => {
-  if (targetMarginPercent >= 100) {
+  const safeServiceRate = safeNonNegative(servicePercent) / 100;
+  const retainedProfitRate = Math.max(1 - safeServiceRate, 0);
+  const safeMarginRate = safeNonNegative(targetMarginPercent) / 100;
+
+  if (retainedProfitRate <= 0 || safeMarginRate >= retainedProfitRate) {
     return null;
   }
 
-  const safeMargin = safeNonNegative(targetMarginPercent);
-
-  return Math.round(totalCostCents / (1 - safeMargin / 100));
+  return Math.round(
+    (safeNonNegative(directCostCents) * retainedProfitRate) /
+      (retainedProfitRate - safeMarginRate),
+  );
 };
 
 export const calculateBaseCostPerDozenCents = (rules: FinanceBaseCostRule[]): number => {
@@ -97,12 +103,14 @@ export const calculateDozenSimulatorScenarios = ({
   totalCostPerDozenCents,
   cookingFeePerDozenCents,
   deliveryFeeCents,
+  servicePercent = 0,
 }: {
   dozens: number;
   priceDozenCents: number;
   totalCostPerDozenCents: number;
   cookingFeePerDozenCents: number;
   deliveryFeeCents: number;
+  servicePercent?: number;
 }): DashboardScenario[] => {
   const safeDozens = safeNonNegative(dozens);
   const startedDozens = safeDozens > 0 ? Math.ceil(safeDozens) : 0;
@@ -138,12 +146,17 @@ export const calculateDozenSimulatorScenarios = ({
     },
   ].map((scenario) => {
     const saleCents = baseSaleCents + scenario.feeCents;
-    const profitCents = calculateProfitCents(saleCents, productionCostCents);
+    const grossProfitCents = calculateProfitCents(saleCents, productionCostCents);
+    const serviceCostCents = Math.round(
+      Math.max(grossProfitCents, 0) * (safeNonNegative(servicePercent) / 100),
+    );
+    const costCents = productionCostCents + serviceCostCents;
+    const profitCents = calculateProfitCents(saleCents, costCents);
 
     return {
       ...scenario,
       saleCents,
-      costCents: productionCostCents,
+      costCents,
       profitCents,
       marginPercent: calculateMarginPercent(profitCents, saleCents),
     };
@@ -152,8 +165,9 @@ export const calculateDozenSimulatorScenarios = ({
 
 export const calculateVarietyMetrics = (input: DashboardVarietyInput): DashboardVarietyMetrics => {
   const directCostCents = Math.round(input.baseCostPerDozenCents + input.recipeCostPerDozenCents);
+  const grossProfitCents = calculateProfitCents(input.priceDozenCents, directCostCents);
   const serviceCostCents = Math.round(
-    directCostCents * (safeNonNegative(input.servicePercent) / 100),
+    Math.max(grossProfitCents, 0) * (safeNonNegative(input.servicePercent) / 100),
   );
   const totalCostCents = directCostCents + serviceCostCents;
   const profitCents = calculateProfitCents(input.priceDozenCents, totalCostCents);
@@ -165,13 +179,18 @@ export const calculateVarietyMetrics = (input: DashboardVarietyInput): Dashboard
     totalCostCents,
     profitCents,
     marginPercent: calculateMarginPercent(profitCents, input.priceDozenCents),
-    targetSalePriceCents: calculateTargetSalePriceCents(totalCostCents, input.targetMarginPercent),
+    targetSalePriceCents: calculateTargetSalePriceCents(
+      directCostCents,
+      input.targetMarginPercent,
+      input.servicePercent,
+    ),
     scenarios: calculateDozenSimulatorScenarios({
       dozens: 1,
       priceDozenCents: input.priceDozenCents,
-      totalCostPerDozenCents: totalCostCents,
+      totalCostPerDozenCents: directCostCents,
       cookingFeePerDozenCents: input.cookingFeePerDozenCents,
       deliveryFeeCents: input.deliveryFeeCents,
+      servicePercent: input.servicePercent,
     }),
   };
 };
@@ -180,7 +199,7 @@ export const calculateAverageMarginPercent = (varieties: DashboardVarietyMetrics
   roundPercent(averageNumber(varieties.map((variety) => variety.marginPercent)));
 
 export const calculateAverageCostCents = (varieties: DashboardVarietyMetrics[]): number =>
-  Math.round(averageNumber(varieties.map((variety) => variety.totalCostCents)));
+  Math.round(averageNumber(varieties.map((variety) => variety.directCostCents)));
 
 export const calculateAverageSalePriceCents = (varieties: DashboardVarietyMetrics[]): number =>
   Math.round(averageNumber(varieties.map((variety) => variety.priceDozenCents)));

@@ -15,6 +15,7 @@ import {
   listFinancePurchases,
   listFinanceRecipes,
   previewFinanceOrderCost,
+  updateFinancePurchase,
   updateFinanceRecipe,
 } from '../api';
 import { FinancePage } from './FinancePage';
@@ -37,6 +38,7 @@ vi.mock('../api', () => ({
   listFinanceStock: vi.fn(),
   previewFinanceOrderCost: vi.fn(),
   updateFinanceBaseCostRule: vi.fn(),
+  updateFinancePurchase: vi.fn(),
   updateFinanceRecipe: vi.fn(),
 }));
 
@@ -196,6 +198,17 @@ describe('FinancePage', () => {
       canceledReason: null,
       items: [],
     });
+    vi.mocked(updateFinancePurchase).mockResolvedValue({
+      id: 'purchase-1',
+      purchaseDate: '2026-05-27',
+      supplier: 'Molino sur',
+      receiptNumber: null,
+      notes: null,
+      fundingSource: 'services',
+      canceledAt: null,
+      canceledReason: null,
+      items: [],
+    });
     vi.mocked(cancelFinancePurchase).mockResolvedValue({
       id: 'purchase-1',
       purchaseDate: '2026-05-27',
@@ -280,7 +293,7 @@ describe('FinancePage', () => {
     expect(screen.getByLabelText(/margen objetivo/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/servicios/i)).toHaveValue(20);
     expect(screen.getByText(/precio para 50%/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$\s*1\.728/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$\s*1\.920/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /márgenes por escenario/i })).toHaveAttribute(
       'aria-expanded',
       'false',
