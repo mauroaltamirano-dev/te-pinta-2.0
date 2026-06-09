@@ -68,6 +68,7 @@ export type DashboardUpcomingOrder = {
   deliveryDate: string;
   deliveryTime: DeliveryTime;
   status: OrderStatus;
+  isPaid: boolean;
   total: number;
 };
 
@@ -109,6 +110,27 @@ export type DashboardTotals = {
   totalUnits: number;
   soldDozens: number;
   averageTicket: number;
+};
+
+export type DashboardTrendDirection = 'positive' | 'negative' | 'neutral';
+
+export type DashboardKpiComparison = {
+  value: string;
+  label: string;
+  direction: DashboardTrendDirection;
+  currentValue: number;
+  previousValue: number | null;
+  difference: number | null;
+  changePercent: number | null;
+};
+
+export type DashboardKpiComparisons = {
+  sales: DashboardKpiComparison;
+  profit: DashboardKpiComparison;
+  orders: DashboardKpiComparison;
+  dozens: DashboardKpiComparison;
+  averageTicket: DashboardKpiComparison;
+  pendingRevenue: DashboardKpiComparison;
 };
 
 export type DashboardWalletStatus = 'correct' | 'low' | 'critical';
@@ -198,6 +220,7 @@ export type DailyDashboard = {
   rangeAnalytics: Record<DashboardRange, DashboardRangeAnalytics>;
   selectedRange: DashboardSelectedRange;
   selectedRangeAnalytics: DashboardRangeAnalytics;
+  kpiComparisons: DashboardKpiComparisons;
   weeklyVarietyAnalytics: DashboardWeeklyVarietyAnalytics;
   accountingSummary: DashboardAccountingSummary;
   varietySales: {
@@ -225,6 +248,28 @@ const centsToMoney = (value: number): number => roundMoney(value / 100);
 
 const formatMoney = (value: number): string =>
   `$${Math.round(value).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+
+const formatSignedMoney = (value: number): string => {
+  if (value === 0) return formatMoney(0);
+
+  return `${value > 0 ? '+' : '-'}${formatMoney(Math.abs(value))}`;
+};
+
+const formatSignedNumber = (value: number): string => {
+  if (value === 0) return '0';
+
+  return `${value > 0 ? '+' : '-'}${Math.abs(value).toLocaleString('es-AR', {
+    maximumFractionDigits: 1,
+  })}`;
+};
+
+const formatSignedPercent = (value: number): string => {
+  if (value === 0) return '0%';
+
+  return `${value > 0 ? '+' : '-'}${Math.abs(value).toLocaleString('es-AR', {
+    maximumFractionDigits: 1,
+  })}%`;
+};
 
 const toIsoDate = (date: Date): string => {
   const year = date.getFullYear();
@@ -602,6 +647,164 @@ const buildTotals = (orders: DashboardOrder[]): DashboardTotals => {
   };
 };
 
+const getPreviousEquivalentRange = ({
+  startDate,
+  endDate,
+}: DashboardWeekRange): DashboardWeekRange => {
+  const start = parseIsoDate(startDate);
+  const end = parseIsoDate(endDate);
+  const dayCount = Math.max(
+    1,
+    Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+  );
+  const previousEnd = addDays(start, -1);
+  const previousStart = addDays(previousEnd, -(dayCount - 1));
+
+  return {
+    startDate: toIsoDate(previousStart),
+    endDate: toIsoDate(previousEnd),
+  };
+};
+
+const filterOrdersByRange = (
+  orders: DashboardOrder[],
+  { startDate, endDate }: DashboardWeekRange,
+): DashboardOrder[] =>
+  orders.filter((order) => order.deliveryDate >= startDate && order.deliveryDate <= endDate);
+
+const resolveDirection = (
+  difference: number,
+  preference: 'higher' | 'lower' = 'higher',
+): DashboardTrendDirection => {
+  if (difference === 0) return 'neutral';
+
+  const isPositive = preference === 'higher' ? difference > 0 : difference < 0;
+
+  return isPositive ? 'positive' : 'negative';
+};
+
+const buildKpiComparison = ({
+  currentValue,
+  previousValue,
+  label,
+  valueFormat,
+  preference = 'higher',
+}: {
+  currentValue: number;
+  previousValue: number;
+  label: string;
+  valueFormat: 'money' | 'number' | 'percent' | 'quantity';
+  preference?: 'higher' | 'lower';
+}): DashboardKpiComparison => {
+  const difference = roundMoney(currentValue - previousValue);
+  const changePercent =
+    previousValue !== 0 ? roundMoney((difference / Math.abs(previousValue)) * 100) : null;
+  const value =
+    valueFormat === 'percent' && changePercent !== null
+      ? formatSignedPercent(changePercent)
+      : valueFormat === 'number' || valueFormat === 'quantity'
+        ? formatSignedNumber(difference)
+        : formatSignedMoney(difference);
+
+  return {
+    value,
+    label,
+    direction: resolveDirection(difference, preference),
+    currentValue,
+    previousValue,
+    difference,
+    changePercent,
+  };
+};
+
+const buildNeutralKpiComparison = (
+  key: keyof Pick<
+    DashboardTotals,
+    | 'grossRevenue'
+    | 'estimatedProfit'
+    | 'orderCount'
+    | 'soldDozens'
+    | 'averageTicket'
+    | 'pendingRevenue'
+  >,
+  totals: DashboardTotals,
+): DashboardKpiComparison => ({
+  value: '—',
+  label: 'Sin comparación equivalente para Siempre',
+  direction: 'neutral',
+  currentValue: totals[key],
+  previousValue: null,
+  difference: null,
+  changePercent: null,
+});
+
+const buildKpiComparisons = ({
+  allOrders,
+  currentTotals,
+  currentRange,
+}: {
+  allOrders: DashboardOrder[];
+  currentTotals: DashboardTotals;
+  currentRange: DashboardWeekRange | null;
+}): DashboardKpiComparisons => {
+  if (!currentRange) {
+    return {
+      sales: buildNeutralKpiComparison('grossRevenue', currentTotals),
+      profit: buildNeutralKpiComparison('estimatedProfit', currentTotals),
+      orders: buildNeutralKpiComparison('orderCount', currentTotals),
+      dozens: buildNeutralKpiComparison('soldDozens', currentTotals),
+      averageTicket: buildNeutralKpiComparison('averageTicket', currentTotals),
+      pendingRevenue: buildNeutralKpiComparison('pendingRevenue', currentTotals),
+    };
+  }
+
+  const previousRange = getPreviousEquivalentRange(currentRange);
+  const previousTotals = buildTotals(filterOrdersByRange(allOrders, previousRange));
+  const label = `vs período anterior (${formatIsoDateLabel(
+    previousRange.startDate,
+  )} – ${formatIsoDateLabel(previousRange.endDate)})`;
+
+  return {
+    sales: buildKpiComparison({
+      currentValue: currentTotals.grossRevenue,
+      previousValue: previousTotals.grossRevenue,
+      label,
+      valueFormat: 'percent',
+    }),
+    profit: buildKpiComparison({
+      currentValue: currentTotals.estimatedProfit,
+      previousValue: previousTotals.estimatedProfit,
+      label,
+      valueFormat: 'percent',
+    }),
+    orders: buildKpiComparison({
+      currentValue: currentTotals.orderCount,
+      previousValue: previousTotals.orderCount,
+      label,
+      valueFormat: 'number',
+    }),
+    dozens: buildKpiComparison({
+      currentValue: currentTotals.soldDozens,
+      previousValue: previousTotals.soldDozens,
+      label,
+      valueFormat: 'quantity',
+    }),
+    averageTicket: buildKpiComparison({
+      currentValue: currentTotals.averageTicket,
+      previousValue: previousTotals.averageTicket,
+      label,
+      valueFormat: 'money',
+    }),
+    pendingRevenue: buildKpiComparison({
+      currentValue: currentTotals.pendingRevenue,
+      previousValue: previousTotals.pendingRevenue,
+      label,
+      valueFormat: 'money',
+      preference: 'lower',
+    }),
+  };
+};
+
 const buildStatusSummary = (orders: DashboardOrder[]): DashboardStatusSummary => ({
   confirmed: orders.filter((order) => order.status === 'confirmado').length,
   inProduction: 0,
@@ -792,6 +995,20 @@ export const getDailyDashboard = async (
             startDate: presetDateRanges[requestedPreset]?.startDate ?? null,
             endDate: presetDateRanges[requestedPreset]?.endDate ?? null,
           };
+  const kpiComparisonRange =
+    selectedRangeMetadata.mode === 'preset' && selectedRangeMetadata.preset === 'all'
+      ? null
+      : selectedRangeMetadata.startDate && selectedRangeMetadata.endDate
+        ? {
+            startDate: selectedRangeMetadata.startDate,
+            endDate: selectedRangeMetadata.endDate,
+          }
+        : null;
+  const kpiComparisons = buildKpiComparisons({
+    allOrders,
+    currentTotals: selectedRangeAnalytics.totals,
+    currentRange: kpiComparisonRange,
+  });
 
   const upcomingOrders = allOrders
     .filter((order) => order.deliveryDate >= todayIso && !isFinalized(order))
@@ -808,6 +1025,7 @@ export const getDailyDashboard = async (
       deliveryDate: order.deliveryDate,
       deliveryTime: order.deliveryTime,
       status: order.status,
+      isPaid: order.isPaid,
       total: order.total,
     }));
 
@@ -828,6 +1046,7 @@ export const getDailyDashboard = async (
     rangeAnalytics,
     selectedRange: selectedRangeMetadata,
     selectedRangeAnalytics,
+    kpiComparisons,
     weeklyVarietyAnalytics,
     accountingSummary,
     varietySales: {

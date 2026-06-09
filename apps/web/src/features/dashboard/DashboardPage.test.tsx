@@ -7,7 +7,13 @@ import { createQueryClient } from '@/lib/query-client';
 
 import { listFinancePurchases } from '../finance/api';
 import type { FinancePurchaseDetail } from '../finance/types';
-import { listOrders, type OrderListResponse } from '../orders/orders-api';
+import {
+  listOrders,
+  updateOrderPayment,
+  updateOrderStatus,
+  type OrderDetail,
+  type OrderListResponse,
+} from '../orders/orders-api';
 import { getDailyDashboard, type DailyDashboard } from './dashboard-api';
 import { DashboardPage } from './DashboardPage';
 
@@ -26,6 +32,8 @@ vi.mock('../finance/hooks/useFinanceAssumptions', () => ({
 
 vi.mock('../orders/orders-api', () => ({
   listOrders: vi.fn(),
+  updateOrderPayment: vi.fn(),
+  updateOrderStatus: vi.fn(),
 }));
 
 vi.mock('./dashboard-api', () => ({
@@ -233,6 +241,62 @@ const dashboardResponse: DailyDashboard = {
     recentOrders: [],
     chartDays,
   },
+  kpiComparisons: {
+    sales: {
+      value: '+26,7%',
+      label: 'vs período anterior real',
+      direction: 'positive',
+      currentValue: 185000,
+      previousValue: 146000,
+      difference: 39000,
+      changePercent: 26.7,
+    },
+    profit: {
+      value: '+$11.200',
+      label: 'vs período anterior real',
+      direction: 'positive',
+      currentValue: 54500,
+      previousValue: 43300,
+      difference: 11200,
+      changePercent: 25.9,
+    },
+    orders: {
+      value: '+4',
+      label: 'vs período anterior real',
+      direction: 'positive',
+      currentValue: 13,
+      previousValue: 9,
+      difference: 4,
+      changePercent: 44.4,
+    },
+    dozens: {
+      value: '+3,5',
+      label: 'vs período anterior real',
+      direction: 'positive',
+      currentValue: 17,
+      previousValue: 13.5,
+      difference: 3.5,
+      changePercent: 25.9,
+    },
+    averageTicket: {
+      value: '-$820',
+      label: 'vs período anterior real',
+      direction: 'negative',
+      currentValue: 14230,
+      previousValue: 15050,
+      difference: -820,
+      changePercent: -5.4,
+    },
+    pendingRevenue: {
+      value: '+$7.500',
+      label: 'vs período anterior real',
+      direction: 'negative',
+      currentValue: 32000,
+      previousValue: 24500,
+      difference: 7500,
+      changePercent: 30.6,
+    },
+  },
   accountingSummary: {
     servicePercent: 25,
     totals: {
@@ -374,6 +438,18 @@ const ordersResponse: OrderListResponse = {
   stats: { active: 2, finalized: 0 },
 };
 
+const orderDetailFromListItem = (index: number): OrderDetail => {
+  const order = ordersResponse.orders[index];
+
+  if (!order) throw new Error(`Missing order fixture at index ${index}`);
+
+  return {
+    ...order,
+    addons: [],
+    items: order.items ?? [],
+  };
+};
+
 const renderDashboardPage = () => {
   const queryClient = createQueryClient();
 
@@ -391,6 +467,14 @@ describe('DashboardPage', () => {
     vi.resetAllMocks();
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
     vi.mocked(listOrders).mockResolvedValue(ordersResponse);
+    vi.mocked(updateOrderPayment).mockResolvedValue({
+      ...orderDetailFromListItem(0),
+      isPaid: true,
+    });
+    vi.mocked(updateOrderStatus).mockResolvedValue({
+      ...orderDetailFromListItem(0),
+      status: 'preparado',
+    });
     vi.mocked(listFinancePurchases).mockResolvedValue(financePurchases);
   });
 
@@ -409,14 +493,16 @@ describe('DashboardPage', () => {
 
     expect(screen.getByText('Ventas del período')).toBeInTheDocument();
     expect(screen.getByText('$185.000')).toBeInTheDocument();
+    expect(await screen.findByText('+26,7%')).toBeInTheDocument();
+    expect(screen.getAllByText(/vs período anterior real/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText('+12,4%')).not.toBeInTheDocument();
     expect(screen.getByText('Ganancia estimada')).toBeInTheDocument();
     expect(screen.getAllByText('$54.500').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pendiente de cobro').length).toBeGreaterThan(0);
 
+    expect(await screen.findByRole('region', { name: /alertas críticas/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /agenda inmediata/i })).toBeInTheDocument();
     expect(screen.getAllByText(/maría gómez/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: /qué hay que producir/i })).toBeInTheDocument();
-    expect(screen.getByText(/salteña/i)).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: /dinero asignado/i })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: /top clientes/i })).toBeInTheDocument();
     expect(
@@ -426,16 +512,29 @@ describe('DashboardPage', () => {
       await screen.findByRole('heading', { name: /desempeño por variedad/i }),
     ).toBeInTheDocument();
     expect(
-      await screen.findByRole('heading', { name: /seguimiento secundario/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole('heading', { name: /qué hay que producir/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /resumen general/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /seguimiento secundario/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it('groups range controls and commercial analytics without the weekly calendar', async () => {
+  it('keeps the header compact and moves filters to KPI and commercial sections', async () => {
     renderDashboardPage();
 
-    expect(await screen.findByRole('group', { name: /presets rápidos/i })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /rango manual/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/fecha de referencia/i)).toBeInTheDocument();
+    const header = await screen.findByRole('banner');
+    expect(
+      within(header).queryByRole('group', { name: /presets rápidos/i }),
+    ).not.toBeInTheDocument();
+    expect(within(header).queryByRole('group', { name: /rango manual/i })).not.toBeInTheDocument();
+    expect(within(header).queryByLabelText(/fecha de referencia/i)).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole('group', { name: /filtro general del dashboard/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /filtro de indicadores/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /filtro comercial/i })).toBeInTheDocument();
 
     const commercialAnalytics = await screen.findByRole('region', {
       name: /analítica comercial/i,
@@ -472,71 +571,142 @@ describe('DashboardPage', () => {
     expect(wallets.queryByText('$118.500')).not.toBeInTheDocument();
   });
 
-  it('shows a readable general chart with purchases instead of the old profit toggle', async () => {
+  it('syncs general and section filters while preserving sibling section overrides', async () => {
     renderDashboardPage();
 
-    const generalSummary = await screen.findByRole('region', { name: /resumen general/i });
-
-    expect(
-      within(generalSummary).getByRole('heading', { name: /resumen general/i }),
-    ).toBeInTheDocument();
-    expect(within(generalSummary).getByRole('button', { name: /ventas/i })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(within(generalSummary).getByRole('button', { name: /compras/i })).toBeInTheDocument();
-    expect(
-      within(generalSummary).queryByRole('button', { name: /ganancias/i }),
-    ).not.toBeInTheDocument();
-    expect(await within(generalSummary).findByText('$38.000')).toBeInTheDocument();
-    expect(within(generalSummary).getByText('$0')).toBeInTheDocument();
-
-    fireEvent.click(within(generalSummary).getByRole('button', { name: /compras/i }));
-
-    expect(within(generalSummary).getByRole('button', { name: /compras/i })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(await within(generalSummary).findByText(/compras registradas/i)).toHaveTextContent(
-      '$18.000',
-    );
-    expect(within(generalSummary).getByText('$12.000')).toBeInTheDocument();
-    expect(within(generalSummary).queryByText('$9.990')).not.toBeInTheDocument();
-  });
-
-  it('requests custom range analytics with explicit from and to dates', async () => {
-    renderDashboardPage();
-
-    fireEvent.click(await screen.findByRole('button', { name: /rango personalizado/i }));
-    fireEvent.change(screen.getByLabelText(/desde/i), { target: { value: '2026-05-01' } });
-    fireEvent.change(screen.getByLabelText(/hasta/i), { target: { value: '2026-05-15' } });
-
-    await waitFor(() => {
-      expect(getDailyDashboard).toHaveBeenLastCalledWith({
-        date: expect.any(String),
-        analyticsMode: 'custom',
-        startDate: '2026-05-01',
-        endDate: '2026-05-15',
-      });
+    const generalFilter = await screen.findByRole('group', {
+      name: /filtro general del dashboard/i,
     });
-  });
+    const kpiFilter = screen.getByRole('group', { name: /filtro de indicadores/i });
+    const commercialFilter = screen.getByRole('group', { name: /filtro comercial/i });
 
-  it('reloads the dashboard for the selected day filter and date', async () => {
-    renderDashboardPage();
+    expect(within(generalFilter).getByRole('button', { name: /semana/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(kpiFilter).getByRole('button', { name: /semana/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(commercialFilter).getByRole('button', { name: /semana/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
-    fireEvent.click(await screen.findByRole('button', { name: /^hoy$/i }));
+    fireEvent.click(within(commercialFilter).getByRole('button', { name: /mes/i }));
+
+    expect(within(generalFilter).getByRole('button', { name: /personalizado/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(kpiFilter).getByRole('button', { name: /semana/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(commercialFilter).getByRole('button', { name: /mes/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
     fireEvent.change(screen.getByLabelText(/fecha de referencia/i), {
       target: { value: '2026-05-07' },
     });
+    fireEvent.click(within(generalFilter).getByRole('button', { name: /siempre/i }));
+
+    expect(within(generalFilter).getByRole('button', { name: /siempre/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(kpiFilter).getByRole('button', { name: /siempre/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(commercialFilter).getByRole('button', { name: /siempre/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     await waitFor(() => {
-      expect(getDailyDashboard).toHaveBeenLastCalledWith({
+      expect(getDailyDashboard).toHaveBeenCalledWith({
         date: '2026-05-07',
-        analyticsMode: 'custom',
-        startDate: '2026-05-07',
-        endDate: '2026-05-07',
+        analyticsMode: 'preset',
+        preset: 'all',
       });
     });
+  });
+
+  it('runs agenda actions and refreshes dashboard/order queries', async () => {
+    renderDashboardPage();
+
+    const agendaHeading = await screen.findByRole('heading', { name: /agenda inmediata/i });
+    const agendaSection = agendaHeading.closest('section');
+    expect(agendaSection).not.toBeNull();
+    const agenda = within(agendaSection!);
+    await waitFor(() => {
+      expect(agenda.getAllByRole('link', { name: /^ver pedido$/i })[0]).toHaveAttribute(
+        'href',
+        '/orders?orderId=order-1043',
+      );
+    });
+    const dashboardCallsBeforeAction = vi.mocked(getDailyDashboard).mock.calls.length;
+    const orderCallsBeforeAction = vi.mocked(listOrders).mock.calls.length;
+
+    const markPaidButton = agenda.getByRole('button', {
+      name: /marcar pagado.*maría gómez.*#1043/i,
+    });
+
+    fireEvent.click(markPaidButton);
+
+    await waitFor(() => {
+      expect(updateOrderPayment).toHaveBeenCalledWith('order-1043', true);
+    });
+    await waitFor(() => {
+      expect(vi.mocked(getDailyDashboard).mock.calls.length).toBeGreaterThan(
+        dashboardCallsBeforeAction,
+      );
+      expect(vi.mocked(listOrders).mock.calls.length).toBeGreaterThan(orderCallsBeforeAction);
+    });
+
+    fireEvent.click(
+      agenda.getByRole('button', { name: /marcar preparado.*maría gómez.*#1043/i }),
+    );
+
+    await waitFor(() => {
+      expect(updateOrderStatus).toHaveBeenCalledWith('order-1043', 'preparado');
+    });
+  });
+
+  it('keeps paid state in dashboard upcoming fallback while orders are loading', async () => {
+    vi.mocked(listOrders).mockReturnValue(new Promise<OrderListResponse>(() => undefined));
+    vi.mocked(getDailyDashboard).mockResolvedValue({
+      ...dashboardResponse,
+      upcomingOrders: [
+        {
+          id: 'order-1044',
+          customerName: 'Juan Pérez',
+          deliveryDate: '2026-06-05',
+          deliveryTime: 'noche',
+          status: 'confirmado',
+          isPaid: true,
+          total: 24000,
+        },
+      ],
+    });
+
+    renderDashboardPage();
+
+    const agendaHeading = await screen.findByRole('heading', { name: /agenda inmediata/i });
+    const agendaSection = agendaHeading.closest('section');
+    expect(agendaSection).not.toBeNull();
+    const agenda = within(agendaSection!);
+
+    expect(await agenda.findByText('Pagado')).toBeInTheDocument();
+    expect(
+      agenda.queryByRole('button', { name: /marcar pagado.*juan pérez.*#1044/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      agenda.getByRole('button', { name: /marcar preparado.*juan pérez.*#1044/i }),
+    ).toBeInTheDocument();
   });
 
   it('shows empty states when real data exists but the period has no activity', async () => {
@@ -571,7 +741,6 @@ describe('DashboardPage', () => {
     renderDashboardPage();
 
     expect(await screen.findByText(/no hay pedidos próximos/i)).toBeInTheDocument();
-    expect(screen.getByText(/no hay producción pendiente/i)).toBeInTheDocument();
     expect(screen.getAllByText(/no hay ventas en el período/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/no hay clientes para este período/i)).toBeInTheDocument();
   });

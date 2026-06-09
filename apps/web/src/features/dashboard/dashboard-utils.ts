@@ -1,13 +1,10 @@
 import { type ComponentType } from 'react';
 
-import {
-  getBusinessDateIso,
-  type DeliveryTime,
-  type OrderStatus,
-} from '@te-pinta/shared';
+import { getBusinessDateIso, type DeliveryTime, type OrderStatus } from '@te-pinta/shared';
 
 import type {
   DashboardCalendarDay,
+  DashboardKpiComparison,
   DashboardTotals,
   DashboardTopClient,
   DashboardTopVariety,
@@ -24,7 +21,6 @@ import {
   type DashboardPaymentStatus,
   type DashboardProductionStatus,
   type DashboardProductionSummary,
-  type DashboardTrendDirection,
   type DashboardUrgency,
   type DashboardVarietySale,
   type DashboardWeeklySale,
@@ -33,7 +29,7 @@ import type { OrderListItem } from '../orders/orders-api';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type DashboardPeriod = 'today' | 'week' | 'month' | 'custom';
+export type DashboardPeriod = 'week' | 'month' | 'all' | 'custom';
 
 export type PeriodRange = {
   startDate: string;
@@ -44,6 +40,8 @@ export type PeriodRange = {
 export type DashboardOrderCard = Omit<DashboardMockOrder, 'dozens'> & {
   dozens: number | null;
   href: string;
+  isPaid: boolean;
+  status: OrderStatus;
 };
 
 export type KpiCardData = {
@@ -51,11 +49,7 @@ export type KpiCardData = {
   title: string;
   value: string;
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
-  comparison: {
-    value: string;
-    label: string;
-    direction: DashboardTrendDirection;
-  };
+  comparison: DashboardKpiComparison;
   accent: 'primary' | 'success' | 'warning' | 'danger' | 'olive' | 'neutral';
   helpText?: string;
 };
@@ -118,10 +112,10 @@ export const productionStatusByOrderStatus: Record<OrderStatus, DashboardProduct
 };
 
 export const periodOptions: Array<{ value: DashboardPeriod; label: string }> = [
-  { value: 'today', label: 'Hoy' },
-  { value: 'week', label: 'Esta semana' },
-  { value: 'month', label: 'Mes actual' },
-  { value: 'custom', label: 'Rango personalizado' },
+  { value: 'week', label: 'Semana' },
+  { value: 'month', label: 'Mes' },
+  { value: 'all', label: 'Siempre' },
+  { value: 'custom', label: 'Personalizado' },
 ];
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────
@@ -218,7 +212,18 @@ export const getPeriodRange = (
     };
   }
 
-  return { startDate: baseDate, endDate: baseDate, label: `Hoy · ${formatCompactDate(baseDate)}` };
+  if (period === 'all') {
+    return { startDate: baseDate, endDate: baseDate, label: 'Siempre' };
+  }
+
+  const startDate = toIsoDate(startOfMondayWeek(date));
+  const endDate = toIsoDate(addLocalDays(parseLocalDate(startDate), 6));
+
+  return {
+    startDate,
+    endDate,
+    label: `Semana · ${formatCompactDate(startDate)} al ${formatCompactDate(endDate)}`,
+  };
 };
 
 export const getRelativeDeliveryLabel = (
@@ -411,7 +416,10 @@ export const buildDashboardWallets = ({
 
 // ── Mappers ────────────────────────────────────────────────────────────────────
 
-export const mapOrderToCard = (order: OrderListItem, referenceDate: string): DashboardOrderCard => ({
+export const mapOrderToCard = (
+  order: OrderListItem,
+  referenceDate: string,
+): DashboardOrderCard => ({
   id: order.id,
   customerName: order.customer.name,
   deliveryDate: order.deliveryDate,
@@ -422,11 +430,15 @@ export const mapOrderToCard = (order: OrderListItem, referenceDate: string): Das
   productionStatus: productionStatusByOrderStatus[order.status],
   urgency: getUrgency(order.deliveryDate, referenceDate),
   href: `/orders?orderId=${encodeURIComponent(order.id)}`,
+  isPaid: order.isPaid,
+  status: order.status,
 });
 
 export const mapMockOrderToCard = (order: DashboardMockOrder): DashboardOrderCard => ({
   ...order,
   href: `/orders?orderId=${encodeURIComponent(order.id)}`,
+  isPaid: order.paymentStatus === 'Pagado',
+  status: order.productionStatus === 'Producido' ? 'preparado' : 'confirmado',
 });
 
 // ── Builders ───────────────────────────────────────────────────────────────────

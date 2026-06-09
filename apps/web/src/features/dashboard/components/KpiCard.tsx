@@ -3,7 +3,7 @@ import { Info, TrendingDown, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
-import type { DashboardTrendDirection } from '../dashboard.mock';
+import type { DashboardTrendDirection } from '../dashboard-api';
 import type { KpiCardData } from '../dashboard-utils';
 
 const trendClasses: Record<DashboardTrendDirection, string> = {

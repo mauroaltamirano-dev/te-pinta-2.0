@@ -41,6 +41,7 @@ export type DashboardUpcomingOrder = {
   deliveryDate: string;
   deliveryTime: DeliveryTime;
   status: OrderStatus;
+  isPaid: boolean;
   total: number;
 };
 
@@ -84,6 +85,27 @@ export type DashboardTotals = {
   totalUnits: number;
   soldDozens: number;
   averageTicket: number;
+};
+
+export type DashboardTrendDirection = 'positive' | 'negative' | 'neutral';
+
+export type DashboardKpiComparison = {
+  value: string;
+  label: string;
+  direction: DashboardTrendDirection;
+  currentValue: number;
+  previousValue: number | null;
+  difference: number | null;
+  changePercent: number | null;
+};
+
+export type DashboardKpiComparisons = {
+  sales: DashboardKpiComparison;
+  profit: DashboardKpiComparison;
+  orders: DashboardKpiComparison;
+  dozens: DashboardKpiComparison;
+  averageTicket: DashboardKpiComparison;
+  pendingRevenue: DashboardKpiComparison;
 };
 
 export type DashboardWalletStatus = 'correct' | 'low' | 'critical';
@@ -155,6 +177,7 @@ export type DailyDashboard = {
   rangeAnalytics?: Record<DashboardRange, DashboardRangeAnalytics>;
   selectedRange?: DashboardSelectedRange;
   selectedRangeAnalytics?: DashboardRangeAnalytics;
+  kpiComparisons?: DashboardKpiComparisons;
   weeklyVarietyAnalytics?: DashboardWeeklyVarietyAnalytics;
   accountingSummary?: DashboardAccountingSummary;
   varietySales: {

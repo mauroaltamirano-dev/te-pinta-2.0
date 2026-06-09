@@ -184,6 +184,27 @@ describe('dashboard service', () => {
     expect(result.upcomingOrders).toHaveLength(1);
   });
 
+  it('includes payment state in upcoming orders for dashboard fallback rendering', async () => {
+    const testRepository = repository([
+      order({
+        id: 'paid-active-order',
+        deliveryDate: '2026-05-30',
+        status: 'confirmado',
+        isPaid: true,
+      }),
+    ]);
+
+    const result = await getDailyDashboard(
+      { date: '2026-05-30' },
+      testRepository,
+      () => new Date('2026-05-30T12:00:00.000Z'),
+    );
+
+    expect(result.upcomingOrders).toEqual([
+      expect.objectContaining({ id: 'paid-active-order', isPaid: true }),
+    ]);
+  });
+
   it('builds preset range analytics anchored to the selected date', async () => {
     const testRepository = repository([
       order({
@@ -523,5 +544,115 @@ describe('dashboard service', () => {
       { id: 'services', amount: 1_600 },
       { id: 'profit', amount: 6_400 },
     ]);
+  });
+
+  it('builds KPI comparisons from the previous equivalent period', async () => {
+    const testRepository = repository([
+      order({
+        id: 'current-large',
+        deliveryDate: '2026-06-04',
+        total: 30_000,
+        costTotalCents: 18_000_00,
+        isPaid: true,
+        items: [item({ quantity: 24 })],
+      }),
+      order({
+        id: 'current-pending',
+        deliveryDate: '2026-06-05',
+        total: 10_000,
+        costTotalCents: 4_000_00,
+        isPaid: false,
+        items: [item({ quantity: 12 })],
+      }),
+      order({
+        id: 'previous-paid',
+        deliveryDate: '2026-05-29',
+        total: 20_000,
+        costTotalCents: 12_000_00,
+        isPaid: true,
+        items: [item({ quantity: 12 })],
+      }),
+    ]);
+
+    const result = await getDailyDashboard(
+      {
+        date: '2026-06-07',
+        analyticsMode: 'custom',
+        startDate: '2026-06-01',
+        endDate: '2026-06-07',
+      },
+      testRepository,
+      () => new Date('2026-06-07T12:00:00.000Z'),
+    );
+
+    expect(result.kpiComparisons.sales).toMatchObject({
+      value: '+100%',
+      label: 'vs período anterior (25/05/2026 – 31/05/2026)',
+      direction: 'positive',
+      currentValue: 40_000,
+      previousValue: 20_000,
+      difference: 20_000,
+      changePercent: 100,
+    });
+    expect(result.kpiComparisons.profit).toMatchObject({
+      value: '+125%',
+      direction: 'positive',
+      currentValue: 18_000,
+      previousValue: 8_000,
+      difference: 10_000,
+      changePercent: 125,
+    });
+    expect(result.kpiComparisons.orders).toMatchObject({
+      value: '+1',
+      direction: 'positive',
+      currentValue: 2,
+      previousValue: 1,
+      difference: 1,
+      changePercent: 100,
+    });
+    expect(result.kpiComparisons.dozens).toMatchObject({
+      value: '+2',
+      direction: 'positive',
+      currentValue: 3,
+      previousValue: 1,
+      difference: 2,
+      changePercent: 200,
+    });
+    expect(result.kpiComparisons.averageTicket).toMatchObject({
+      value: '$0',
+      direction: 'neutral',
+      currentValue: 20_000,
+      previousValue: 20_000,
+      difference: 0,
+      changePercent: 0,
+    });
+    expect(result.kpiComparisons.pendingRevenue).toMatchObject({
+      value: '+$10.000',
+      direction: 'negative',
+      currentValue: 10_000,
+      previousValue: 0,
+      difference: 10_000,
+      changePercent: null,
+    });
+  });
+
+  it('uses neutral KPI comparisons for the all-time dashboard range', async () => {
+    const testRepository = repository([order({ id: 'paid-order', total: 20_000 })]);
+
+    const result = await getDailyDashboard(
+      { date: '2026-06-07', analyticsMode: 'preset', preset: 'all' },
+      testRepository,
+      () => new Date('2026-06-07T12:00:00.000Z'),
+    );
+
+    expect(result.kpiComparisons.sales).toMatchObject({
+      value: '—',
+      label: 'Sin comparación equivalente para Siempre',
+      direction: 'neutral',
+      currentValue: 20_000,
+      previousValue: null,
+      difference: null,
+      changePercent: null,
+    });
   });
 });

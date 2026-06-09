@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, BarChart3, ShoppingBag, Users } from 'lucide-react';
 
@@ -98,7 +98,8 @@ export const GeneralSummaryChart = ({
       eyebrow: 'Gastos',
       totalLabel: 'Compras registradas',
       emptyTitle: 'No hay compras en el período',
-      emptyDescription: 'El gráfico toma compras activas registradas en Gestión y excluye anuladas.',
+      emptyDescription:
+        'El gráfico toma compras activas registradas en Gestión y excluye anuladas.',
       toneClassName: 'bg-accent/80',
       points: purchaseSeries,
     },
@@ -123,7 +124,9 @@ export const GeneralSummaryChart = ({
                 aria-pressed={isActive}
                 className={cn(
                   'rounded-full px-3 py-2 text-xs font-black transition-colors',
-                  isActive ? 'bg-sidebar text-white shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                  isActive
+                    ? 'bg-sidebar text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
                 key={option}
                 onClick={() => setMode(option)}
@@ -339,9 +342,11 @@ const VarietyPerformancePanel = ({ varieties }: { varieties: DashboardVarietySal
 };
 
 export const CommercialAnalyticsSection = ({
+  filterControls,
   summary,
   varieties,
 }: {
+  filterControls?: ReactNode;
   summary: DashboardCustomerSummary | null;
   varieties: DashboardVarietySale[];
 }) => (
@@ -355,9 +360,7 @@ export const CommercialAnalyticsSection = ({
           Clientes, productos y desempeño
         </h2>
       </div>
-      <p className="rounded-2xl bg-muted px-3 py-2 text-xs font-black text-sidebar ring-1 ring-border/70">
-        Misma ventana de análisis, sin filtros duplicados
-      </p>
+      {filterControls}
     </div>
 
     <div className="grid gap-4 xl:grid-cols-3">
@@ -409,10 +412,7 @@ export const WeeklySalesChart = ({ weeklySales }: { weeklySales: DashboardWeekly
                   <div className="flex min-h-0 items-end">
                     <div
                       aria-label={`${day.day}: ${formatMoney(day.value)}`}
-                      className={cn(
-                        'w-full rounded-t-2xl',
-                        isPeak ? 'bg-primary' : 'bg-accent/75',
-                      )}
+                      className={cn('w-full rounded-t-2xl', isPeak ? 'bg-primary' : 'bg-accent/75')}
                       style={{ height: `${Math.max((day.value / maxValue) * 100, 8)}%` }}
                     />
                   </div>
