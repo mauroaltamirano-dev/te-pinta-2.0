@@ -1,8 +1,21 @@
 import { asc, eq } from 'drizzle-orm';
 
 import type { createDbClient } from '../../db/index';
-import { customers, menuItems, orderItems, orders } from '../../db/schema';
-import type { DashboardOrder, DashboardRepository } from './dashboard-service';
+import {
+  customers,
+  financePurchaseItems,
+  financePurchases,
+  menuItems,
+  orderItems,
+  orders,
+  settings,
+} from '../../db/schema';
+import type {
+  DashboardOrder,
+  DashboardPurchase,
+  DashboardRepository,
+  DashboardSetting,
+} from './dashboard-service';
 
 type DbClient = ReturnType<typeof createDbClient>['db'];
 
@@ -53,5 +66,51 @@ export const createDashboardRepository = (db: DbClient): DashboardRepository => 
     }
 
     return [...byOrder.values()];
+  },
+
+  async listPurchases(): Promise<DashboardPurchase[]> {
+    const rows = await db
+      .select({
+        purchase: financePurchases,
+        purchaseItem: financePurchaseItems,
+      })
+      .from(financePurchases)
+      .innerJoin(financePurchaseItems, eq(financePurchaseItems.purchaseId, financePurchases.id))
+      .orderBy(
+        asc(financePurchases.purchaseDate),
+        asc(financePurchases.id),
+        asc(financePurchaseItems.id),
+      );
+
+    const byPurchase = new Map<string, DashboardPurchase>();
+
+    for (const row of rows) {
+      const current = byPurchase.get(row.purchase.id) ?? {
+        id: row.purchase.id,
+        fundingSource: row.purchase.fundingSource,
+        canceledAt: row.purchase.canceledAt,
+        items: [],
+      };
+
+      current.items.push({
+        totalPriceCents: row.purchaseItem.totalPriceCents,
+      });
+      byPurchase.set(row.purchase.id, current);
+    }
+
+    return [...byPurchase.values()];
+  },
+
+  async getSetting(key: string): Promise<DashboardSetting | null> {
+    const [row] = await db
+      .select({
+        key: settings.key,
+        value: settings.value,
+      })
+      .from(settings)
+      .where(eq(settings.key, key))
+      .limit(1);
+
+    return row ?? null;
   },
 });

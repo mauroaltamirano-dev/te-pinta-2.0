@@ -86,6 +86,41 @@ export type DashboardTotals = {
   averageTicket: number;
 };
 
+export type DashboardWalletStatus = 'correct' | 'low' | 'critical';
+
+export type DashboardAccountingWallet = {
+  id: 'base-cost' | 'services' | 'profit';
+  title: string;
+  amount: number;
+  percent: number;
+  objectiveLabel: string;
+  differenceLabel: string;
+  status: DashboardWalletStatus;
+  progress: number;
+  description: string;
+};
+
+export type DashboardPurchaseTotals = {
+  productionCost: number;
+  services: number;
+  profit: number;
+};
+
+export type DashboardAccountingTotals = {
+  paidRevenue: number;
+  directCost: number;
+  grossProfit: number;
+  serviceReserve: number;
+  profitReserve: number;
+  purchases: DashboardPurchaseTotals;
+};
+
+export type DashboardAccountingSummary = {
+  servicePercent: number;
+  totals: DashboardAccountingTotals;
+  wallets: DashboardAccountingWallet[];
+};
+
 export type DashboardRangeAnalytics = {
   totals: DashboardTotals;
   topClients: DashboardTopClient[];
@@ -121,6 +156,7 @@ export type DailyDashboard = {
   selectedRange?: DashboardSelectedRange;
   selectedRangeAnalytics?: DashboardRangeAnalytics;
   weeklyVarietyAnalytics?: DashboardWeeklyVarietyAnalytics;
+  accountingSummary?: DashboardAccountingSummary;
   varietySales: {
     all: DashboardTopVariety[];
     last31: DashboardTopVariety[];

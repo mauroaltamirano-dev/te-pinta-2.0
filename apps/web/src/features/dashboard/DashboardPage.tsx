@@ -22,12 +22,9 @@ import {
   dashboardWeeklySalesMock,
 } from './dashboard.mock';
 import { useFinancePurchases } from '../finance/hooks';
-import { summarizePurchaseFundingSources } from '../finance/helpers/purchaseImpact';
-import { useFinanceAssumptions } from '../finance/hooks/useFinanceAssumptions';
 import { useOrders } from '../orders/orders-hooks';
 
 import {
-  buildDashboardWallets,
   buildPurchaseSpendSeries,
   buildCriticalAlerts,
   buildCustomerSummary,
@@ -90,7 +87,6 @@ export const DashboardPage = () => {
     from: periodRange.startDate,
     to: periodRange.endDate,
   });
-  const { assumptions } = useFinanceAssumptions();
   const dashboard = dashboardQuery.data;
   const selectedRangeAnalytics = dashboard?.selectedRangeAnalytics;
   const selectedTotals = selectedRangeAnalytics?.totals;
@@ -167,30 +163,13 @@ export const DashboardPage = () => {
     [dashboard?.lastSevenDays, purchasesQuery.data, selectedRangeAnalytics?.chartDays],
   );
 
-  const purchaseFundingSummary = useMemo(
-    () => summarizePurchaseFundingSources(purchasesQuery.data ?? []),
-    [purchasesQuery.data],
-  );
-
   const wallets = useMemo(() => {
-    const walletTotals = selectedTotals ?? dashboard?.totals;
-
-    if (!walletTotals || useMockDashboardData) {
+    if (useMockDashboardData) {
       return dashboardWalletsMock;
     }
 
-    return buildDashboardWallets({
-      totals: walletTotals,
-      servicePercent: assumptions.servicePercent,
-      purchaseSummary: purchaseFundingSummary,
-    });
-  }, [
-    assumptions.servicePercent,
-    dashboard?.totals,
-    purchaseFundingSummary,
-    selectedTotals,
-    useMockDashboardData,
-  ]);
+    return dashboard?.accountingSummary?.wallets ?? dashboardWalletsMock;
+  }, [dashboard?.accountingSummary?.wallets, useMockDashboardData]);
 
   const criticalAlerts = useMemo(
     () =>

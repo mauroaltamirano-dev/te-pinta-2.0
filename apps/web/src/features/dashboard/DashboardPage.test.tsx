@@ -164,7 +164,12 @@ const dashboardResponse: DailyDashboard = {
     { menuItemId: 'menu-2', name: 'Jamón y queso', quantity: 31 },
   ],
   topClients: [
-    { customerId: 'customer-1', name: 'Distribuidora San Martín', orderCount: 4, totalRevenue: 48000 },
+    {
+      customerId: 'customer-1',
+      name: 'Distribuidora San Martín',
+      orderCount: 4,
+      totalRevenue: 48000,
+    },
     { customerId: 'customer-2', name: 'María Gómez', orderCount: 2, totalRevenue: 36000 },
   ],
   upcomingOrders: [],
@@ -209,7 +214,12 @@ const dashboardResponse: DailyDashboard = {
   selectedRangeAnalytics: {
     totals,
     topClients: [
-      { customerId: 'customer-1', name: 'Distribuidora San Martín', orderCount: 4, totalRevenue: 48000 },
+      {
+        customerId: 'customer-1',
+        name: 'Distribuidora San Martín',
+        orderCount: 4,
+        totalRevenue: 48000,
+      },
       { customerId: 'customer-2', name: 'María Gómez', orderCount: 2, totalRevenue: 36000 },
       { customerId: 'customer-3', name: 'Juan Pérez', orderCount: 1, totalRevenue: 12000 },
       { customerId: 'customer-4', name: 'Sofía López', orderCount: 1, totalRevenue: 9000 },
@@ -222,6 +232,56 @@ const dashboardResponse: DailyDashboard = {
     statusSummary: { confirmed: 6, inProduction: 0, ready: 2, delivered: 5, total: 13 },
     recentOrders: [],
     chartDays,
+  },
+  accountingSummary: {
+    servicePercent: 25,
+    totals: {
+      paidRevenue: 150000,
+      directCost: 95000,
+      grossProfit: 55000,
+      serviceReserve: 13750,
+      profitReserve: 41250,
+      purchases: {
+        productionCost: 53000,
+        services: 5750,
+        profit: 8250,
+      },
+    },
+    wallets: [
+      {
+        id: 'base-cost',
+        title: 'Costo base',
+        amount: 42000,
+        percent: 63,
+        objectiveLabel: 'Reserva API: $95.000',
+        differenceLabel: 'Disponible API producción: $42.000',
+        status: 'correct',
+        progress: 44,
+        description: 'Saldo contable all-time para producción.',
+      },
+      {
+        id: 'services',
+        title: 'Servicios',
+        amount: 8000,
+        percent: 12,
+        objectiveLabel: 'Objetivo API: 25% de ganancia bruta',
+        differenceLabel: 'Disponible API servicios: $8.000',
+        status: 'correct',
+        progress: 58,
+        description: 'Saldo contable all-time para servicios.',
+      },
+      {
+        id: 'profit',
+        title: 'Ganancia',
+        amount: 33000,
+        percent: 49,
+        objectiveLabel: 'Ganancia libre API: $41.250',
+        differenceLabel: 'Disponible API ganancia: $33.000',
+        status: 'correct',
+        progress: 80,
+        description: 'Saldo contable all-time para ganancia.',
+      },
+    ],
   },
   weeklyVarietyAnalytics: {
     currentWeek: { startDate: '2026-06-01', endDate: '2026-06-07' },
@@ -256,8 +316,22 @@ const ordersResponse: OrderListResponse = {
       itemCount: 2,
       totalQuantity: 36,
       items: [
-        { id: 'item-1', menuItemId: 'menu-1', menuItemName: 'Salteña', quantity: 24, unitPrice: 1200, subtotal: 28800 },
-        { id: 'item-2', menuItemId: 'menu-2', menuItemName: 'Jamón y queso', quantity: 12, unitPrice: 1100, subtotal: 13200 },
+        {
+          id: 'item-1',
+          menuItemId: 'menu-1',
+          menuItemName: 'Salteña',
+          quantity: 24,
+          unitPrice: 1200,
+          subtotal: 28800,
+        },
+        {
+          id: 'item-2',
+          menuItemId: 'menu-2',
+          menuItemName: 'Jamón y queso',
+          quantity: 12,
+          unitPrice: 1100,
+          subtotal: 13200,
+        },
       ],
     },
     {
@@ -278,7 +352,14 @@ const ordersResponse: OrderListResponse = {
       itemCount: 1,
       totalQuantity: 24,
       items: [
-        { id: 'item-3', menuItemId: 'menu-3', menuItemName: 'Caprese', quantity: 24, unitPrice: 1000, subtotal: 24000 },
+        {
+          id: 'item-3',
+          menuItemId: 'menu-3',
+          menuItemName: 'Caprese',
+          quantity: 24,
+          unitPrice: 1000,
+          subtotal: 24000,
+        },
       ],
     },
   ],
@@ -317,7 +398,9 @@ describe('DashboardPage', () => {
     renderDashboardPage();
 
     expect(await screen.findByRole('heading', { name: /dashboard general/i })).toBeInTheDocument();
-    expect(screen.getByText(/resumen operativo y financiero del emprendimiento/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/resumen operativo y financiero del emprendimiento/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /nuevo pedido/i })).toHaveAttribute('href', '/orders');
     expect(screen.getByRole('link', { name: /registrar gasto/i })).toHaveAttribute(
       'href',
@@ -371,7 +454,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('heading', { name: /ritmo de venta/i })).not.toBeInTheDocument();
   });
 
-  it('derives internal wallets from purchase funding source and service percentage', async () => {
+  it('renders accounting wallets from the dashboard API instead of period purchase derivation', async () => {
     renderDashboardPage();
 
     const heading = await screen.findByRole('heading', { name: /dinero asignado/i });
@@ -382,10 +465,11 @@ describe('DashboardPage', () => {
     expect(wallets.getByRole('heading', { name: /costo base/i })).toBeInTheDocument();
     expect(wallets.getByRole('heading', { name: /servicios/i })).toBeInTheDocument();
     expect(wallets.getByRole('heading', { name: /ganancia/i })).toBeInTheDocument();
-    expect(await wallets.findByText('$118.500')).toBeInTheDocument();
-    expect(await wallets.findByText('$12.500')).toBeInTheDocument();
-    expect(await wallets.findByText('$36.000')).toBeInTheDocument();
-    expect(wallets.getByText(/objetivo: 10% de ventas/i)).toHaveTextContent('$18.500');
+    expect(await wallets.findByText('$42.000')).toBeInTheDocument();
+    expect(await wallets.findByText('$8.000')).toBeInTheDocument();
+    expect(await wallets.findByText('$33.000')).toBeInTheDocument();
+    expect(wallets.getByText(/objetivo api: 25% de ganancia bruta/i)).toBeInTheDocument();
+    expect(wallets.queryByText('$118.500')).not.toBeInTheDocument();
   });
 
   it('shows a readable general chart with purchases instead of the old profit toggle', async () => {
@@ -393,13 +477,17 @@ describe('DashboardPage', () => {
 
     const generalSummary = await screen.findByRole('region', { name: /resumen general/i });
 
-    expect(within(generalSummary).getByRole('heading', { name: /resumen general/i })).toBeInTheDocument();
+    expect(
+      within(generalSummary).getByRole('heading', { name: /resumen general/i }),
+    ).toBeInTheDocument();
     expect(within(generalSummary).getByRole('button', { name: /ventas/i })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
     expect(within(generalSummary).getByRole('button', { name: /compras/i })).toBeInTheDocument();
-    expect(within(generalSummary).queryByRole('button', { name: /ganancias/i })).not.toBeInTheDocument();
+    expect(
+      within(generalSummary).queryByRole('button', { name: /ganancias/i }),
+    ).not.toBeInTheDocument();
     expect(await within(generalSummary).findByText('$38.000')).toBeInTheDocument();
     expect(within(generalSummary).getByText('$0')).toBeInTheDocument();
 
@@ -409,7 +497,9 @@ describe('DashboardPage', () => {
       'aria-pressed',
       'true',
     );
-    expect(await within(generalSummary).findByText(/compras registradas/i)).toHaveTextContent('$18.000');
+    expect(await within(generalSummary).findByText(/compras registradas/i)).toHaveTextContent(
+      '$18.000',
+    );
     expect(within(generalSummary).getByText('$12.000')).toBeInTheDocument();
     expect(within(generalSummary).queryByText('$9.990')).not.toBeInTheDocument();
   });

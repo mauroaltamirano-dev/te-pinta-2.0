@@ -2,6 +2,7 @@ import {
   getBusinessDateIso,
   type DashboardQuery,
   type DeliveryTime,
+  type FinancePurchaseFundingSource,
   type OrderStatus,
 } from '@te-pinta/shared';
 
@@ -110,6 +111,57 @@ export type DashboardTotals = {
   averageTicket: number;
 };
 
+export type DashboardWalletStatus = 'correct' | 'low' | 'critical';
+
+export type DashboardAccountingWallet = {
+  id: 'base-cost' | 'services' | 'profit';
+  title: string;
+  amount: number;
+  percent: number;
+  objectiveLabel: string;
+  differenceLabel: string;
+  status: DashboardWalletStatus;
+  progress: number;
+  description: string;
+};
+
+export type DashboardPurchaseItem = {
+  totalPriceCents: number;
+};
+
+export type DashboardPurchase = {
+  id: string;
+  fundingSource: FinancePurchaseFundingSource;
+  canceledAt: Date | string | null;
+  items: DashboardPurchaseItem[];
+};
+
+export type DashboardSetting = {
+  key: string;
+  value: string;
+};
+
+export type DashboardPurchaseTotals = {
+  productionCost: number;
+  services: number;
+  profit: number;
+};
+
+export type DashboardAccountingTotals = {
+  paidRevenue: number;
+  directCost: number;
+  grossProfit: number;
+  serviceReserve: number;
+  profitReserve: number;
+  purchases: DashboardPurchaseTotals;
+};
+
+export type DashboardAccountingSummary = {
+  servicePercent: number;
+  totals: DashboardAccountingTotals;
+  wallets: DashboardAccountingWallet[];
+};
+
 export type DashboardRange = 'all' | 'last31' | 'last7';
 
 export type DashboardRangeAnalytics = {
@@ -147,6 +199,7 @@ export type DailyDashboard = {
   selectedRange: DashboardSelectedRange;
   selectedRangeAnalytics: DashboardRangeAnalytics;
   weeklyVarietyAnalytics: DashboardWeeklyVarietyAnalytics;
+  accountingSummary: DashboardAccountingSummary;
   varietySales: {
     all: DashboardTopVariety[];
     last31: DashboardTopVariety[];
@@ -157,9 +210,21 @@ export type DailyDashboard = {
 
 export type DashboardRepository = {
   listOrders(): Promise<DashboardOrder[]>;
+  listPurchases(): Promise<DashboardPurchase[]>;
+  getSetting(key: string): Promise<DashboardSetting | null>;
 };
 
+const SERVICE_PERCENT_SETTING_KEY = 'finance_dashboard_service_percent';
+const DEFAULT_SERVICE_PERCENT = 20;
+
 const roundMoney = (value: number): number => Math.round(value * 100) / 100;
+
+const moneyToCents = (value: number): number => Math.round(value * 100);
+
+const centsToMoney = (value: number): number => roundMoney(value / 100);
+
+const formatMoney = (value: number): string =>
+  `$${Math.round(value).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
 
 const toIsoDate = (date: Date): string => {
   const year = date.getFullYear();
@@ -191,9 +256,7 @@ const startOfMondayWeek = (date: Date): Date => {
 };
 
 const normalizeRange = (startDate: string, endDate: string): DashboardWeekRange =>
-  startDate <= endDate
-    ? { startDate, endDate }
-    : { startDate: endDate, endDate: startDate };
+  startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
 
 const weekRangeFromStart = (startDate: string): DashboardWeekRange => {
   const start = startOfMondayWeek(parseIsoDate(startDate));
@@ -206,20 +269,205 @@ const weekRangeFromStart = (startDate: string): DashboardWeekRange => {
 const isFinalized = (order: DashboardOrder): boolean =>
   order.status === 'entregado' && order.isPaid;
 
-const sumEstimatedCost = (orders: DashboardOrder[]): number =>
-  roundMoney(
-    orders.reduce(
-      (orderTotal, order) =>
-        orderTotal +
-        (order.costTotalCents !== undefined && order.costTotalCents !== null
-          ? order.costTotalCents / 100
-          : order.items.reduce(
-              (itemTotal, item) => itemTotal + (item.quantity / 12) * item.costPerDozen,
-              0,
-            )),
+const getOrderDirectCostCents = (order: DashboardOrder): number => {
+  if (order.costTotalCents !== undefined && order.costTotalCents !== null) {
+    return order.costTotalCents;
+  }
+
+  return moneyToCents(
+    order.items.reduce(
+      (itemTotal, item) => itemTotal + (item.quantity / 12) * item.costPerDozen,
       0,
     ),
   );
+};
+
+const sumEstimatedCost = (orders: DashboardOrder[]): number =>
+  roundMoney(
+    orders.reduce((orderTotal, order) => orderTotal + getOrderDirectCostCents(order) / 100, 0),
+  );
+
+const parseServicePercent = (setting: DashboardSetting | null): number => {
+  const value = Number(setting?.value);
+
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? value : DEFAULT_SERVICE_PERCENT;
+};
+
+const calculateWalletStatus = (amount: number, objective: number): DashboardWalletStatus => {
+  if (amount < 0) return 'critical';
+  if (objective > 0 && amount < objective * 0.2) return 'low';
+
+  return 'correct';
+};
+
+const calculateWalletProgress = (amount: number, objective: number): number => {
+  if (objective <= 0) return amount > 0 ? 100 : 0;
+
+  return Math.round((amount / objective) * 100);
+};
+
+const calculateWalletPercent = (amountCents: number, totalAssignedCents: number): number =>
+  totalAssignedCents > 0 ? Math.round((amountCents / totalAssignedCents) * 100) : 0;
+
+const reserveDifferenceLabel = (
+  amount: number,
+  positiveLabel: string,
+  negativeLabel: string,
+): string =>
+  amount < 0
+    ? `${negativeLabel}: ${formatMoney(Math.abs(amount))}`
+    : `${positiveLabel}: ${formatMoney(amount)}`;
+
+const purchaseTotalsToMoney = (
+  purchaseTotalsCents: Record<FinancePurchaseFundingSource, number>,
+): DashboardPurchaseTotals => ({
+  productionCost: centsToMoney(purchaseTotalsCents.production_cost),
+  services: centsToMoney(purchaseTotalsCents.services),
+  profit: centsToMoney(purchaseTotalsCents.profit),
+});
+
+const buildAccountingSummary = (
+  orders: DashboardOrder[],
+  purchases: DashboardPurchase[],
+  servicePercent: number,
+): DashboardAccountingSummary => {
+  const paidOrders = orders.filter((order) => order.isPaid);
+  const accountingCents = paidOrders.reduce(
+    (totals, order) => {
+      const paidRevenueCents = moneyToCents(order.total);
+      const directCostCents = getOrderDirectCostCents(order);
+      const grossProfitCents = paidRevenueCents - directCostCents;
+      const serviceReserveCents = Math.round(
+        Math.max(grossProfitCents, 0) * (servicePercent / 100),
+      );
+
+      totals.paidRevenue += paidRevenueCents;
+      totals.directCost += directCostCents;
+      totals.grossProfit += grossProfitCents;
+      totals.serviceReserve += serviceReserveCents;
+      totals.profitReserve += grossProfitCents - serviceReserveCents;
+
+      return totals;
+    },
+    {
+      paidRevenue: 0,
+      directCost: 0,
+      grossProfit: 0,
+      serviceReserve: 0,
+      profitReserve: 0,
+    },
+  );
+  const purchaseTotalsCents: Record<FinancePurchaseFundingSource, number> = {
+    production_cost: 0,
+    services: 0,
+    profit: 0,
+  };
+
+  for (const purchase of purchases) {
+    if (purchase.canceledAt) continue;
+
+    purchaseTotalsCents[purchase.fundingSource] += purchase.items.reduce(
+      (total, item) => total + item.totalPriceCents,
+      0,
+    );
+  }
+
+  const walletBalancesCents = {
+    productionCost: accountingCents.directCost - purchaseTotalsCents.production_cost,
+    services: accountingCents.serviceReserve - purchaseTotalsCents.services,
+    profit: accountingCents.profitReserve - purchaseTotalsCents.profit,
+  };
+  const totalAssignedCents =
+    accountingCents.directCost + accountingCents.serviceReserve + accountingCents.profitReserve;
+  const wallet = ({
+    id,
+    title,
+    amountCents,
+    objectiveCents,
+    objectiveLabel,
+    positiveDifferenceLabel,
+    negativeDifferenceLabel,
+    description,
+  }: {
+    id: DashboardAccountingWallet['id'];
+    title: string;
+    amountCents: number;
+    objectiveCents: number;
+    objectiveLabel: string;
+    positiveDifferenceLabel: string;
+    negativeDifferenceLabel: string;
+    description: string;
+  }): DashboardAccountingWallet => {
+    const amount = centsToMoney(amountCents);
+    const objective = centsToMoney(objectiveCents);
+
+    return {
+      id,
+      title,
+      amount,
+      percent: calculateWalletPercent(amountCents, totalAssignedCents),
+      objectiveLabel,
+      differenceLabel: reserveDifferenceLabel(
+        amount,
+        positiveDifferenceLabel,
+        negativeDifferenceLabel,
+      ),
+      status: calculateWalletStatus(amount, objective),
+      progress: calculateWalletProgress(amount, objective),
+      description,
+    };
+  };
+
+  return {
+    servicePercent,
+    totals: {
+      paidRevenue: centsToMoney(accountingCents.paidRevenue),
+      directCost: centsToMoney(accountingCents.directCost),
+      grossProfit: centsToMoney(accountingCents.grossProfit),
+      serviceReserve: centsToMoney(accountingCents.serviceReserve),
+      profitReserve: centsToMoney(accountingCents.profitReserve),
+      purchases: purchaseTotalsToMoney(purchaseTotalsCents),
+    },
+    wallets: [
+      wallet({
+        id: 'base-cost',
+        title: 'Costo base',
+        amountCents: walletBalancesCents.productionCost,
+        objectiveCents: accountingCents.directCost,
+        objectiveLabel: `Reserva estimada: ${formatMoney(
+          centsToMoney(accountingCents.directCost),
+        )}`,
+        positiveDifferenceLabel: 'Disponible para producción',
+        negativeDifferenceLabel: 'Sobregiro de producción',
+        description: 'Ventas reservadas para relleno, tapas, packaging y compras de producción.',
+      }),
+      wallet({
+        id: 'services',
+        title: 'Servicios',
+        amountCents: walletBalancesCents.services,
+        objectiveCents: accountingCents.serviceReserve,
+        objectiveLabel: `Objetivo: ${servicePercent}% de ganancia bruta (${formatMoney(
+          centsToMoney(accountingCents.serviceReserve),
+        )})`,
+        positiveDifferenceLabel: 'Disponible para servicios',
+        negativeDifferenceLabel: 'Sobregiro de servicios',
+        description: 'Reserva para luz, gas, agua, combustible, comisiones y gastos operativos.',
+      }),
+      wallet({
+        id: 'profit',
+        title: 'Ganancia',
+        amountCents: walletBalancesCents.profit,
+        objectiveCents: accountingCents.profitReserve,
+        objectiveLabel: `Ganancia libre objetivo: ${formatMoney(
+          centsToMoney(accountingCents.profitReserve),
+        )}`,
+        positiveDifferenceLabel: 'Ganancia libre disponible',
+        negativeDifferenceLabel: 'Sobregiro de ganancia',
+        description: 'Utilidad disponible luego de reservar costos, servicios y compras asignadas.',
+      }),
+    ],
+  };
+};
 
 const buildTopVarieties = (orders: DashboardOrder[]): DashboardTopVariety[] => {
   const varieties = new Map<string, DashboardTopVariety>();
@@ -385,7 +633,13 @@ export const getDailyDashboard = async (
   const currentBusinessDate = getBusinessDateIso(currentDate);
   const date = query.date ?? currentBusinessDate;
   const anchorDate = parseIsoDate(date);
-  const allOrders = await repository.listOrders();
+  const [allOrders, purchases, servicePercentSetting] = await Promise.all([
+    repository.listOrders(),
+    repository.listPurchases(),
+    repository.getSetting(SERVICE_PERCENT_SETTING_KEY),
+  ]);
+  const servicePercent = parseServicePercent(servicePercentSetting);
+  const accountingSummary = buildAccountingSummary(allOrders, purchases, servicePercent);
   const selectedDateOrders = allOrders.filter((order) => order.deliveryDate === date);
   const last31Start = toIsoDate(addDays(anchorDate, -30));
   const last7Start = toIsoDate(addDays(anchorDate, -6));
@@ -502,7 +756,8 @@ export const getDailyDashboard = async (
   const selectedRangeOrders = selectedRange
     ? allOrders.filter(
         (order) =>
-          order.deliveryDate >= selectedRange.startDate && order.deliveryDate <= selectedRange.endDate,
+          order.deliveryDate >= selectedRange.startDate &&
+          order.deliveryDate <= selectedRange.endDate,
       )
     : rangeOrders[requestedPreset];
   const selectedRangeAnalytics = selectedRange
@@ -574,6 +829,7 @@ export const getDailyDashboard = async (
     selectedRange: selectedRangeMetadata,
     selectedRangeAnalytics,
     weeklyVarietyAnalytics,
+    accountingSummary,
     varietySales: {
       all: buildTopVarieties(allOrders),
       last31: buildTopVarieties(last31Orders),
