@@ -26,7 +26,10 @@ import { PageHero } from '@/components/layout/PageHero';
 
 import type { DashboardTopVariety } from '../dashboard/dashboard-api';
 import { useDailyDashboard } from '../dashboard/dashboard-hooks';
-import { calculateBaseCostPerDozenCents } from '../finance/helpers/dashboardMath';
+import {
+  calculateBaseCostPerDozenCents,
+  calculateVarietyMetrics,
+} from '../finance/helpers/dashboardMath';
 import { useFinanceBaseCostRules, useFinanceRecipes } from '../finance/hooks';
 import type { FinanceRecipe } from '../finance/types';
 import type { MenuItem } from './menu-api';
@@ -81,8 +84,11 @@ const formatMoney = (value: number): string => moneyFormatter.format(value);
 
 type MenuFinanceMetrics = {
   costPerDozen: number;
+  directCostPerDozen: number;
   recipeCostPerDozen: number;
   baseCostPerDozen: number;
+  servicePercent: number;
+  serviceReservePerDozen: number;
   marginPerDozen: number;
   marginPercent: number;
   hasRecipe: boolean;
@@ -95,22 +101,43 @@ const buildMenuFinanceMetrics = (
   item: MenuItem,
   recipe: FinanceRecipe | undefined,
   baseCostPerDozenCents: number,
+  servicePercent: number,
 ): MenuFinanceMetrics => {
   const hasFinanceCost = Boolean(recipe);
   const recipeCostPerDozenCents = hasFinanceCost ? (recipe?.totalCostPerDozenCents ?? 0) : 0;
-  const costPerDozenCents = hasFinanceCost
+  const directCostPerDozenCents = hasFinanceCost
     ? baseCostPerDozenCents + recipeCostPerDozenCents
     : Math.round(item.costPerDozen * 100);
-  const costPerDozen = costPerDozenCents / 100;
+  const accountingMetrics = calculateVarietyMetrics({
+    id: item.id,
+    name: item.name,
+    baseCostPerDozenCents: hasFinanceCost ? baseCostPerDozenCents : 0,
+    recipeCostPerDozenCents: hasFinanceCost
+      ? recipeCostPerDozenCents
+      : directCostPerDozenCents,
+    priceDozenCents: Math.round(item.priceDozen * 100),
+    servicePercent,
+    targetMarginPercent: 0,
+    cookingFeePerDozenCents: 0,
+    deliveryFeeCents: 0,
+    hasRecipe: Boolean(recipe?.items.length),
+    warningsCount: recipe?.warnings.length ?? 0,
+  });
+  const costPerDozen = accountingMetrics.totalCostCents / 100;
+  const directCostPerDozen = accountingMetrics.directCostCents / 100;
   const recipeCostPerDozen = recipeCostPerDozenCents / 100;
   const baseCostPerDozen = hasFinanceCost ? baseCostPerDozenCents / 100 : 0;
-  const marginPerDozen = item.priceDozen - costPerDozen;
-  const marginPercent = item.priceDozen ? Math.round((marginPerDozen / item.priceDozen) * 100) : 0;
+  const serviceReservePerDozen = accountingMetrics.serviceCostCents / 100;
+  const marginPerDozen = accountingMetrics.profitCents / 100;
+  const marginPercent = accountingMetrics.marginPercent;
 
   return {
     baseCostPerDozen,
     costPerDozen,
+    directCostPerDozen,
     recipeCostPerDozen,
+    servicePercent,
+    serviceReservePerDozen,
     marginPerDozen,
     marginPercent,
     hasRecipe: Boolean(recipe?.items.length),
@@ -227,7 +254,7 @@ const MenuItemDetailAnalytics = ({
             {formatMoney(financeMetrics.marginPerDozen)}
           </p>
           <p className="mt-1 text-xs font-bold text-muted-foreground">
-            {financeMetrics.marginPercent}% sobre precio de venta.
+            {financeMetrics.marginPercent.toLocaleString('es-AR')}% sobre precio de venta.
           </p>
         </article>
       </div>
@@ -264,7 +291,7 @@ const MenuItemDetailAnalytics = ({
               {formatMoney(
                 financeMetrics.hasFinanceCost
                   ? financeMetrics.recipeCostPerDozen
-                  : financeMetrics.costPerDozen,
+                  : financeMetrics.directCostPerDozen,
               )}
             </dd>
           </div>
@@ -277,13 +304,27 @@ const MenuItemDetailAnalytics = ({
             </div>
           ) : null}
           <div className="flex items-center justify-between rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
-            <dt className="font-bold text-muted-foreground">Costo total</dt>
+            <dt className="font-bold text-muted-foreground">Costo directo</dt>
+            <dd className="font-black tabular-nums text-foreground">
+              {formatMoney(financeMetrics.directCostPerDozen)}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
+            <dt className="font-bold text-muted-foreground">
+              Reserva servicios {financeMetrics.servicePercent.toLocaleString('es-AR')}%
+            </dt>
+            <dd className="font-black tabular-nums text-foreground">
+              {formatMoney(financeMetrics.serviceReservePerDozen)}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
+            <dt className="font-bold text-muted-foreground">Costo contable</dt>
             <dd className="font-black tabular-nums text-foreground">
               {formatMoney(financeMetrics.costPerDozen)}
             </dd>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-primary/5 px-3 py-2 ring-1 ring-primary/10">
-            <dt className="font-bold text-primary">Margen real</dt>
+            <dt className="font-bold text-primary">Margen neto</dt>
             <dd className="inline-flex items-center gap-1 font-black tabular-nums text-foreground">
               {formatMoney(financeMetrics.marginPerDozen)}
               <ArrowUpRight className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
@@ -356,6 +397,7 @@ export const MenuPage = () => {
   const isSaving = createMenuItem.isPending || updateMenuItem.isPending;
   const allItems = menuItemsQuery.data ?? [];
   const editingItem = allItems.find((item) => item.id === editingItemId) ?? null;
+  const servicePercent = dashboardQuery.data?.accountingSummary?.servicePercent ?? 0;
   const baseCostPerDozenCents = useMemo(
     () => calculateBaseCostPerDozenCents(financeBaseCostRulesQuery.data ?? []),
     [financeBaseCostRulesQuery.data],
@@ -369,14 +411,19 @@ export const MenuPage = () => {
       new Map(
         allItems.map((item) => [
           item.id,
-          buildMenuFinanceMetrics(item, recipeByMenuItemId.get(item.id), baseCostPerDozenCents),
+          buildMenuFinanceMetrics(
+            item,
+            recipeByMenuItemId.get(item.id),
+            baseCostPerDozenCents,
+            servicePercent,
+          ),
         ]),
       ),
-    [allItems, baseCostPerDozenCents, recipeByMenuItemId],
+    [allItems, baseCostPerDozenCents, recipeByMenuItemId, servicePercent],
   );
   const getFinanceMetrics = (item: MenuItem): MenuFinanceMetrics =>
     financeMetricsByMenuItemId.get(item.id) ??
-    buildMenuFinanceMetrics(item, undefined, baseCostPerDozenCents);
+    buildMenuFinanceMetrics(item, undefined, baseCostPerDozenCents, servicePercent);
 
   const filteredItems = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -789,26 +836,26 @@ export const MenuPage = () => {
                             </div>
                             <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-border/60">
                               <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-                                Costo total
+                                Costo contable
                               </dt>
                               <dd className="mt-1 font-black tabular-nums text-foreground">
                                 {formatMoney(financeMetrics.costPerDozen)}
                               </dd>
                               <p className="mt-1 text-[0.7rem] font-bold text-muted-foreground">
                                 {financeMetrics.hasFinanceCost
-                                  ? `Relleno ${formatMoney(financeMetrics.recipeCostPerDozen)} + base ${formatMoney(financeMetrics.baseCostPerDozen)}`
+                                  ? `Directo ${formatMoney(financeMetrics.directCostPerDozen)} + servicios ${formatMoney(financeMetrics.serviceReservePerDozen)}`
                                   : financeMetrics.sourceLabel}
                               </p>
                             </div>
                             <div className="rounded-2xl bg-primary/5 px-3 py-2 ring-1 ring-primary/10">
                               <dt className="text-xs font-black uppercase tracking-wide text-primary">
-                                Margen
+                                Margen neto
                               </dt>
                               <dd className="mt-1 font-black tabular-nums text-foreground">
                                 {formatMoney(financeMetrics.marginPerDozen)}
                               </dd>
                               <p className="mt-1 text-[0.7rem] font-bold text-primary/80">
-                                {financeMetrics.marginPercent}%
+                                {financeMetrics.marginPercent.toLocaleString('es-AR')}%
                               </p>
                             </div>
                           </dl>

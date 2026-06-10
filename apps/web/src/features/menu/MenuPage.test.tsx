@@ -141,6 +141,22 @@ describe('MenuPage', () => {
         last7: [],
         selectedDate: [],
       },
+      accountingSummary: {
+        servicePercent: 20,
+        totals: {
+          paidRevenue: 48000,
+          directCost: 18000,
+          grossProfit: 30000,
+          serviceReserve: 6000,
+          profitReserve: 24000,
+          purchases: {
+            productionCost: 0,
+            services: 0,
+            profit: 0,
+          },
+        },
+        wallets: [],
+      },
     };
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
     vi.mocked(listFinanceBaseCostRules).mockResolvedValue([
@@ -240,10 +256,16 @@ describe('MenuPage', () => {
     ).toHaveTextContent('$ 720');
     expect(
       screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
-    ).toHaveTextContent('Costo total');
+    ).toHaveTextContent('Costo directo');
     expect(
       screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
     ).toHaveTextContent('$ 7.920');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('Costo contable');
+    expect(
+      screen.getByRole('region', { name: /detalle de variedad seleccionada/i }),
+    ).toHaveTextContent('$ 8.736');
     expect(screen.getByRole('link', { name: /ver detalle financiero/i })).toHaveAttribute(
       'href',
       '/finanzas?section=dashboard&menuItemId=menu-1',
@@ -257,6 +279,54 @@ describe('MenuPage', () => {
 
     expect(screen.getByLabelText(/variedad carne suave/i)).toBeInTheDocument();
     expect(screen.queryByText('Humita')).not.toBeInTheDocument();
+  });
+
+  it('shows service reserve, accounting cost, and net margin for recipe-backed items', async () => {
+    renderMenuPage();
+
+    const detail = await screen.findByRole('region', {
+      name: /detalle de variedad seleccionada/i,
+    });
+
+    expect(detail).toHaveTextContent('Costo directo');
+    expect(detail).toHaveTextContent('$ 7.920');
+    expect(detail).toHaveTextContent('Reserva servicios 20%');
+    expect(detail).toHaveTextContent('$ 816');
+    expect(detail).toHaveTextContent('Costo contable');
+    expect(detail).toHaveTextContent('$ 8.736');
+    expect(detail).toHaveTextContent('Margen neto');
+    expect(detail).toHaveTextContent('$ 3.264');
+    expect(detail).toHaveTextContent('27,2% sobre precio de venta.');
+  });
+
+  it('does not add service reserve when the direct cost already exceeds the sale price', async () => {
+    vi.mocked(listFinanceBaseCostRules).mockResolvedValue([]);
+    vi.mocked(listFinanceRecipes).mockResolvedValue([]);
+    vi.mocked(listMenuItems).mockResolvedValue([
+      {
+        id: 'menu-loss',
+        name: 'Variedad bajo costo',
+        priceUnit: 700,
+        priceHalfDozen: 3500,
+        priceDozen: 6000,
+        costPerDozen: 8000,
+        isActive: true,
+        isArchived: false,
+      },
+    ]);
+
+    renderMenuPage();
+
+    const detail = await screen.findByRole('region', {
+      name: /detalle de variedad seleccionada/i,
+    });
+
+    expect(detail).toHaveTextContent('Reserva servicios 20%');
+    expect(detail).toHaveTextContent('$ 0');
+    expect(detail).toHaveTextContent('Costo contable');
+    expect(detail).toHaveTextContent('$ 8.000');
+    expect(detail).toHaveTextContent('Margen neto');
+    expect(detail).toHaveTextContent('-$ 2.000');
   });
 
   it('creates a menu item from the form', async () => {

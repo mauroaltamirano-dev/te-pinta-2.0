@@ -58,7 +58,7 @@ export const MetricCard = ({
           <h3 className="text-xs font-black uppercase tracking-wide text-muted-foreground">
             {label}
           </h3>
-          <p className="mt-2 font-display text-2xl font-black text-foreground">{value}</p>
+          <p className="mt-2 text-2xl font-black tabular-nums text-foreground">{value}</p>
         </div>
         {icon && (
           <div className="rounded-2xl bg-white/75 p-2 text-primary shadow-sm" aria-hidden={true}>
