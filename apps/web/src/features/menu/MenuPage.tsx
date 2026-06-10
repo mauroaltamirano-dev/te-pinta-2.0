@@ -31,6 +31,7 @@ import {
   calculateVarietyMetrics,
 } from '../finance/helpers/dashboardMath';
 import { useFinanceBaseCostRules, useFinanceRecipes } from '../finance/hooks';
+import { useFinanceAssumptions } from '../finance/hooks/useFinanceAssumptions';
 import type { FinanceRecipe } from '../finance/types';
 import type { MenuItem } from './menu-api';
 import { useCreateMenuItem, useMenuItems, useUpdateMenuItem } from './menu-hooks';
@@ -389,6 +390,7 @@ export const MenuPage = () => {
   const itemRefs = useRef(new Map<string, HTMLElement>());
   const menuItemsQuery = useMenuItems();
   const dashboardQuery = useDailyDashboard();
+  const { assumptions } = useFinanceAssumptions();
   const financeRecipesQuery = useFinanceRecipes();
   const financeBaseCostRulesQuery = useFinanceBaseCostRules();
   const createMenuItem = useCreateMenuItem();
@@ -397,7 +399,7 @@ export const MenuPage = () => {
   const isSaving = createMenuItem.isPending || updateMenuItem.isPending;
   const allItems = menuItemsQuery.data ?? [];
   const editingItem = allItems.find((item) => item.id === editingItemId) ?? null;
-  const servicePercent = dashboardQuery.data?.accountingSummary?.servicePercent ?? 0;
+  const servicePercent = assumptions.servicePercent;
   const baseCostPerDozenCents = useMemo(
     () => calculateBaseCostPerDozenCents(financeBaseCostRulesQuery.data ?? []),
     [financeBaseCostRulesQuery.data],

@@ -7,6 +7,7 @@ import { createQueryClient } from '@/lib/query-client';
 
 import { getDailyDashboard, type DailyDashboard } from '../dashboard/dashboard-api';
 import { listFinanceBaseCostRules, listFinanceRecipes } from '../finance/api';
+import { listSettings, updateSetting } from '../settings/settings-api';
 import { MenuPage } from './MenuPage';
 import { createMenuItem, listMenuItems, updateMenuItem } from './menu-api';
 
@@ -17,6 +18,11 @@ vi.mock('../dashboard/dashboard-api', () => ({
 vi.mock('../finance/api', () => ({
   listFinanceBaseCostRules: vi.fn(),
   listFinanceRecipes: vi.fn(),
+}));
+
+vi.mock('../settings/settings-api', () => ({
+  listSettings: vi.fn(),
+  updateSetting: vi.fn(),
 }));
 
 vi.mock('./menu-api', () => ({
@@ -159,6 +165,14 @@ describe('MenuPage', () => {
       },
     };
     vi.mocked(getDailyDashboard).mockResolvedValue(dashboardResponse);
+    vi.mocked(listSettings).mockResolvedValue([
+      { key: 'finance_dashboard_service_percent', value: '20' },
+      { key: 'finance_dashboard_target_margin_percent', value: '50' },
+    ]);
+    vi.mocked(updateSetting).mockResolvedValue({
+      key: 'finance_dashboard_service_percent',
+      value: '20',
+    });
     vi.mocked(listFinanceBaseCostRules).mockResolvedValue([
       {
         id: 'base-rule-1',
@@ -297,6 +311,27 @@ describe('MenuPage', () => {
     expect(detail).toHaveTextContent('Margen neto');
     expect(detail).toHaveTextContent('$ 3.264');
     expect(detail).toHaveTextContent('27,2% sobre precio de venta.');
+  });
+
+  it('uses the global finance service percent instead of the dashboard accounting fallback', async () => {
+    vi.mocked(listSettings).mockResolvedValue([
+      { key: 'finance_dashboard_service_percent', value: '10' },
+      { key: 'finance_dashboard_target_margin_percent', value: '50' },
+    ]);
+
+    renderMenuPage();
+
+    const detail = await screen.findByRole('region', {
+      name: /detalle de variedad seleccionada/i,
+    });
+
+    expect(detail).toHaveTextContent('Reserva servicios 10%');
+    expect(detail).toHaveTextContent('$ 408');
+    expect(detail).toHaveTextContent('Costo contable');
+    expect(detail).toHaveTextContent('$ 8.328');
+    expect(detail).toHaveTextContent('Margen neto');
+    expect(detail).toHaveTextContent('$ 3.672');
+    expect(detail).not.toHaveTextContent('Reserva servicios 20%');
   });
 
   it('does not add service reserve when the direct cost already exceeds the sale price', async () => {
