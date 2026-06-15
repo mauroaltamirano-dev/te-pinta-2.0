@@ -11,6 +11,7 @@ import type {
   createFinancePurchaseItemSchema,
   createFinancePurchaseSchema,
   createFinanceStockAdjustmentSchema,
+  createFinanceWalletAdjustmentSchema,
   createIngredientSchema,
   createMenuItemSchema,
   createOrderSchema,
@@ -35,6 +36,11 @@ import type {
   financeStockFiltersSchema,
   financeStockMovementTypeSchema,
   financeSummaryQuerySchema,
+  financeWalletMovementDirectionSchema,
+  financeWalletMovementFiltersSchema,
+  financeWalletMovementSchema,
+  financeWalletMovementSourceTypeSchema,
+  financeWalletSchema,
   ingredientUnitSchema,
   orderFiltersSchema,
   orderAddonInputSchema,
@@ -59,6 +65,9 @@ export type FinanceProductCategory = z.infer<typeof financeProductCategorySchema
 export type FinanceBaseUnit = z.infer<typeof financeBaseUnitSchema>;
 export type FinancePurchaseUnit = z.infer<typeof financePurchaseUnitSchema>;
 export type FinancePurchaseFundingSource = z.infer<typeof financePurchaseFundingSourceSchema>;
+export type FinanceWallet = z.infer<typeof financeWalletSchema>;
+export type FinanceWalletMovementDirection = z.infer<typeof financeWalletMovementDirectionSchema>;
+export type FinanceWalletMovementSourceType = z.infer<typeof financeWalletMovementSourceTypeSchema>;
 export type FinanceStockMovementType = z.infer<typeof financeStockMovementTypeSchema>;
 export type FinanceManualStockMovementType = z.infer<typeof financeManualStockMovementTypeSchema>;
 export type FinanceCostComponentType = z.infer<typeof financeCostComponentTypeSchema>;
@@ -89,6 +98,11 @@ export type UpdateFinancePurchaseInput = z.infer<typeof updateFinancePurchaseSch
 export type FinancePurchaseFilters = z.infer<typeof financePurchaseFiltersSchema>;
 export type FinancePurchaseItemImpact = z.infer<typeof financePurchaseItemImpactSchema>;
 export type CancelFinancePurchaseInput = z.infer<typeof cancelFinancePurchaseSchema>;
+export type FinanceWalletMovementFilters = z.infer<typeof financeWalletMovementFiltersSchema>;
+export type FinanceWalletMovement = z.infer<typeof financeWalletMovementSchema>;
+export type CreateFinanceWalletAdjustmentInput = z.infer<
+  typeof createFinanceWalletAdjustmentSchema
+>;
 
 export type CreateFinanceBaseCostRuleInput = z.infer<typeof createFinanceBaseCostRuleSchema>;
 export type UpdateFinanceBaseCostRuleInput = z.infer<typeof updateFinanceBaseCostRuleSchema>;

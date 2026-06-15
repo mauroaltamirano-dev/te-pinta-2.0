@@ -20,7 +20,10 @@ import {
   financeRecipeItems,
   financeRecipes,
   financeStockMovements,
+  financeWalletAdjustments,
   menuItems,
+  orderItems,
+  orders,
 } from '../../db/schema';
 import type {
   FinanceCostingData,
@@ -39,12 +42,20 @@ import type {
   PersistFinanceRecipeInput,
   PersistFinanceStockMovement,
 } from './finance-service';
+import type {
+  FinanceWalletAdjustmentRecord,
+  WalletLedgerPurchaseInput,
+  WalletLedgerRepository,
+  WalletLedgerSaleInput,
+} from './wallet-ledger-service';
 
 type DbClient = ReturnType<typeof createDbClient>['db'];
 type FinanceProductRow = typeof financeProducts.$inferSelect;
 type FinancePurchaseRow = typeof financePurchases.$inferSelect;
 type FinancePurchaseItemRow = typeof financePurchaseItems.$inferSelect;
 type FinanceStockMovementRow = typeof financeStockMovements.$inferSelect;
+type FinanceWalletAdjustmentRow = typeof financeWalletAdjustments.$inferSelect;
+type FinanceWalletAdjustmentInsert = typeof financeWalletAdjustments.$inferInsert;
 type FinanceBaseCostRuleRow = typeof financeBaseCostRules.$inferSelect;
 type FinanceBaseCostRuleInsert = typeof financeBaseCostRules.$inferInsert;
 type FinanceRecipeItemRow = typeof financeRecipeItems.$inferSelect;
@@ -60,6 +71,7 @@ const requireReturnedRow = <T>(row: T | undefined): T => {
 
 const quantityToDb = (value: number): string => value.toFixed(3);
 const quantityFromDb = (value: string): number => Number(value);
+const moneyToCents = (value: number | string): number => Math.round(Number(value) * 100);
 
 const mapProduct = (row: FinanceProductRow): FinanceProduct => ({
   id: row.id,
@@ -92,6 +104,18 @@ const mapStockMovement = (row: FinanceStockMovementRow): FinanceStockMovement =>
   quantityBase: quantityFromDb(row.quantityBase),
   sourcePurchaseItemId: row.sourcePurchaseItemId,
   notes: row.notes,
+  createdAt: row.createdAt,
+});
+
+const mapWalletAdjustment = (row: FinanceWalletAdjustmentRow): FinanceWalletAdjustmentRecord => ({
+  id: row.id,
+  wallet: row.wallet,
+  direction: row.direction,
+  amountCents: row.amountCents,
+  reason: row.reason,
+  actorId: row.actorId,
+  actorName: row.actorName,
+  occurredAt: row.occurredAt,
   createdAt: row.createdAt,
 });
 
@@ -144,6 +168,20 @@ const toStockMovementValues = (
   quantityBase: quantityToDb(movement.quantityBase),
   sourcePurchaseItemId: movement.sourcePurchaseItemId,
   notes: movement.notes,
+});
+
+const toWalletAdjustmentValues = (
+  adjustment: FinanceWalletAdjustmentRecord,
+): FinanceWalletAdjustmentInsert => ({
+  id: adjustment.id,
+  wallet: adjustment.wallet,
+  direction: adjustment.direction,
+  amountCents: adjustment.amountCents,
+  reason: adjustment.reason,
+  actorId: adjustment.actorId,
+  actorName: adjustment.actorName,
+  occurredAt: adjustment.occurredAt,
+  createdAt: adjustment.createdAt,
 });
 
 const toProductUpdateValues = (
@@ -414,6 +452,60 @@ const listPurchaseDetails = async (
   );
 };
 
+const listWalletLedgerSaleInputs = async (db: DbClient): Promise<WalletLedgerSaleInput[]> => {
+  const rows = await db
+    .select({
+      order: orders,
+      item: orderItems,
+      menuItemCostPerDozen: menuItems.costPerDozen,
+    })
+    .from(orders)
+    .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .innerJoin(menuItems, eq(orderItems.menuItemId, menuItems.id))
+    .orderBy(asc(orders.deliveryDate), asc(orders.id), asc(orderItems.id));
+  const byOrder = new Map<
+    string,
+    WalletLedgerSaleInput & {
+      fallbackDirectCost: number;
+      storedDirectCostCents: number | null;
+    }
+  >();
+
+  for (const row of rows) {
+    const current = byOrder.get(row.order.id) ?? {
+      id: row.order.id,
+      isPaid: row.order.isPaid,
+      occurredAt: row.order.deliveryDate,
+      totalCents: moneyToCents(row.order.total),
+      directCostCents: 0,
+      storedDirectCostCents: row.order.costTotalCents,
+      fallbackDirectCost: 0,
+    };
+
+    current.fallbackDirectCost += (row.item.quantity / 12) * Number(row.menuItemCostPerDozen);
+    byOrder.set(row.order.id, current);
+  }
+
+  return [...byOrder.values()].map(({ fallbackDirectCost, storedDirectCostCents, ...order }) => ({
+    ...order,
+    directCostCents: storedDirectCostCents ?? moneyToCents(fallbackDirectCost),
+  }));
+};
+
+const listWalletLedgerPurchaseInputs = async (
+  db: DbClient,
+): Promise<WalletLedgerPurchaseInput[]> => {
+  const purchases = await listPurchaseDetails(db);
+
+  return purchases.map((purchase) => ({
+    id: purchase.id,
+    occurredAt: purchase.purchaseDate,
+    fundingSource: purchase.fundingSource,
+    totalPriceCents: purchase.items.reduce((total, item) => total + item.totalPriceCents, 0),
+    canceledAt: purchase.canceledAt,
+  }));
+};
+
 const getLatestCostByProduct = async (
   db: DbClient,
   productIds: string[],
@@ -575,7 +667,9 @@ const buildRecipeDetails = async (
   });
 };
 
-export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
+export const createFinanceRepository = (
+  db: DbClient,
+): FinanceRepository & WalletLedgerRepository => ({
   async listProducts(filters = {}): Promise<FinanceProductRecord[]> {
     const productRows = await listProductRows(db, filters);
     const productIds = productRows.map((row) => row.id);
@@ -942,6 +1036,34 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
         [...menuItemsById].map(([id, item]) => [id, { id: item.id, name: item.name }]),
       ),
     };
+  },
+
+  async listWalletLedgerSales(): Promise<WalletLedgerSaleInput[]> {
+    return listWalletLedgerSaleInputs(db);
+  },
+
+  async listWalletLedgerPurchases(): Promise<WalletLedgerPurchaseInput[]> {
+    return listWalletLedgerPurchaseInputs(db);
+  },
+
+  async listWalletAdjustments(): Promise<FinanceWalletAdjustmentRecord[]> {
+    const rows = await db
+      .select()
+      .from(financeWalletAdjustments)
+      .orderBy(desc(financeWalletAdjustments.occurredAt), desc(financeWalletAdjustments.id));
+
+    return rows.map(mapWalletAdjustment);
+  },
+
+  async createWalletAdjustment(
+    input: FinanceWalletAdjustmentRecord,
+  ): Promise<FinanceWalletAdjustmentRecord> {
+    const [row] = await db
+      .insert(financeWalletAdjustments)
+      .values(toWalletAdjustmentValues(input))
+      .returning();
+
+    return mapWalletAdjustment(requireReturnedRow(row));
   },
 });
 

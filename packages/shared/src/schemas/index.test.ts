@@ -7,6 +7,7 @@ import {
   createFinanceProductSchema,
   createFinancePurchaseSchema,
   createFinanceStockAdjustmentSchema,
+  createFinanceWalletAdjustmentSchema,
   createIngredientSchema,
   createMenuItemSchema,
   createOrderSchema,
@@ -18,6 +19,10 @@ import {
   financeProductCategorySchema,
   financePurchaseFundingSourceSchema,
   financePurchaseItemImpactSchema,
+  financeWalletMovementDirectionSchema,
+  financeWalletMovementFiltersSchema,
+  financeWalletMovementSchema,
+  financeWalletMovementSourceTypeSchema,
   orderStatusSchema,
   updateFinanceBaseCostRuleSchema,
   updateFinanceProductSchema,
@@ -242,6 +247,76 @@ describe('shared domain schemas', () => {
         priceDeltaPercent: null,
       }).priceDeltaPercent,
     ).toBeNull();
+  });
+
+  it('validates wallet movement filters, trace fields, positive cents, and adjustment reasons', () => {
+    expect(financeWalletMovementDirectionSchema.options).toEqual(['credit', 'debit']);
+    expect(financeWalletMovementSourceTypeSchema.options).toEqual([
+      'sale',
+      'purchase',
+      'adjustment',
+    ]);
+    expect(
+      financeWalletMovementFiltersSchema.parse({
+        wallet: 'profit',
+        direction: 'credit',
+        sourceType: 'sale',
+        sourceId: ' order-1 ',
+        from: '2026-06-01',
+        to: '2026-06-30',
+      }),
+    ).toEqual({
+      wallet: 'profit',
+      direction: 'credit',
+      sourceType: 'sale',
+      sourceId: 'order-1',
+      from: '2026-06-01',
+      to: '2026-06-30',
+    });
+    expect(financeWalletMovementFiltersSchema.safeParse({ wallet: 'base-cost' }).success).toBe(
+      false,
+    );
+    expect(financeWalletMovementFiltersSchema.safeParse({ direction: 'in' }).success).toBe(false);
+    expect(financeWalletMovementFiltersSchema.safeParse({ from: '06/01/2026' }).success).toBe(
+      false,
+    );
+
+    expect(
+      financeWalletMovementSchema.parse({
+        id: 'sale:order-1:profit',
+        wallet: 'profit',
+        direction: 'credit',
+        amountCents: 9_000,
+        signedAmountCents: 9_000,
+        sourceType: 'sale',
+        sourceId: 'order-1',
+        occurredAt: '2026-06-15',
+      }),
+    ).toMatchObject({
+      id: 'sale:order-1:profit',
+      wallet: 'profit',
+      sourceType: 'sale',
+    });
+    expect(
+      financeWalletMovementSchema.safeParse({
+        id: 'purchase:purchase-1',
+        wallet: 'services',
+        direction: 'debit',
+        amountCents: 0,
+        signedAmountCents: 0,
+        sourceType: 'purchase',
+        sourceId: 'purchase-1',
+        occurredAt: '2026-06-15',
+      }).success,
+    ).toBe(false);
+    expect(
+      createFinanceWalletAdjustmentSchema.safeParse({
+        wallet: 'services',
+        direction: 'credit',
+        amountCents: 2_500,
+        reason: '  ',
+      }).success,
+    ).toBe(false);
   });
 
   it('validates finance rules, recipes, stock adjustments, and costing previews', () => {

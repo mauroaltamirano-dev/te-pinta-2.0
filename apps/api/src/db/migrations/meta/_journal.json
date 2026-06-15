@@ -71,6 +71,13 @@
       "when": 1780676348176,
       "tag": "0009_finance_purchase_funding_source",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781558400000,
+      "tag": "0010_finance_wallet_adjustments",
+      "breakpoints": true
     }
   ]
 }

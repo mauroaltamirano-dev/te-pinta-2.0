@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -37,6 +39,10 @@ export const financePurchaseFundingSourceEnum = pgEnum('finance_purchase_funding
   'production_cost',
   'profit',
   'services',
+]);
+export const financeWalletMovementDirectionEnum = pgEnum('finance_wallet_movement_direction', [
+  'credit',
+  'debit',
 ]);
 export const financeStockMovementTypeEnum = pgEnum('finance_stock_movement_type', [
   'purchase_in',
@@ -301,5 +307,26 @@ export const financeRecipeItems = pgTable(
   (table) => [
     index('finance_recipe_items_menu_item_id_idx').on(table.menuItemId),
     index('finance_recipe_items_product_id_idx').on(table.productId),
+  ],
+);
+
+export const financeWalletAdjustments = pgTable(
+  'finance_wallet_adjustments',
+  {
+    id: id(),
+    wallet: financePurchaseFundingSourceEnum('wallet').notNull(),
+    direction: financeWalletMovementDirectionEnum('direction').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    reason: text('reason').notNull(),
+    actorId: text('actor_id').notNull(),
+    actorName: varchar('actor_name', { length: 160 }).notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('finance_wallet_adjustments_wallet_idx').on(table.wallet),
+    index('finance_wallet_adjustments_occurred_at_idx').on(table.occurredAt),
+    index('finance_wallet_adjustments_actor_id_idx').on(table.actorId),
+    check('finance_wallet_adjustments_amount_positive', sql`${table.amountCents} > 0`),
   ],
 );

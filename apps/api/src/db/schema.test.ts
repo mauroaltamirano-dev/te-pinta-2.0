@@ -13,6 +13,7 @@ import {
   financeRecipeItems,
   financeRecipes,
   financeStockMovements,
+  financeWalletAdjustments,
   ingredients,
   menuItems,
   orderItems,
@@ -40,6 +41,7 @@ describe('database schema', () => {
       getTableName(financeBaseCostRules),
       getTableName(financeRecipes),
       getTableName(financeRecipeItems),
+      getTableName(financeWalletAdjustments),
     ]).toEqual([
       'users',
       'customers',
@@ -55,6 +57,7 @@ describe('database schema', () => {
       'finance_base_cost_rules',
       'finance_recipes',
       'finance_recipe_items',
+      'finance_wallet_adjustments',
     ]);
   });
 
@@ -121,12 +124,27 @@ describe('database schema', () => {
       'utf8',
     );
 
-    expect(migration).toContain(
-      'CREATE TYPE "public"."finance_purchase_funding_source" AS ENUM',
-    );
+    expect(migration).toContain('CREATE TYPE "public"."finance_purchase_funding_source" AS ENUM');
     expect(migration).toContain(
       'ALTER TABLE "finance_purchases" ADD COLUMN "funding_source" "finance_purchase_funding_source" DEFAULT',
     );
+  });
+
+  it('adds audited finance wallet adjustments in migration 0010', async () => {
+    const migration = await readFile(
+      join(currentDir, 'migrations', '0010_finance_wallet_adjustments.sql'),
+      'utf8',
+    );
+
+    expect(migration).toContain('CREATE TYPE "public"."finance_wallet_movement_direction"');
+    expect(migration).toContain('CREATE TABLE "finance_wallet_adjustments"');
+    expect(migration).toContain('"wallet" "finance_purchase_funding_source" NOT NULL');
+    expect(migration).toContain('"reason" text NOT NULL');
+    expect(migration).toContain('"actor_id" text NOT NULL');
+    expect(migration).toContain('"amount_cents" integer NOT NULL');
+    expect(migration).toContain('CHECK ("amount_cents" > 0)');
+    expect(migration).toContain('finance_wallet_adjustments_wallet_idx');
+    expect(migration).toContain('finance_wallet_adjustments_occurred_at_idx');
   });
 
   it('registers latest migrations in the Drizzle journal', async () => {
@@ -142,27 +160,27 @@ describe('database schema', () => {
     };
 
     expect(journal.entries.at(-4)).toMatchObject({
-      idx: 6,
-      version: '7',
-      tag: '0006_finance_mvp',
-      breakpoints: true,
-    });
-    expect(journal.entries.at(-3)).toMatchObject({
       idx: 7,
       version: '7',
       tag: '0007_finance_purchase_cancellation',
       breakpoints: true,
     });
-    expect(journal.entries.at(-2)).toMatchObject({
+    expect(journal.entries.at(-3)).toMatchObject({
       idx: 8,
       version: '7',
       tag: '0008_menu_item_archival',
       breakpoints: true,
     });
-    expect(journal.entries.at(-1)).toMatchObject({
+    expect(journal.entries.at(-2)).toMatchObject({
       idx: 9,
       version: '7',
       tag: '0009_finance_purchase_funding_source',
+      breakpoints: true,
+    });
+    expect(journal.entries.at(-1)).toMatchObject({
+      idx: 10,
+      version: '7',
+      tag: '0010_finance_wallet_adjustments',
       breakpoints: true,
     });
   });

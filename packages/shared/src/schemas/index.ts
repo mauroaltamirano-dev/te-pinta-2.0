@@ -25,11 +25,10 @@ export const financeProductCategorySchema = z.enum([
 ]);
 export const financeBaseUnitSchema = z.enum(['unit', 'g', 'kg', 'ml', 'l', 'pack']);
 export const financePurchaseUnitSchema = financeBaseUnitSchema;
-export const financePurchaseFundingSourceSchema = z.enum([
-  'production_cost',
-  'profit',
-  'services',
-]);
+export const financePurchaseFundingSourceSchema = z.enum(['production_cost', 'profit', 'services']);
+export const financeWalletSchema = financePurchaseFundingSourceSchema;
+export const financeWalletMovementDirectionSchema = z.enum(['credit', 'debit']);
+export const financeWalletMovementSourceTypeSchema = z.enum(['sale', 'purchase', 'adjustment']);
 export const financeStockMovementTypeSchema = z.enum([
   'purchase_in',
   'manual_in',
@@ -208,6 +207,37 @@ export const financePurchaseFiltersSchema = z.object({
   to: z.iso.date().optional(),
   supplier: z.string().trim().optional(),
   category: financeProductCategorySchema.optional(),
+});
+
+export const financeWalletMovementFiltersSchema = z.object({
+  wallet: financeWalletSchema.optional(),
+  direction: financeWalletMovementDirectionSchema.optional(),
+  sourceType: financeWalletMovementSourceTypeSchema.optional(),
+  sourceId: trimmedString.optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+});
+
+export const financeWalletMovementSchema = z.object({
+  id: idSchema,
+  wallet: financeWalletSchema,
+  direction: financeWalletMovementDirectionSchema,
+  amountCents: positiveMoneyCentsSchema,
+  signedAmountCents: z.number().int(),
+  sourceType: financeWalletMovementSourceTypeSchema,
+  sourceId: idSchema,
+  occurredAt: trimmedString,
+  reason: trimmedString.optional(),
+  actorId: trimmedString.optional(),
+  actorName: trimmedString.optional(),
+});
+
+export const createFinanceWalletAdjustmentSchema = z.object({
+  wallet: financeWalletSchema,
+  direction: financeWalletMovementDirectionSchema,
+  amountCents: positiveMoneyCentsSchema,
+  reason: trimmedString,
+  occurredAt: trimmedString.optional(),
 });
 
 export const financePurchaseItemImpactSchema = z.object({
