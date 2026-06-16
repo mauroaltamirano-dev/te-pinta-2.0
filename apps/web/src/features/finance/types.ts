@@ -3,6 +3,7 @@ import type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
+  CreateFinanceWalletAdjustmentInput,
   CancelFinancePurchaseInput,
   FinanceBaseUnit,
   FinanceCostComponentType,
@@ -15,6 +16,11 @@ import type {
   FinanceProductFilters,
   FinancePurchaseFundingSource,
   FinancePurchaseFilters,
+  FinanceWallet,
+  FinanceWalletMovement,
+  FinanceWalletMovementDirection,
+  FinanceWalletMovementFilters,
+  FinanceWalletMovementSourceType,
   FinanceRoundingMode,
   FinanceStockFilters,
   FinancePurchaseItemImpact,
@@ -30,6 +36,7 @@ export type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
+  CreateFinanceWalletAdjustmentInput,
   CancelFinancePurchaseInput,
   FinanceBaseUnit,
   FinanceCostComponentType,
@@ -42,6 +49,11 @@ export type {
   FinanceProductFilters,
   FinancePurchaseFundingSource,
   FinancePurchaseFilters,
+  FinanceWallet,
+  FinanceWalletMovement,
+  FinanceWalletMovementDirection,
+  FinanceWalletMovementFilters,
+  FinanceWalletMovementSourceType,
   FinanceRoundingMode,
   FinanceStockFilters,
   FinancePurchaseItemImpact,
@@ -149,4 +161,9 @@ export type FinanceRecipe = {
   totalCostPerDozenCents: number;
   totalCostPerUnitCents: number;
   warnings: FinanceCostWarning[];
+};
+
+export type FinanceWalletMovementLedger = {
+  movements: FinanceWalletMovement[];
+  balances: Record<FinanceWallet, number>;
 };

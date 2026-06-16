@@ -568,6 +568,18 @@ describe('DashboardPage', () => {
     expect(await wallets.findByText('$8.000')).toBeInTheDocument();
     expect(await wallets.findByText('$33.000')).toBeInTheDocument();
     expect(wallets.getByText(/objetivo api: 25% de ganancia bruta/i)).toBeInTheDocument();
+    expect(wallets.getByRole('link', { name: /ver movimientos de costo base/i })).toHaveAttribute(
+      'href',
+      '/finanzas?section=ledger&wallet=production_cost',
+    );
+    expect(wallets.getByRole('link', { name: /ver movimientos de servicios/i })).toHaveAttribute(
+      'href',
+      '/finanzas?section=ledger&wallet=services',
+    );
+    expect(wallets.getByRole('link', { name: /ver movimientos de ganancia/i })).toHaveAttribute(
+      'href',
+      '/finanzas?section=ledger&wallet=profit',
+    );
     expect(wallets.queryByText('$118.500')).not.toBeInTheDocument();
   });
 
@@ -667,9 +679,7 @@ describe('DashboardPage', () => {
       expect(vi.mocked(listOrders).mock.calls.length).toBeGreaterThan(orderCallsBeforeAction);
     });
 
-    fireEvent.click(
-      agenda.getByRole('button', { name: /marcar preparado.*maría gómez.*#1043/i }),
-    );
+    fireEvent.click(agenda.getByRole('button', { name: /marcar preparado.*maría gómez.*#1043/i }));
 
     await waitFor(() => {
       expect(updateOrderStatus).toHaveBeenCalledWith('order-1043', 'preparado');

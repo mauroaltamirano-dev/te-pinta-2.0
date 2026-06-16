@@ -11,9 +11,15 @@ import {
   type FinanceSectionId,
 } from '../components/FinanceSectionNav';
 import { useFinanceWorkspaceData } from '../hooks/useFinanceWorkspaceData';
+import type { FinanceWallet } from '../types';
 
 const getSectionFromQuery = (section: string | null): FinanceSectionId =>
   financeSections.some((item) => item.id === section) ? (section as FinanceSectionId) : 'dashboard';
+
+const financeWallets: FinanceWallet[] = ['production_cost', 'services', 'profit'];
+
+const getWalletFromQuery = (wallet: string | null): FinanceWallet | undefined =>
+  financeWallets.includes(wallet as FinanceWallet) ? (wallet as FinanceWallet) : undefined;
 
 export const FinancePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,6 +29,8 @@ export const FinancePage = () => {
   const workspaceData = useFinanceWorkspaceData();
   const selectedRecipeMenuItemId =
     activeSection === 'recipes' ? (searchParams.get('menuItemId') ?? undefined) : undefined;
+  const selectedLedgerWallet =
+    activeSection === 'ledger' ? getWalletFromQuery(searchParams.get('wallet')) : undefined;
 
   useEffect(() => {
     const nextSection = getSectionFromQuery(searchParams.get('section'));
@@ -35,6 +43,9 @@ export const FinancePage = () => {
     nextParams.set('section', section);
     if (section !== 'recipes') {
       nextParams.delete('menuItemId');
+    }
+    if (section !== 'ledger') {
+      nextParams.delete('wallet');
     }
     setSearchParams(nextParams, { replace: true });
   };
@@ -56,6 +67,7 @@ export const FinancePage = () => {
       <FinanceLegacyWorkspace
         activeSection={activeSection}
         data={workspaceData}
+        selectedLedgerWallet={selectedLedgerWallet}
         selectedRecipeMenuItemId={selectedRecipeMenuItemId}
       />
     </div>

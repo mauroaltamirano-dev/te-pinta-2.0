@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/lib/api-client';
 
 import {
+  createFinanceWalletAdjustment,
   createFinanceBaseCostRule,
   createFinanceProduct,
   createFinancePurchase,
@@ -15,6 +16,7 @@ import {
   listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
+  listFinanceWalletMovements,
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
   updateFinanceProduct,
@@ -104,6 +106,88 @@ describe('finance api client', () => {
     });
   });
 
+  it('lists wallet movements and records audited wallet adjustments through the ledger endpoints', async () => {
+    const ledger = {
+      movements: [
+        {
+          id: 'sale:order-1:profit',
+          wallet: 'profit' as const,
+          direction: 'credit' as const,
+          amountCents: 900000,
+          signedAmountCents: 900000,
+          sourceType: 'sale' as const,
+          sourceId: 'order-1',
+          occurredAt: '2026-06-15',
+          reason: undefined,
+          actorId: undefined,
+          actorName: undefined,
+        },
+      ],
+      balances: { production_cost: 0, services: 0, profit: 900000 },
+    };
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: ledger });
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        movement: {
+          id: 'adjustment:adjustment-1',
+          wallet: 'services',
+          direction: 'debit',
+          amountCents: 250000,
+          signedAmountCents: -250000,
+          sourceType: 'adjustment',
+          sourceId: 'adjustment-1',
+          occurredAt: '2026-06-18T12:30:00.000Z',
+          reason: 'Gas bill',
+          actorId: 'admin',
+          actorName: 'Admin Te Pinta',
+        },
+      },
+    });
+
+    await expect(
+      listFinanceWalletMovements({
+        wallet: 'profit',
+        direction: 'credit',
+        sourceType: 'sale',
+        sourceId: 'order-1',
+        from: '2026-06-15',
+        to: '2026-06-15',
+      }),
+    ).resolves.toEqual(ledger);
+    await expect(
+      createFinanceWalletAdjustment({
+        wallet: 'services',
+        direction: 'debit',
+        amountCents: 250000,
+        reason: 'Gas bill',
+        occurredAt: '2026-06-18T12:30:00.000Z',
+      }),
+    ).resolves.toMatchObject({
+      wallet: 'services',
+      signedAmountCents: -250000,
+      sourceType: 'adjustment',
+      actorName: 'Admin Te Pinta',
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith('/finance/wallet-movements', {
+      params: {
+        wallet: 'profit',
+        direction: 'credit',
+        sourceType: 'sale',
+        sourceId: 'order-1',
+        from: '2026-06-15',
+        to: '2026-06-15',
+      },
+    });
+    expect(apiClient.post).toHaveBeenCalledWith('/finance/wallet-adjustments', {
+      wallet: 'services',
+      direction: 'debit',
+      amountCents: 250000,
+      reason: 'Gas bill',
+      occurredAt: '2026-06-18T12:30:00.000Z',
+    });
+  });
+
   it('manages base cost rules and recipes through finance endpoints', async () => {
     vi.mocked(apiClient.get)
       .mockResolvedValueOnce({ data: { rules: [baseCostRule] } })
@@ -186,7 +270,6 @@ describe('finance api client', () => {
     );
     expect(apiClient.delete).toHaveBeenCalledWith('/finance/base-cost-rules/rule-1');
   });
-
 
   it('updates products and loads product history through catalog endpoints', async () => {
     vi.mocked(apiClient.put).mockResolvedValueOnce({

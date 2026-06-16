@@ -5,7 +5,9 @@ import {
   createFinancePurchaseSchema,
   updateFinanceProductSchema,
   createFinanceStockAdjustmentSchema,
+  createFinanceWalletAdjustmentSchema,
   financeCostingPreviewOrderSchema,
+  financeWalletMovementFiltersSchema,
   updateFinanceBaseCostRuleSchema,
   updateFinancePurchaseSchema,
   updateFinanceRecipeSchema,
@@ -17,6 +19,7 @@ import type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
   CreateFinanceStockAdjustmentInput,
+  CreateFinanceWalletAdjustmentInput,
   CancelFinancePurchaseInput,
   CreateFinanceBaseCostRuleInput,
   FinanceCostingPreviewOrderInput,
@@ -24,6 +27,9 @@ import type {
   FinanceOrderCostBreakdown,
   FinanceProductFilters,
   FinancePurchaseFilters,
+  FinanceWalletMovement,
+  FinanceWalletMovementFilters,
+  FinanceWalletMovementLedger,
   FinanceProductWithMetrics,
   FinanceProductHistoryItem,
   FinancePurchaseDetail,
@@ -59,7 +65,6 @@ export const createFinanceProduct = async (
 
   return response.data.product;
 };
-
 
 export const updateFinanceProduct = async (
   id: string,
@@ -205,6 +210,29 @@ export const createFinanceStockAdjustment = async (
   const payload = createFinanceStockAdjustmentSchema.parse(input);
   const response = await apiClient.post<{ movement: FinanceStockMovement }>(
     '/finance/stock/adjustments',
+    payload,
+  );
+
+  return response.data.movement;
+};
+
+export const listFinanceWalletMovements = async (
+  filters: FinanceWalletMovementFilters = {},
+): Promise<FinanceWalletMovementLedger> => {
+  const params = financeWalletMovementFiltersSchema.parse(filters);
+  const response = await apiClient.get<FinanceWalletMovementLedger>('/finance/wallet-movements', {
+    params,
+  });
+
+  return response.data;
+};
+
+export const createFinanceWalletAdjustment = async (
+  input: CreateFinanceWalletAdjustmentInput,
+): Promise<FinanceWalletMovement> => {
+  const payload = createFinanceWalletAdjustmentSchema.parse(input);
+  const response = await apiClient.post<{ movement: FinanceWalletMovement }>(
+    '/finance/wallet-adjustments',
     payload,
   );
 

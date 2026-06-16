@@ -14,6 +14,7 @@ describe('FinanceSectionNav', () => {
       'dashboard',
       'catalog',
       'purchases',
+      'ledger',
       'base-costs',
       'recipes',
       'calculator',
@@ -22,6 +23,7 @@ describe('FinanceSectionNav', () => {
       'aria-selected',
       'true',
     );
+    expect(within(tablist).getByRole('tab', { name: /movimientos/i })).toBeInTheDocument();
     expect(within(tablist).queryByRole('tab', { name: /stock/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /stock/i })).not.toBeInTheDocument();
   });

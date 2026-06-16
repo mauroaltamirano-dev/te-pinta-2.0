@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { dashboardQueryKeys } from '../dashboard/dashboard-hooks';
 import type {
   CreateFinanceBaseCostRuleInput,
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
+  CreateFinanceWalletAdjustmentInput,
   CancelFinancePurchaseInput,
   FinanceCostingPreviewOrderInput,
   FinanceProductFilters,
   FinancePurchaseFilters,
+  FinanceWalletMovementFilters,
   UpdateFinanceProductInput,
   UpdateFinancePurchaseInput,
   FinanceStockFilters,
@@ -18,6 +21,7 @@ import {
   createFinanceBaseCostRule,
   createFinanceProduct,
   createFinancePurchase,
+  createFinanceWalletAdjustment,
   getFinanceProductHistory,
   createFinanceStockAdjustment,
   cancelFinancePurchase,
@@ -27,6 +31,7 @@ import {
   listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
+  listFinanceWalletMovements,
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
   updateFinanceProduct,
@@ -45,6 +50,8 @@ export const financeQueryKeys = {
   recipes: () => [...financeQueryKeys.all, 'recipes'] as const,
   purchases: (filters: FinancePurchaseFilters = {}) =>
     [...financeQueryKeys.all, 'purchases', filters] as const,
+  walletMovements: (filters: FinanceWalletMovementFilters = {}) =>
+    [...financeQueryKeys.all, 'wallet-movements', filters] as const,
 };
 
 export const useFinanceProducts = (filters: FinanceProductFilters = {}) =>
@@ -53,7 +60,6 @@ export const useFinanceProducts = (filters: FinanceProductFilters = {}) =>
     queryFn: () => listFinanceProducts(filters),
     staleTime: 20_000,
   });
-
 
 export const useFinanceProductHistory = (id: string, enabled = true) =>
   useQuery({
@@ -91,6 +97,13 @@ export const useFinancePurchases = (filters: FinancePurchaseFilters = {}) =>
     staleTime: 20_000,
   });
 
+export const useFinanceWalletMovements = (filters: FinanceWalletMovementFilters = {}) =>
+  useQuery({
+    queryKey: financeQueryKeys.walletMovements(filters),
+    queryFn: () => listFinanceWalletMovements(filters),
+    staleTime: 20_000,
+  });
+
 export const useCreateFinanceProduct = () => {
   const queryClient = useQueryClient();
 
@@ -99,7 +112,6 @@ export const useCreateFinanceProduct = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
   });
 };
-
 
 export const useUpdateFinanceProduct = () => {
   const queryClient = useQueryClient();
@@ -146,6 +158,18 @@ export const useCreateFinanceStockAdjustment = () => {
   return useMutation({
     mutationFn: createFinanceStockAdjustment,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
+  });
+};
+
+export const useCreateFinanceWalletAdjustment = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateFinanceWalletAdjustmentInput) => createFinanceWalletAdjustment(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: financeQueryKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all });
+    },
   });
 };
 

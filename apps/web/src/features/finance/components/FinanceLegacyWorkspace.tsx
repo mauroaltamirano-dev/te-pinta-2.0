@@ -10,9 +10,15 @@ import {
 import type { FinanceWorkspaceData } from '../hooks/useFinanceWorkspaceData';
 import { FinanceDashboard } from '../slices/dashboard/FinanceDashboard';
 import { FinanceCatalog } from '../slices/catalog/FinanceCatalog';
+import { FinanceWalletLedger } from '../slices/ledger/FinanceWalletLedger';
 import { FinancePurchases } from '../slices/purchases/FinancePurchases';
-import { FinanceBaseCosts, normalizeBaseCostRuleForm, type BaseCostRuleFormState } from '../slices/base-costs/FinanceBaseCosts';
+import {
+  FinanceBaseCosts,
+  normalizeBaseCostRuleForm,
+  type BaseCostRuleFormState,
+} from '../slices/base-costs/FinanceBaseCosts';
 import { FinanceRecipes, type RecipeDraftItem } from '../slices/recipes/FinanceRecipes';
+import type { FinanceWallet } from '../types';
 import type { FinanceSectionId } from './FinanceSectionNav';
 
 type CalculatorFormState = {
@@ -32,7 +38,6 @@ const initialCalculatorForm: CalculatorFormState = {
   menuItemId: '',
   quantity: '12',
 };
-
 
 const inputClassName =
   'mt-2 w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20';
@@ -81,12 +86,14 @@ const EmptyState = ({ title, description }: { title: string; description: string
 type FinanceLegacyWorkspaceProps = {
   activeSection: FinanceSectionId;
   data: FinanceWorkspaceData;
+  selectedLedgerWallet?: FinanceWallet;
   selectedRecipeMenuItemId?: string;
 };
 
 export const FinanceLegacyWorkspace = ({
   activeSection,
   data,
+  selectedLedgerWallet,
   selectedRecipeMenuItemId,
 }: FinanceLegacyWorkspaceProps) => {
   const [calculatorForm, setCalculatorForm] = useState<CalculatorFormState>(initialCalculatorForm);
@@ -97,15 +104,8 @@ export const FinanceLegacyWorkspace = ({
   const updateRecipe = useUpdateFinanceRecipe();
   const previewOrderCost = usePreviewFinanceOrderCost();
 
-  const {
-    productsQuery,
-    purchasesQuery,
-    products,
-    purchases,
-    baseCostRules,
-    recipes,
-    menuItems,
-  } = data;
+  const { productsQuery, purchasesQuery, products, purchases, baseCostRules, recipes, menuItems } =
+    data;
 
   const handleCreateBaseCostRule = (form: BaseCostRuleFormState) => {
     const normalizedForm = normalizeBaseCostRuleForm(form);
@@ -306,6 +306,10 @@ export const FinanceLegacyWorkspace = ({
             products={products}
             purchases={purchases}
           />
+        ) : null}
+
+        {activeSection === 'ledger' ? (
+          <FinanceWalletLedger initialWallet={selectedLedgerWallet} />
         ) : null}
 
         {activeSection === 'base-costs' ? (

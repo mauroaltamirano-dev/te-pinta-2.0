@@ -1,7 +1,9 @@
 import { Banknote, Wallet } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { cn } from '@/lib/utils';
 
+import type { FinanceWallet } from '../../finance/types';
 import { formatMoney } from '../dashboard-utils';
 import type { DashboardWallet, DashboardWalletStatus } from '../dashboard.mock';
 import { SectionCard, StatusBadge } from './shared';
@@ -16,6 +18,19 @@ const walletStatusClasses: Record<DashboardWalletStatus, string> = {
   correct: 'bg-emerald-50 text-emerald-800 ring-emerald-100',
   low: 'bg-amber-50 text-amber-800 ring-amber-100',
   critical: 'bg-red-50 text-red-800 ring-red-100',
+};
+
+const walletLedgerParams: Record<string, FinanceWallet> = {
+  'base-cost': 'production_cost',
+  production_cost: 'production_cost',
+  services: 'services',
+  profit: 'profit',
+};
+
+const getWalletLedgerPath = (wallet: DashboardWallet): string => {
+  const ledgerWallet = walletLedgerParams[wallet.id] ?? 'production_cost';
+
+  return `/finanzas?section=ledger&wallet=${ledgerWallet}`;
 };
 
 const WalletCard = ({ wallet }: { wallet: DashboardWallet }) => (
@@ -56,6 +71,12 @@ const WalletCard = ({ wallet }: { wallet: DashboardWallet }) => (
     <p className={cn('mt-1 text-xs font-bold', walletStatusClasses[wallet.status])}>
       {wallet.differenceLabel}
     </p>
+    <Link
+      className="mt-4 inline-flex rounded-full bg-primary/10 px-3 py-2 text-xs font-black text-primary ring-1 ring-primary/15 transition hover:bg-primary/15"
+      to={getWalletLedgerPath(wallet)}
+    >
+      Ver movimientos de {wallet.title}
+    </Link>
   </article>
 );
 

@@ -7,27 +7,34 @@ import { createQueryClient } from '@/lib/query-client';
 
 import {
   cancelFinancePurchase,
+  createFinanceWalletAdjustment,
   createFinanceProduct,
   createFinancePurchase,
   getFinanceProductHistory,
+  listFinanceWalletMovements,
   updateFinanceProduct,
   updateFinancePurchase,
 } from './api';
+import { dashboardQueryKeys } from '../dashboard/dashboard-hooks';
 import {
   financeQueryKeys,
   useCancelFinancePurchase,
+  useCreateFinanceWalletAdjustment,
   useCreateFinanceProduct,
   useCreateFinancePurchase,
   useFinanceProductHistory,
+  useFinanceWalletMovements,
   useUpdateFinanceProduct,
   useUpdateFinancePurchase,
 } from './hooks';
 
 vi.mock('./api', () => ({
   cancelFinancePurchase: vi.fn(),
+  createFinanceWalletAdjustment: vi.fn(),
   createFinanceProduct: vi.fn(),
   createFinancePurchase: vi.fn(),
   getFinanceProductHistory: vi.fn(),
+  listFinanceWalletMovements: vi.fn(),
   updateFinanceProduct: vi.fn(),
   updateFinancePurchase: vi.fn(),
 }));
@@ -64,6 +71,36 @@ describe('finance catalog hooks', () => {
 
     await waitFor(() => expect(result.current.data).toHaveLength(1));
     expect(getFinanceProductHistory).toHaveBeenCalledWith('product-1');
+  });
+
+  it('loads wallet movements with filters under a dedicated ledger query key', async () => {
+    vi.mocked(listFinanceWalletMovements).mockResolvedValueOnce({
+      movements: [
+        {
+          id: 'sale:order-1:profit',
+          wallet: 'profit',
+          direction: 'credit',
+          amountCents: 900000,
+          signedAmountCents: 900000,
+          sourceType: 'sale',
+          sourceId: 'order-1',
+          occurredAt: '2026-06-15',
+        },
+      ],
+      balances: { production_cost: 0, services: 0, profit: 900000 },
+    });
+    const { wrapper } = createWrapper();
+    const filters = { wallet: 'profit' as const, sourceType: 'sale' as const };
+
+    const { result } = renderHook(() => useFinanceWalletMovements(filters), { wrapper });
+
+    await waitFor(() => expect(result.current.data?.movements).toHaveLength(1));
+    expect(listFinanceWalletMovements).toHaveBeenCalledWith(filters);
+    expect(financeQueryKeys.walletMovements(filters)).toEqual([
+      'finance',
+      'wallet-movements',
+      filters,
+    ]);
   });
 
   it('updates products and invalidates the finance workspace queries', async () => {
@@ -220,4 +257,42 @@ describe('finance catalog hooks', () => {
     expect(invalidateSpy).toHaveBeenNthCalledWith(4, { queryKey: financeQueryKeys.all });
   });
 
+  it('invalidates finance and dashboard queries after creating a wallet adjustment', async () => {
+    vi.mocked(createFinanceWalletAdjustment).mockResolvedValueOnce({
+      id: 'adjustment:adjustment-1',
+      wallet: 'services',
+      direction: 'debit',
+      amountCents: 250000,
+      signedAmountCents: -250000,
+      sourceType: 'adjustment',
+      sourceId: 'adjustment-1',
+      occurredAt: '2026-06-18T12:30:00.000Z',
+      reason: 'Gas bill',
+      actorId: 'admin',
+      actorName: 'Admin Te Pinta',
+    });
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useCreateFinanceWalletAdjustment(), { wrapper });
+
+    result.current.mutate({
+      wallet: 'services',
+      direction: 'debit',
+      amountCents: 250000,
+      reason: 'Gas bill',
+      occurredAt: '2026-06-18T12:30:00.000Z',
+    });
+
+    await waitFor(() => expect(createFinanceWalletAdjustment).toHaveBeenCalled());
+    expect(createFinanceWalletAdjustment).toHaveBeenCalledWith({
+      wallet: 'services',
+      direction: 'debit',
+      amountCents: 250000,
+      reason: 'Gas bill',
+      occurredAt: '2026-06-18T12:30:00.000Z',
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: financeQueryKeys.all });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: dashboardQueryKeys.all });
+  });
 });

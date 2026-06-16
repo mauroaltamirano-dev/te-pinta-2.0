@@ -1,10 +1,11 @@
 import type { ComponentType } from 'react';
-import { Boxes, Calculator, Layers3, PieChart, ReceiptText, Soup } from 'lucide-react';
+import { Boxes, Calculator, Layers3, PieChart, ReceiptText, ScrollText, Soup } from 'lucide-react';
 
 export type FinanceSectionId =
   | 'dashboard'
   | 'catalog'
   | 'purchases'
+  | 'ledger'
   | 'base-costs'
   | 'recipes'
   | 'calculator';
@@ -24,6 +25,7 @@ export const financeSections: FinanceSection[] = [
   { id: 'dashboard', label: 'Dashboard', icon: PieChart },
   { id: 'catalog', label: 'Catálogo', icon: Boxes },
   { id: 'purchases', label: 'Compras', icon: ReceiptText },
+  { id: 'ledger', label: 'Movimientos', icon: ScrollText },
   { id: 'base-costs', label: 'Costos base', icon: Layers3 },
   { id: 'recipes', label: 'Recetas', icon: Soup },
   { id: 'calculator', label: 'Calculadora', icon: Calculator },
@@ -60,7 +62,7 @@ export const FinanceSectionNav = ({ activeSection, onSectionChange }: FinanceSec
 
     <div
       aria-label="Secciones de gestión"
-      className="hidden gap-2 rounded-[1.5rem] border border-border/70 bg-card p-2 shadow-card sm:grid sm:grid-cols-2 lg:grid-cols-6"
+      className="hidden gap-2 rounded-[1.5rem] border border-border/70 bg-card p-2 shadow-card sm:grid sm:grid-cols-2 lg:grid-cols-7"
       role="tablist"
     >
       {financeSections.map((section) => {
