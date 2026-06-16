@@ -5,6 +5,7 @@ export type {
   FinanceProductWithMetrics,
   FinancePurchaseDetail,
   FinanceRepository,
+  FinanceWalletMovementLedger,
   FinanceStockItem,
   FinanceStockMovement,
 } from './finance-service';

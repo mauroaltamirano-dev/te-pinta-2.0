@@ -1,10 +1,11 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 
 import type { createDbClient } from '../../db/index';
 import {
   customers,
   financePurchaseItems,
   financePurchases,
+  financeWalletAdjustments,
   menuItems,
   orderItems,
   orders,
@@ -87,6 +88,7 @@ export const createDashboardRepository = (db: DbClient): DashboardRepository => 
     for (const row of rows) {
       const current = byPurchase.get(row.purchase.id) ?? {
         id: row.purchase.id,
+        purchaseDate: row.purchase.purchaseDate,
         fundingSource: row.purchase.fundingSource,
         canceledAt: row.purchase.canceledAt,
         items: [],
@@ -99,6 +101,23 @@ export const createDashboardRepository = (db: DbClient): DashboardRepository => 
     }
 
     return [...byPurchase.values()];
+  },
+
+  async listWalletAdjustments() {
+    return db
+      .select({
+        id: financeWalletAdjustments.id,
+        wallet: financeWalletAdjustments.wallet,
+        direction: financeWalletAdjustments.direction,
+        amountCents: financeWalletAdjustments.amountCents,
+        reason: financeWalletAdjustments.reason,
+        actorId: financeWalletAdjustments.actorId,
+        actorName: financeWalletAdjustments.actorName,
+        occurredAt: financeWalletAdjustments.occurredAt,
+        createdAt: financeWalletAdjustments.createdAt,
+      })
+      .from(financeWalletAdjustments)
+      .orderBy(desc(financeWalletAdjustments.occurredAt), desc(financeWalletAdjustments.id));
   },
 
   async getSetting(key: string): Promise<DashboardSetting | null> {

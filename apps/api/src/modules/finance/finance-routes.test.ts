@@ -126,6 +126,12 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
     recipeItemsByMenuItemId: new Map(),
     menuItemsById: new Map(),
   }),
+  getSetting: async (key) =>
+    key === 'finance_dashboard_service_percent' ? { key, value: '25' } : null,
+  listWalletLedgerSales: async () => [],
+  listWalletLedgerPurchases: async () => [],
+  listWalletAdjustments: async () => [],
+  createWalletAdjustment: async (input) => input,
   ...overrides,
 });
 
@@ -147,6 +153,129 @@ describe('finance routes', () => {
 
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
+  });
+
+  it('returns filtered wallet movements with balances calculated from the visible ledger', async () => {
+    const app = createFinanceApp(
+      createRepository({
+        listWalletLedgerSales: async () => [
+          {
+            id: 'order-1',
+            isPaid: true,
+            occurredAt: '2026-06-15',
+            totalCents: 20_000,
+            directCostCents: 8_000,
+          },
+        ],
+      }),
+    );
+
+    const filteredResponse = await request(app)
+      .get('/api/v1/finance/wallet-movements')
+      .query({
+        wallet: 'profit',
+        direction: 'credit',
+        sourceType: 'sale',
+        sourceId: 'order-1',
+        from: '2026-06-15',
+        to: '2026-06-15',
+      })
+      .set('Authorization', `Bearer ${accessToken}`);
+    const emptyResponse = await request(app)
+      .get('/api/v1/finance/wallet-movements')
+      .query({ sourceId: 'missing-source' })
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(filteredResponse.status).toBe(200);
+    expect(filteredResponse.body).toMatchObject({
+      movements: [
+        {
+          id: 'sale:order-1:profit',
+          wallet: 'profit',
+          signedAmountCents: 9_000,
+          sourceType: 'sale',
+          sourceId: 'order-1',
+        },
+      ],
+      balances: { production_cost: 0, services: 0, profit: 9_000 },
+    });
+    expect(emptyResponse.status).toBe(200);
+    expect(emptyResponse.body).toEqual({
+      movements: [],
+      balances: { production_cost: 0, services: 0, profit: 0 },
+    });
+  });
+
+  it('records wallet adjustments with the authenticated actor audit fields', async () => {
+    const createWalletAdjustment = vi.fn<FinanceRepository['createWalletAdjustment']>(
+      async (input) => ({
+        ...input,
+        occurredAt: new Date('2026-06-18T12:30:00.000Z'),
+        createdAt: new Date('2026-06-18T12:31:00.000Z'),
+      }),
+    );
+    const app = createFinanceApp(createRepository({ createWalletAdjustment }));
+
+    const response = await request(app)
+      .post('/api/v1/finance/wallet-adjustments')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        wallet: 'services',
+        direction: 'debit',
+        amountCents: 2_500,
+        reason: ' Gas bill ',
+        occurredAt: '2026-06-18T12:30:00.000Z',
+      });
+    const persisted = createWalletAdjustment.mock.calls[0]?.[0];
+
+    expect(response.status).toBe(201);
+    expect(persisted).toMatchObject({
+      wallet: 'services',
+      direction: 'debit',
+      amountCents: 2_500,
+      reason: 'Gas bill',
+      actorId: 'admin',
+      actorName: 'Admin Te Pinta',
+    });
+    expect(persisted?.id).toEqual(expect.any(String));
+    expect(persisted?.occurredAt.toISOString()).toBe('2026-06-18T12:30:00.000Z');
+    expect(response.body.movement).toMatchObject({
+      id: persisted?.id,
+      wallet: 'services',
+      signedAmountCents: -2_500,
+      sourceType: 'adjustment',
+      actorId: 'admin',
+      actorName: 'Admin Te Pinta',
+    });
+    expect(createWalletAdjustment).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects impossible wallet adjustment timestamps before persisting', async () => {
+    const createWalletAdjustment = vi.fn<FinanceRepository['createWalletAdjustment']>(
+      async (input) => ({
+        ...input,
+        createdAt: new Date('2026-06-18T12:31:00.000Z'),
+      }),
+    );
+    const app = createFinanceApp(createRepository({ createWalletAdjustment }));
+
+    const response = await request(app)
+      .post('/api/v1/finance/wallet-adjustments')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        wallet: 'services',
+        direction: 'credit',
+        amountCents: 2_500,
+        reason: 'Correction',
+        occurredAt: '2026-02-31T12:30:00.000Z',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: 'Invalid wallet adjustment timestamp',
+      code: 'FINANCE_WALLET_ADJUSTMENT_INVALID_OCCURRED_AT',
+    });
+    expect(createWalletAdjustment).not.toHaveBeenCalled();
   });
 
   it('returns the standard validation error and does not persist partial purchases', async () => {

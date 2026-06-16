@@ -5,6 +5,13 @@ import {
   type FinancePurchaseFundingSource,
   type OrderStatus,
 } from '@te-pinta/shared';
+import {
+  buildWalletMovements,
+  calculateWalletBalances,
+  type FinanceWalletAdjustmentRecord,
+  type WalletLedgerPurchaseInput,
+  type WalletLedgerSaleInput,
+} from '../finance/wallet-ledger-service';
 
 export type DashboardOrderItem = {
   menuItemId: string;
@@ -153,6 +160,7 @@ export type DashboardPurchaseItem = {
 
 export type DashboardPurchase = {
   id: string;
+  purchaseDate: string;
   fundingSource: FinancePurchaseFundingSource;
   canceledAt: Date | string | null;
   items: DashboardPurchaseItem[];
@@ -234,6 +242,7 @@ export type DailyDashboard = {
 export type DashboardRepository = {
   listOrders(): Promise<DashboardOrder[]>;
   listPurchases(): Promise<DashboardPurchase[]>;
+  listWalletAdjustments(): Promise<FinanceWalletAdjustmentRecord[]>;
   getSetting(key: string): Promise<DashboardSetting | null>;
 };
 
@@ -371,9 +380,26 @@ const purchaseTotalsToMoney = (
   profit: centsToMoney(purchaseTotalsCents.profit),
 });
 
+const toWalletLedgerSale = (order: DashboardOrder): WalletLedgerSaleInput => ({
+  id: order.id,
+  isPaid: order.isPaid,
+  occurredAt: order.deliveryDate,
+  totalCents: moneyToCents(order.total),
+  directCostCents: getOrderDirectCostCents(order),
+});
+
+const toWalletLedgerPurchase = (purchase: DashboardPurchase): WalletLedgerPurchaseInput => ({
+  id: purchase.id,
+  occurredAt: purchase.purchaseDate,
+  fundingSource: purchase.fundingSource,
+  totalPriceCents: purchase.items.reduce((total, item) => total + item.totalPriceCents, 0),
+  canceledAt: purchase.canceledAt,
+});
+
 const buildAccountingSummary = (
   orders: DashboardOrder[],
   purchases: DashboardPurchase[],
+  adjustments: FinanceWalletAdjustmentRecord[],
   servicePercent: number,
 ): DashboardAccountingSummary => {
   const paidOrders = orders.filter((order) => order.isPaid);
@@ -417,11 +443,14 @@ const buildAccountingSummary = (
     );
   }
 
-  const walletBalancesCents = {
-    productionCost: accountingCents.directCost - purchaseTotalsCents.production_cost,
-    services: accountingCents.serviceReserve - purchaseTotalsCents.services,
-    profit: accountingCents.profitReserve - purchaseTotalsCents.profit,
-  };
+  const walletBalancesCents = calculateWalletBalances(
+    buildWalletMovements({
+      sales: orders.map(toWalletLedgerSale),
+      purchases: purchases.map(toWalletLedgerPurchase),
+      adjustments,
+      servicePercent,
+    }),
+  );
   const totalAssignedCents =
     accountingCents.directCost + accountingCents.serviceReserve + accountingCents.profitReserve;
   const wallet = ({
@@ -477,7 +506,7 @@ const buildAccountingSummary = (
       wallet({
         id: 'base-cost',
         title: 'Costo base',
-        amountCents: walletBalancesCents.productionCost,
+        amountCents: walletBalancesCents.production_cost,
         objectiveCents: accountingCents.directCost,
         objectiveLabel: `Reserva estimada: ${formatMoney(
           centsToMoney(accountingCents.directCost),
@@ -836,13 +865,19 @@ export const getDailyDashboard = async (
   const currentBusinessDate = getBusinessDateIso(currentDate);
   const date = query.date ?? currentBusinessDate;
   const anchorDate = parseIsoDate(date);
-  const [allOrders, purchases, servicePercentSetting] = await Promise.all([
+  const [allOrders, purchases, adjustments, servicePercentSetting] = await Promise.all([
     repository.listOrders(),
     repository.listPurchases(),
+    repository.listWalletAdjustments(),
     repository.getSetting(SERVICE_PERCENT_SETTING_KEY),
   ]);
   const servicePercent = parseServicePercent(servicePercentSetting);
-  const accountingSummary = buildAccountingSummary(allOrders, purchases, servicePercent);
+  const accountingSummary = buildAccountingSummary(
+    allOrders,
+    purchases,
+    adjustments,
+    servicePercent,
+  );
   const selectedDateOrders = allOrders.filter((order) => order.deliveryDate === date);
   const last31Start = toIsoDate(addDays(anchorDate, -30));
   const last7Start = toIsoDate(addDays(anchorDate, -6));

@@ -111,6 +111,12 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
     recipeItemsByMenuItemId: new Map(),
     menuItemsById: new Map([['menu-humita', { id: 'menu-humita', name: 'Humita' }]]),
   }),
+  getSetting: async (key) =>
+    key === 'finance_dashboard_service_percent' ? { key, value: '20' } : null,
+  listWalletLedgerSales: async () => [],
+  listWalletLedgerPurchases: async () => [],
+  listWalletAdjustments: async () => [],
+  createWalletAdjustment: async (input) => input,
   ...overrides,
 });
 

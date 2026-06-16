@@ -7,6 +7,11 @@ import type {
   DashboardRepository,
 } from './dashboard-service';
 import { getDailyDashboard } from './dashboard-service';
+import {
+  buildWalletMovements,
+  calculateWalletBalances,
+  toWalletAdjustmentRecord,
+} from '../finance/wallet-ledger-service';
 
 const item = (overrides: Partial<DashboardOrderItem> = {}): DashboardOrderItem => ({
   menuItemId: 'menu-1',
@@ -34,6 +39,7 @@ const order = (overrides: Partial<DashboardOrder> = {}): DashboardOrder => ({
 
 const purchase = (overrides: Partial<DashboardPurchase> = {}): DashboardPurchase => ({
   id: 'purchase-1',
+  purchaseDate: '2026-05-06',
   fundingSource: 'production_cost',
   canceledAt: null,
   items: [{ totalPriceCents: 3_000_00 }],
@@ -46,6 +52,7 @@ const repository = (
 ): DashboardRepository => ({
   listOrders: async () => orders,
   listPurchases: async () => [],
+  listWalletAdjustments: async () => [],
   getSetting: async (key) =>
     key === 'finance_dashboard_service_percent' ? { key, value: '20' } : null,
   ...overrides,
@@ -512,6 +519,103 @@ describe('dashboard service', () => {
     expect(mayDashboard.selectedRangeAnalytics.totals.grossRevenue).toBe(20_000);
     expect(juneDashboard.selectedRangeAnalytics.totals.grossRevenue).toBe(0);
     expect(juneDashboard.accountingSummary.wallets).toEqual(mayDashboard.accountingSummary.wallets);
+  });
+
+  it('reconciles accounting wallet totals to all-time ledger movement sums across period changes', async () => {
+    const adjustment = toWalletAdjustmentRecord({
+      id: 'adjustment-profit-correction',
+      wallet: 'profit',
+      direction: 'credit',
+      amountCents: 1_000_00,
+      reason: 'Cash correction',
+      actorId: 'admin',
+      actorName: 'Admin Te Pinta',
+      occurredAt: new Date('2026-06-10T12:00:00.000Z'),
+    });
+    const sale = {
+      id: 'paid-may-order',
+      isPaid: true,
+      occurredAt: '2026-05-06',
+      totalCents: 20_000_00,
+      directCostCents: 12_000_00,
+    };
+    const purchases = [
+      {
+        id: 'active-flour',
+        occurredAt: '2026-06-01',
+        fundingSource: 'production_cost' as const,
+        totalPriceCents: 3_000_00,
+        canceledAt: null,
+      },
+    ];
+    const testRepository = repository(
+      [
+        order({
+          id: sale.id,
+          deliveryDate: sale.occurredAt,
+          total: sale.totalCents / 100,
+          costTotalCents: sale.directCostCents,
+          isPaid: sale.isPaid,
+        }),
+      ],
+      {
+        getSetting: async (key) =>
+          key === 'finance_dashboard_service_percent' ? { key, value: '25' } : null,
+        listPurchases: async () =>
+          purchases.map((item) =>
+            purchase({
+              id: item.id,
+              purchaseDate: item.occurredAt,
+              fundingSource: item.fundingSource,
+              items: [{ totalPriceCents: item.totalPriceCents }],
+            }),
+          ),
+        listWalletAdjustments: async () => [adjustment],
+      },
+    );
+    const expectedBalances = calculateWalletBalances(
+      buildWalletMovements({
+        sales: [sale],
+        purchases,
+        adjustments: [adjustment],
+        servicePercent: 25,
+      }),
+    );
+
+    const mayDashboard = await getDailyDashboard(
+      {
+        date: '2026-05-31',
+        analyticsMode: 'custom',
+        startDate: '2026-05-01',
+        endDate: '2026-05-31',
+      },
+      testRepository,
+      () => new Date('2026-05-31T12:00:00.000Z'),
+    );
+    const juneDashboard = await getDailyDashboard(
+      {
+        date: '2026-06-30',
+        analyticsMode: 'custom',
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+      },
+      testRepository,
+      () => new Date('2026-06-30T12:00:00.000Z'),
+    );
+    const walletAmounts = ({ accountingSummary }: typeof mayDashboard) => ({
+      production_cost: accountingSummary.wallets[0]?.amount,
+      services: accountingSummary.wallets[1]?.amount,
+      profit: accountingSummary.wallets[2]?.amount,
+    });
+
+    expect(mayDashboard.selectedRangeAnalytics.totals.grossRevenue).toBe(20_000);
+    expect(juneDashboard.selectedRangeAnalytics.totals.grossRevenue).toBe(0);
+    expect(walletAmounts(mayDashboard)).toEqual({
+      production_cost: expectedBalances.production_cost / 100,
+      services: expectedBalances.services / 100,
+      profit: expectedBalances.profit / 100,
+    });
+    expect(walletAmounts(juneDashboard)).toEqual(walletAmounts(mayDashboard));
   });
 
   it('uses a 20 percent service fallback when the finance setting is missing or invalid', async () => {

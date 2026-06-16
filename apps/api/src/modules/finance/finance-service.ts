@@ -26,8 +26,12 @@ import {
   type FinancePurchaseFilters,
   type FinanceRecipeCostItem,
   type FinanceRoundingMode,
+  type FinanceWallet,
+  type FinanceWalletMovement,
+  type FinanceWalletMovementFilters,
   type FinanceStockFilters,
   type FinanceStockMovementType,
+  type CreateFinanceWalletAdjustmentInput,
   type UpdateFinanceBaseCostRuleInput,
   type UpdateFinanceProductInput,
   type UpdateFinancePurchaseInput,
@@ -35,6 +39,14 @@ import {
 } from '@te-pinta/shared';
 
 import { ApiError } from '../../middlewares/error-handler';
+import {
+  buildWalletMovements,
+  calculateWalletBalances,
+  filterWalletMovements,
+  toWalletAdjustmentRecord,
+  type WalletBalances,
+  type WalletLedgerRepository,
+} from './wallet-ledger-service';
 
 export type FinanceProduct = {
   id: string;
@@ -184,6 +196,21 @@ export type FinanceRecipeDetail = {
   warnings: FinanceCostWarning[];
 };
 
+export type FinanceSetting = {
+  key: string;
+  value: string;
+};
+
+export type FinanceWalletMovementLedger = {
+  movements: FinanceWalletMovement[];
+  balances: Record<FinanceWallet, number>;
+};
+
+export type FinanceWalletAdjustmentActor = {
+  id: string;
+  name: string;
+};
+
 export type PersistFinanceRecipeInput = {
   menuItemId: string;
   items: Array<{
@@ -197,7 +224,7 @@ export type PersistFinanceRecipeInput = {
   }>;
 };
 
-export type FinanceRepository = {
+export type FinanceRepository = WalletLedgerRepository & {
   listProducts(filters?: FinanceProductFilters): Promise<FinanceProductRecord[]>;
   createProduct(product: FinanceProduct): Promise<FinanceProduct>;
   updateProduct(
@@ -234,10 +261,55 @@ export type FinanceRepository = {
   listRecipes(): Promise<FinanceRecipeDetail[]>;
   getRecipe(menuItemId: string): Promise<FinanceRecipeDetail | null>;
   replaceRecipe(input: PersistFinanceRecipeInput): Promise<FinanceRecipeDetail | null>;
+  getSetting(key: string): Promise<FinanceSetting | null>;
 };
+
+const SERVICE_PERCENT_SETTING_KEY = 'finance_dashboard_service_percent';
+const DEFAULT_SERVICE_PERCENT = 20;
 
 const normalizeOptionalText = (value: string | undefined): string | null => value?.trim() || null;
 const normalizeProductName = (name: string): string => name.trim().toLocaleLowerCase('es-AR');
+
+const parseServicePercent = (setting: FinanceSetting | null): number => {
+  const value = Number(setting?.value);
+
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? value : DEFAULT_SERVICE_PERCENT;
+};
+
+const getFinanceServicePercent = async (repository: FinanceRepository): Promise<number> =>
+  parseServicePercent(await repository.getSetting(SERVICE_PERCENT_SETTING_KEY));
+
+const walletAdjustmentTimestampPattern = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+
+const invalidWalletAdjustmentTimestamp = (): ApiError =>
+  new ApiError(
+    400,
+    'Invalid wallet adjustment timestamp',
+    'FINANCE_WALLET_ADJUSTMENT_INVALID_OCCURRED_AT',
+  );
+
+const parseAdjustmentDate = (value: string | undefined): Date => {
+  if (!value) {
+    return new Date();
+  }
+
+  const match = walletAdjustmentTimestampPattern.exec(value);
+  if (!match) {
+    throw invalidWalletAdjustmentTimestamp();
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw invalidWalletAdjustmentTimestamp();
+  }
+
+  const [, year, month, day] = match;
+  if (date.toISOString().slice(0, 10) !== `${year}-${month}-${day}`) {
+    throw invalidWalletAdjustmentTimestamp();
+  }
+
+  return date;
+};
 
 const stockOutTypes = new Set<FinanceStockMovementType>([
   'manual_out',
@@ -469,6 +541,59 @@ export const listFinancePurchases = async (
   filters?: FinancePurchaseFilters,
 ): Promise<FinancePurchaseDetail[]> =>
   enrichPurchaseDetailsWithImpacts(await repository.listPurchases(filters), repository);
+
+export const listFinanceWalletMovements = async (
+  repository: FinanceRepository,
+  filters?: FinanceWalletMovementFilters,
+): Promise<FinanceWalletMovementLedger> => {
+  const [sales, purchases, adjustments, servicePercent] = await Promise.all([
+    repository.listWalletLedgerSales(),
+    repository.listWalletLedgerPurchases(),
+    repository.listWalletAdjustments(),
+    getFinanceServicePercent(repository),
+  ]);
+  const movements = filterWalletMovements(
+    buildWalletMovements({
+      sales,
+      purchases,
+      adjustments,
+      servicePercent,
+    }),
+    filters,
+  );
+
+  return {
+    movements,
+    balances: calculateWalletBalances(movements) satisfies WalletBalances,
+  };
+};
+
+export const createFinanceWalletAdjustment = async (
+  input: CreateFinanceWalletAdjustmentInput,
+  actor: FinanceWalletAdjustmentActor,
+  repository: FinanceRepository,
+): Promise<FinanceWalletMovement> => {
+  const adjustment = toWalletAdjustmentRecord({
+    ...input,
+    id: randomUUID(),
+    actorId: actor.id,
+    actorName: actor.name,
+    occurredAt: parseAdjustmentDate(input.occurredAt),
+  });
+  const created = await repository.createWalletAdjustment(adjustment);
+  const [movement] = buildWalletMovements({
+    sales: [],
+    purchases: [],
+    adjustments: [created],
+    servicePercent: 0,
+  });
+
+  if (!movement) {
+    throw new Error('Wallet adjustment did not produce a movement');
+  }
+
+  return movement;
+};
 
 export const getFinancePurchase = async (
   id: string,

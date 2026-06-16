@@ -24,6 +24,7 @@ import {
   menuItems,
   orderItems,
   orders,
+  settings,
 } from '../../db/schema';
 import type {
   FinanceCostingData,
@@ -45,7 +46,6 @@ import type {
 import type {
   FinanceWalletAdjustmentRecord,
   WalletLedgerPurchaseInput,
-  WalletLedgerRepository,
   WalletLedgerSaleInput,
 } from './wallet-ledger-service';
 
@@ -667,9 +667,7 @@ const buildRecipeDetails = async (
   });
 };
 
-export const createFinanceRepository = (
-  db: DbClient,
-): FinanceRepository & WalletLedgerRepository => ({
+export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
   async listProducts(filters = {}): Promise<FinanceProductRecord[]> {
     const productRows = await listProductRows(db, filters);
     const productIds = productRows.map((row) => row.id);
@@ -1064,6 +1062,19 @@ export const createFinanceRepository = (
       .returning();
 
     return mapWalletAdjustment(requireReturnedRow(row));
+  },
+
+  async getSetting(key): Promise<{ key: string; value: string } | null> {
+    const [row] = await db
+      .select({
+        key: settings.key,
+        value: settings.value,
+      })
+      .from(settings)
+      .where(eq(settings.key, key))
+      .limit(1);
+
+    return row ?? null;
   },
 });
 

@@ -6,10 +6,12 @@ import {
   createFinancePurchaseSchema,
   createFinanceBaseCostRuleSchema,
   createFinanceStockAdjustmentSchema,
+  createFinanceWalletAdjustmentSchema,
   financeCostingPreviewOrderSchema,
   financeProductFiltersSchema,
   financePurchaseFiltersSchema,
   financeStockFiltersSchema,
+  financeWalletMovementFiltersSchema,
   updateFinanceBaseCostRuleSchema,
   updateFinanceProductSchema,
   updateFinancePurchaseSchema,
@@ -17,6 +19,7 @@ import {
 } from '@te-pinta/shared';
 
 import { authenticate } from '../../middlewares/authenticate';
+import { ApiError } from '../../middlewares/error-handler';
 import { validate } from '../../middlewares/validate';
 import { idParamsSchema } from '../route-schemas';
 import type { JwtSecrets } from '../auth/jwt';
@@ -25,6 +28,7 @@ import {
   createFinanceProduct,
   createFinancePurchase,
   createFinanceStockAdjustment,
+  createFinanceWalletAdjustment,
   cancelFinancePurchase,
   deleteFinanceBaseCostRule,
   getFinanceProductHistory,
@@ -35,6 +39,7 @@ import {
   listFinancePurchases,
   listFinanceRecipes,
   listFinanceStock,
+  listFinanceWalletMovements,
   previewFinanceOrderCost,
   updateFinanceBaseCostRule,
   updateFinanceProduct,
@@ -275,6 +280,41 @@ export const createFinanceRouter = ({
     async (req, res, next) => {
       try {
         const movement = await createFinanceStockAdjustment(req.body, repository);
+        res.status(201).json({ movement });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get(
+    '/wallet-movements',
+    validate({ query: financeWalletMovementFiltersSchema }),
+    async (req, res, next) => {
+      try {
+        const filters = financeWalletMovementFiltersSchema.parse(req.query);
+        const ledger = await listFinanceWalletMovements(repository, filters);
+        res.json(ledger);
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/wallet-adjustments',
+    validate({ body: createFinanceWalletAdjustmentSchema }),
+    async (req, res, next) => {
+      try {
+        if (!req.user) {
+          throw new ApiError(401, 'Unauthorized', 'UNAUTHORIZED');
+        }
+
+        const movement = await createFinanceWalletAdjustment(
+          req.body,
+          { id: req.user.id, name: req.user.name },
+          repository,
+        );
         res.status(201).json({ movement });
       } catch (error) {
         next(error);
