@@ -105,6 +105,17 @@ describe('wallet ledger service', () => {
     );
   });
 
+  it('ignores paid zero-total sales instead of blocking the ledger', () => {
+    const movements = buildWalletMovements({
+      sales: [paidSale({ id: 'zero-order', totalCents: 0 })],
+      purchases: [],
+      adjustments: [],
+      servicePercent: 25,
+    });
+
+    expect(movements).toEqual([]);
+  });
+
   it('debits active purchases from their selected wallet and excludes canceled purchases', () => {
     const movements = buildWalletMovements({
       sales: [],

@@ -132,7 +132,10 @@ const buildSaleMovements = (
     return [];
   }
 
-  assertPositiveIntegerCents(sale.totalCents, 'sale.totalCents');
+  assertNonNegativeIntegerCents(sale.totalCents, 'sale.totalCents');
+  if (sale.totalCents === 0) {
+    return [];
+  }
   assertNonNegativeIntegerCents(sale.directCostCents, 'sale.directCostCents');
 
   const movements: FinanceWalletMovement[] = [];
