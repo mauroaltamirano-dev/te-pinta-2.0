@@ -62,7 +62,7 @@ export const FinanceSectionNav = ({ activeSection, onSectionChange }: FinanceSec
 
     <div
       aria-label="Secciones de gestión"
-      className="hidden gap-2 rounded-[1.5rem] border border-border/70 bg-card p-2 shadow-card sm:grid sm:grid-cols-2 lg:grid-cols-7"
+      className="hidden gap-2 overflow-x-auto rounded-[1.5rem] border border-border/70 bg-card p-2 shadow-card sm:flex"
       role="tablist"
     >
       {financeSections.map((section) => {
@@ -75,8 +75,8 @@ export const FinanceSectionNav = ({ activeSection, onSectionChange }: FinanceSec
             aria-selected={isActive}
             className={
               isActive
-                ? 'inline-flex items-center justify-center gap-2 rounded-2xl bg-sidebar px-3 py-2 text-sm font-black text-white shadow-card'
-                : 'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-black text-muted-foreground transition hover:bg-background hover:text-foreground'
+                ? 'inline-flex min-w-fit flex-1 items-center justify-center gap-2 rounded-2xl bg-sidebar px-3 py-2 text-sm font-black text-white shadow-card'
+                : 'inline-flex min-w-fit flex-1 items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-black text-muted-foreground transition hover:bg-background hover:text-foreground'
             }
             id={`finance-tab-${section.id}`}
             key={section.id}

@@ -331,133 +331,136 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
         </div>
       ) : null}
 
-      <FinanceTable
-        ariaLabel="Movimientos de billetera"
-        caption={
-          movementsQuery.isLoading
-            ? 'Cargando movimientos...'
-            : `${ledger?.movements.length ?? 0} movimiento(s) visibles`
-        }
-        columns={columns}
-        emptyState="No hay movimientos para los filtros seleccionados."
-        getRowKey={(movement) => movement.id}
-        rows={ledger?.movements ?? []}
-      />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
+        <FinanceTable
+          ariaLabel="Movimientos de billetera"
+          caption={
+            movementsQuery.isLoading
+              ? 'Cargando movimientos...'
+              : `${ledger?.movements.length ?? 0} movimiento(s) visibles`
+          }
+          className="min-w-0"
+          columns={columns}
+          emptyState="No hay movimientos para los filtros seleccionados."
+          getRowKey={(movement) => movement.id}
+          rows={ledger?.movements ?? []}
+        />
 
-      <form
-        className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-card"
-        onSubmit={handleAdjustmentSubmit}
-      >
-        <div className="flex items-center gap-2 text-primary">
-          <CircleDollarSign className="h-4 w-4" aria-hidden={true} />
-          <h3 className="text-sm font-black uppercase tracking-wide">Ajuste manual</h3>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <label className="text-sm font-bold text-foreground">
-            Billetera del ajuste
-            <select
-              aria-label="Billetera del ajuste"
-              className={`${inputClassName} appearance-none`}
-              onChange={(event) =>
-                setAdjustmentForm((current) => ({
-                  ...current,
-                  wallet: event.target.value as FinanceWallet,
-                }))
-              }
-              value={adjustmentForm.wallet}
-            >
-              {wallets.map((wallet) => (
-                <option key={wallet} value={wallet}>
-                  {walletLabels[wallet]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm font-bold text-foreground">
-            Tipo de ajuste
-            <select
-              aria-label="Tipo de ajuste"
-              className={`${inputClassName} appearance-none`}
-              onChange={(event) =>
-                setAdjustmentForm((current) => ({
-                  ...current,
-                  direction: event.target.value as FinanceWalletMovementDirection,
-                }))
-              }
-              value={adjustmentForm.direction}
-            >
-              {directions.map((direction) => (
-                <option key={direction} value={direction}>
-                  {directionLabels[direction]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm font-bold text-foreground">
-            Monto del ajuste
-            <input
-              aria-label="Monto del ajuste"
-              className={inputClassName}
-              min="0.01"
-              onChange={(event) =>
-                setAdjustmentForm((current) => ({ ...current, amount: event.target.value }))
-              }
-              required
-              step="0.01"
-              type="number"
-              value={adjustmentForm.amount}
-            />
-          </label>
-
-          <label className="text-sm font-bold text-foreground">
-            Fecha del ajuste
-            <input
-              aria-label="Fecha del ajuste"
-              className={inputClassName}
-              onChange={(event) =>
-                setAdjustmentForm((current) => ({ ...current, occurredAt: event.target.value }))
-              }
-              type="datetime-local"
-              value={adjustmentForm.occurredAt}
-            />
-          </label>
-
-          <label className="text-sm font-bold text-foreground xl:col-span-5">
-            Motivo del ajuste
-            <textarea
-              aria-label="Motivo del ajuste"
-              className={inputClassName}
-              onChange={(event) =>
-                setAdjustmentForm((current) => ({ ...current, reason: event.target.value }))
-              }
-              required
-              rows={3}
-              value={adjustmentForm.reason}
-            />
-          </label>
-        </div>
-
-        {createAdjustment.isError ? (
-          <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-900">
-            {getErrorDescription(createAdjustment.error)}
-          </p>
-        ) : null}
-        {createAdjustment.isSuccess ? (
-          <p className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-            Ajuste registrado y dashboard listo para recalcularse.
-          </p>
-        ) : null}
-
-        <button
-          className="mt-4 inline-flex rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
-          disabled={createAdjustment.isPending}
-          type="submit"
+        <form
+          className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-card xl:sticky xl:top-4"
+          onSubmit={handleAdjustmentSubmit}
         >
-          Registrar ajuste
-        </button>
-      </form>
+          <div className="flex items-center gap-2 text-primary">
+            <CircleDollarSign className="h-4 w-4" aria-hidden={true} />
+            <h3 className="text-sm font-black uppercase tracking-wide">Ajuste manual</h3>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <label className="text-sm font-bold text-foreground">
+              Billetera del ajuste
+              <select
+                aria-label="Billetera del ajuste"
+                className={`${inputClassName} appearance-none`}
+                onChange={(event) =>
+                  setAdjustmentForm((current) => ({
+                    ...current,
+                    wallet: event.target.value as FinanceWallet,
+                  }))
+                }
+                value={adjustmentForm.wallet}
+              >
+                {wallets.map((wallet) => (
+                  <option key={wallet} value={wallet}>
+                    {walletLabels[wallet]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-bold text-foreground">
+              Tipo de ajuste
+              <select
+                aria-label="Tipo de ajuste"
+                className={`${inputClassName} appearance-none`}
+                onChange={(event) =>
+                  setAdjustmentForm((current) => ({
+                    ...current,
+                    direction: event.target.value as FinanceWalletMovementDirection,
+                  }))
+                }
+                value={adjustmentForm.direction}
+              >
+                {directions.map((direction) => (
+                  <option key={direction} value={direction}>
+                    {directionLabels[direction]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-bold text-foreground">
+              Monto del ajuste
+              <input
+                aria-label="Monto del ajuste"
+                className={inputClassName}
+                min="0.01"
+                onChange={(event) =>
+                  setAdjustmentForm((current) => ({ ...current, amount: event.target.value }))
+                }
+                required
+                step="0.01"
+                type="number"
+                value={adjustmentForm.amount}
+              />
+            </label>
+
+            <label className="text-sm font-bold text-foreground">
+              Fecha del ajuste
+              <input
+                aria-label="Fecha del ajuste"
+                className={inputClassName}
+                onChange={(event) =>
+                  setAdjustmentForm((current) => ({ ...current, occurredAt: event.target.value }))
+                }
+                type="datetime-local"
+                value={adjustmentForm.occurredAt}
+              />
+            </label>
+
+            <label className="text-sm font-bold text-foreground sm:col-span-2 xl:col-span-1">
+              Motivo del ajuste
+              <textarea
+                aria-label="Motivo del ajuste"
+                className={inputClassName}
+                onChange={(event) =>
+                  setAdjustmentForm((current) => ({ ...current, reason: event.target.value }))
+                }
+                required
+                rows={3}
+                value={adjustmentForm.reason}
+              />
+            </label>
+          </div>
+
+          {createAdjustment.isError ? (
+            <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-900">
+              {getErrorDescription(createAdjustment.error)}
+            </p>
+          ) : null}
+          {createAdjustment.isSuccess ? (
+            <p className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
+              Ajuste registrado y dashboard listo para recalcularse.
+            </p>
+          ) : null}
+
+          <button
+            className="mt-4 inline-flex w-full justify-center rounded-full bg-primary px-4 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+            disabled={createAdjustment.isPending}
+            type="submit"
+          >
+            Registrar ajuste
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
