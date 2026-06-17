@@ -16,6 +16,7 @@ export const healthPayload = { status: 'ok', service: 'te-pinta-api' } as const;
 export const createApp = ({ allowedOrigin, apiRouter }: CreateAppOptions): Express => {
   const app = express();
 
+  app.set('trust proxy', 1);
   app.use(helmet());
   app.use(
     cors({

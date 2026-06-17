@@ -20,4 +20,10 @@ describe('createApp', () => {
     expect(healthRoute).toBeDefined();
     expect(healthPayload).toEqual({ status: 'ok', service: 'te-pinta-api' });
   });
+
+  it('trusts the self-host reverse proxy for rate limiting', () => {
+    const app = createApp({ allowedOrigin: 'http://localhost:5173' });
+
+    expect(app.get('trust proxy')).toBe(1);
+  });
 });
