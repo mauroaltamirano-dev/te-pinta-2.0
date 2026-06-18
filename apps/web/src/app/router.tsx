@@ -13,6 +13,10 @@ const DashboardPage = lazyRoute(
   'DashboardPage',
 );
 const OrdersPage = lazyRoute(() => import('@/features/orders/OrdersPage'), 'OrdersPage');
+const ProductionPage = lazyRoute(
+  () => import('@/features/production/ProductionPage'),
+  'ProductionPage',
+);
 const MenuPage = lazyRoute(() => import('@/features/menu/MenuPage'), 'MenuPage');
 const CustomersPage = lazyRoute(
   () => import('@/features/customers/CustomersPage'),
@@ -39,12 +43,7 @@ export const protectedRoutes = [
   },
   {
     path: 'production',
-    element: (
-      <PlaceholderPage
-        title="Producción"
-        description="Vista dedicada para planificar producción, tandas y preparación. Por ahora el resumen operativo vive en el dashboard general."
-      />
-    ),
+    element: <ProductionPage />,
   },
   {
     path: 'sales',

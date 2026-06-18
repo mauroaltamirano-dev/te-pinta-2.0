@@ -35,36 +35,40 @@ const ActionButton = ({
 );
 
 export const UpcomingOrdersCard = ({
+  description = 'Prioridad de entrega, cobro y producción sin meterte en una tabla pesada.',
+  eyebrow = 'Pedidos próximos / urgentes',
   isActionPending = false,
+  linkLabel = 'Ver pedidos',
   onMarkDelivered,
   onMarkPaid,
   onMarkPrepared,
   orders,
+  title = 'Agenda inmediata',
 }: {
+  description?: string;
+  eyebrow?: string;
   isActionPending?: boolean;
+  linkLabel?: string;
   onMarkDelivered?: (orderId: string) => void;
   onMarkPaid?: (orderId: string) => void;
   onMarkPrepared?: (orderId: string) => void;
   orders: DashboardOrderCard[];
+  title?: string;
 }) => (
   <SectionCard className="order-3">
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
-          <Clock3 className="size-4" aria-hidden /> Pedidos próximos / urgentes
+          <Clock3 className="size-4" aria-hidden /> {eyebrow}
         </p>
-        <h2 className="mt-1 text-2xl font-black tracking-tight text-foreground">
-          Agenda inmediata
-        </h2>
-        <p className="mt-1 text-sm font-semibold text-muted-foreground">
-          Prioridad de entrega, cobro y producción sin meterte en una tabla pesada.
-        </p>
+        <h2 className="mt-1 text-2xl font-black tracking-tight text-foreground">{title}</h2>
+        <p className="mt-1 text-sm font-semibold text-muted-foreground">{description}</p>
       </div>
       <Link
         className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm font-black text-primary transition-colors hover:bg-muted"
         to="/orders"
       >
-        Ver pedidos <ArrowUpRight className="size-4" aria-hidden />
+        {linkLabel} <ArrowUpRight className="size-4" aria-hidden />
       </Link>
     </div>
 
@@ -117,7 +121,7 @@ export const UpcomingOrdersCard = ({
                 >
                   Ver pedido
                 </Link>
-                {order.status === 'confirmado' ? (
+                {order.status === 'confirmado' && onMarkPrepared ? (
                   <ActionButton
                     ariaLabel={`Marcar preparado ${actionContext}`}
                     disabled={isActionPending}
@@ -126,7 +130,7 @@ export const UpcomingOrdersCard = ({
                     Marcar preparado
                   </ActionButton>
                 ) : null}
-                {!order.isPaid ? (
+                {!order.isPaid && onMarkPaid ? (
                   <ActionButton
                     ariaLabel={`Marcar pagado ${actionContext}`}
                     disabled={isActionPending}
@@ -135,7 +139,7 @@ export const UpcomingOrdersCard = ({
                     Marcar pagado
                   </ActionButton>
                 ) : null}
-                {order.status !== 'entregado' ? (
+                {order.status !== 'entregado' && onMarkDelivered ? (
                   <ActionButton
                     ariaLabel={`Confirmar entrega ${actionContext}`}
                     disabled={isActionPending}
