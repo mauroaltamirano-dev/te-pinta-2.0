@@ -1,6 +1,11 @@
 import { type ComponentType } from 'react';
 
-import { getBusinessDateIso, type DeliveryTime, type OrderStatus } from '@te-pinta/shared';
+import {
+  getBusinessDateIso,
+  type DashboardQuery,
+  type DeliveryTime,
+  type OrderStatus,
+} from '@te-pinta/shared';
 
 import type {
   DashboardCalendarDay,
@@ -225,6 +230,20 @@ export const getPeriodRange = (
     label: `Semana · ${formatCompactDate(startDate)} al ${formatCompactDate(endDate)}`,
   };
 };
+
+export const buildDashboardRequest = (
+  period: DashboardPeriod,
+  periodRange: PeriodRange,
+  date: string,
+): DashboardQuery =>
+  period === 'all'
+    ? { date, analyticsMode: 'preset', preset: 'all' }
+    : {
+        date,
+        analyticsMode: 'custom',
+        startDate: periodRange.startDate,
+        endDate: periodRange.endDate,
+      };
 
 export const getRelativeDeliveryLabel = (
   deliveryDate: string,

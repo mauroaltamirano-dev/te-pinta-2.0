@@ -18,6 +18,7 @@ const CustomersPage = lazyRoute(
   () => import('@/features/customers/CustomersPage'),
   'CustomersPage',
 );
+const SalesPage = lazyRoute(() => import('@/features/sales/SalesPage'), 'SalesPage');
 const FinancePage = lazyRoute(
   () => import('@/features/finance/pages/FinancePage'),
   'FinancePage',
@@ -47,12 +48,7 @@ export const protectedRoutes = [
   },
   {
     path: 'sales',
-    element: (
-      <PlaceholderPage
-        title="Ventas"
-        description="Vista dedicada para análisis comercial. Por ahora las ventas principales se ven en el dashboard general."
-      />
-    ),
+    element: <SalesPage />,
   },
   {
     path: 'menu',

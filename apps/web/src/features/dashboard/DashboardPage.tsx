@@ -9,8 +9,6 @@ import {
   Wallet,
 } from 'lucide-react';
 
-import type { DashboardQuery } from '@te-pinta/shared';
-
 import { dashboardQueryKeys, useDailyDashboard } from './dashboard-hooks';
 import {
   dashboardCustomerSummaryMock,
@@ -25,6 +23,7 @@ import { useOrders, useUpdateOrderPayment, useUpdateOrderStatus } from '../order
 import {
   buildCriticalAlerts,
   buildCustomerSummary,
+  buildDashboardRequest,
   buildProductionSummaryFromOrders,
   buildVarietySales,
   deliveryTextLabels,
@@ -35,18 +34,16 @@ import {
   getUrgency,
   mapMockOrderToCard,
   mapOrderToCard,
-  periodOptions,
   productionStatusByOrderStatus,
   today,
   type DashboardOrderCard,
   type DashboardPeriod,
   type KpiCardData,
-  type PeriodRange,
 } from './dashboard-utils';
 
-import { cn } from '@/lib/utils';
 import type { DashboardKpiComparison } from './dashboard-api';
 import { DashboardHeader } from './components/DashboardHeader';
+import { DashboardPeriodControls } from './components/DashboardPeriodControls';
 import { KpiCard } from './components/KpiCard';
 import { UpcomingOrdersCard } from './components/UpcomingOrdersCard';
 import { WalletsSummary } from './components/WalletsSummary';
@@ -72,120 +69,6 @@ const fallbackKpiComparisons = {
   pendingRevenue: fallbackComparison(dashboardKpiComparisons.pendingRevenue),
 };
 
-const buildDashboardRequest = (
-  period: DashboardPeriod,
-  periodRange: PeriodRange,
-  date: string,
-): DashboardQuery => {
-  if (period === 'all') {
-    return { date, analyticsMode: 'preset', preset: 'all' };
-  }
-
-  return {
-    date,
-    analyticsMode: 'custom',
-    startDate: periodRange.startDate,
-    endDate: periodRange.endDate,
-  };
-};
-
-const DashboardPeriodControls = ({
-  ariaLabel,
-  customEndDate,
-  customStartDate,
-  date,
-  onCustomEndDateChange,
-  onCustomStartDateChange,
-  onDateChange,
-  onPeriodChange,
-  period,
-  periodRange,
-  showDateControls = false,
-}: {
-  ariaLabel: string;
-  customEndDate: string;
-  customStartDate: string;
-  date: string;
-  onCustomEndDateChange: (value: string) => void;
-  onCustomStartDateChange: (value: string) => void;
-  onDateChange: (value: string) => void;
-  onPeriodChange: (value: DashboardPeriod) => void;
-  period: DashboardPeriod;
-  periodRange: PeriodRange;
-  showDateControls?: boolean;
-}) => (
-  <fieldset
-    aria-label={ariaLabel}
-    className="rounded-[1.35rem] border border-white/80 bg-white p-4 shadow-card"
-  >
-    <legend className="sr-only">{ariaLabel}</legend>
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-      <div className="min-w-0">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">{ariaLabel}</p>
-        <p className="mt-1 text-sm font-bold text-muted-foreground">{periodRange.label}</p>
-      </div>
-      <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-end">
-        {showDateControls ? (
-          <label className="grid gap-1.5 text-xs font-black uppercase tracking-wide text-muted-foreground">
-            Fecha de referencia
-            <input
-              className="min-h-10 rounded-2xl border border-border bg-background px-4 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25"
-              onChange={(event) => onDateChange(event.target.value)}
-              type="date"
-              value={date}
-            />
-          </label>
-        ) : null}
-        <div className="inline-grid min-h-10 overflow-hidden rounded-2xl bg-muted p-1 ring-1 ring-border/70 sm:grid-cols-4">
-          {periodOptions.map((option) => {
-            const isSelected = option.value === period;
-
-            return (
-              <button
-                aria-pressed={isSelected}
-                className={cn(
-                  'rounded-xl px-3 py-2 text-xs font-black transition-colors',
-                  isSelected
-                    ? 'bg-sidebar text-white shadow-sm'
-                    : 'text-muted-foreground hover:bg-white hover:text-foreground',
-                )}
-                key={option.value}
-                onClick={() => onPeriodChange(option.value)}
-                type="button"
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-
-    {showDateControls && period === 'custom' ? (
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-          Desde
-          <input
-            className="mt-1 min-h-10 w-full rounded-2xl border border-border bg-background px-4 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25"
-            onChange={(event) => onCustomStartDateChange(event.target.value)}
-            type="date"
-            value={customStartDate}
-          />
-        </label>
-        <label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
-          Hasta
-          <input
-            className="mt-1 min-h-10 w-full rounded-2xl border border-border bg-background px-4 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25"
-            onChange={(event) => onCustomEndDateChange(event.target.value)}
-            type="date"
-            value={customEndDate}
-          />
-        </label>
-      </div>
-    ) : null}
-  </fieldset>
-);
-
 export const DashboardPage = () => {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(today);
@@ -210,11 +93,11 @@ export const DashboardPage = () => {
     [customEndDate, customStartDate, date, sectionPeriods.commercial],
   );
 
-  const kpiDashboardRequest = useMemo<DashboardQuery>(
+  const kpiDashboardRequest = useMemo(
     () => buildDashboardRequest(sectionPeriods.kpis, kpiPeriodRange, date),
     [date, kpiPeriodRange, sectionPeriods.kpis],
   );
-  const commercialDashboardRequest = useMemo<DashboardQuery>(
+  const commercialDashboardRequest = useMemo(
     () => buildDashboardRequest(sectionPeriods.commercial, commercialPeriodRange, date),
     [commercialPeriodRange, date, sectionPeriods.commercial],
   );
