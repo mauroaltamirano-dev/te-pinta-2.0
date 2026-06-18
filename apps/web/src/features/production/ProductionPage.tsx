@@ -117,6 +117,7 @@ export const ProductionPage = () => {
 
       <ProductionPendingCard summary={productionSummary} />
       <UpcomingOrdersCard
+        className="order-none"
         description="Pedidos confirmados ordenados por entrega. Marcarlos preparados actualiza Pedidos y Dashboard."
         eyebrow="Cola de cocina"
         isActionPending={updateOrderStatus.isPending}

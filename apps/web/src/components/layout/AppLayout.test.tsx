@@ -97,6 +97,18 @@ describe('AppLayout', () => {
       'href',
       '/orders',
     );
+    expect(within(mobileNav).getByRole('link', { name: /producción/i })).toHaveAttribute(
+      'href',
+      '/production',
+    );
+    expect(within(mobileNav).getByRole('link', { name: /ventas/i })).toHaveAttribute(
+      'href',
+      '/sales',
+    );
+    expect(within(mobileNav).getByRole('link', { name: /stock/i })).toHaveAttribute(
+      'href',
+      '/stock',
+    );
     expect(within(mobileNav).getByRole('link', { name: /gestión/i })).toHaveAttribute(
       'href',
       '/finanzas',

@@ -35,6 +35,7 @@ const ActionButton = ({
 );
 
 export const UpcomingOrdersCard = ({
+  className = 'order-3',
   description = 'Prioridad de entrega, cobro y producción sin meterte en una tabla pesada.',
   eyebrow = 'Pedidos próximos / urgentes',
   isActionPending = false,
@@ -45,6 +46,7 @@ export const UpcomingOrdersCard = ({
   orders,
   title = 'Agenda inmediata',
 }: {
+  className?: string;
   description?: string;
   eyebrow?: string;
   isActionPending?: boolean;
@@ -55,7 +57,7 @@ export const UpcomingOrdersCard = ({
   orders: DashboardOrderCard[];
   title?: string;
 }) => (
-  <SectionCard className="order-3">
+  <SectionCard className={className}>
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">

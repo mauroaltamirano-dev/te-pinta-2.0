@@ -14,7 +14,7 @@ const ProductionChip = ({ item }: { item: DashboardProductionItem }) => (
 );
 
 export const ProductionPendingCard = ({ summary }: { summary: DashboardProductionSummary }) => (
-  <SectionCard className="order-4 bg-gradient-to-br from-white via-card to-crema-maiz/55">
+  <SectionCard className="bg-gradient-to-br from-white via-card to-crema-maiz/55">
     <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div>
         <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">

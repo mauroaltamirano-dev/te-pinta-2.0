@@ -55,7 +55,7 @@ export const DashboardPeriodControls = ({
             />
           </label>
         ) : null}
-        <div className="inline-grid min-h-10 overflow-hidden rounded-2xl bg-muted p-1 ring-1 ring-border/70 sm:grid-cols-4">
+        <div className="inline-grid min-h-10 grid-cols-2 overflow-hidden rounded-2xl bg-muted p-1 ring-1 ring-border/70 sm:grid-cols-4">
           {periodOptions.map((option) => {
             const isSelected = option.value === period;
 

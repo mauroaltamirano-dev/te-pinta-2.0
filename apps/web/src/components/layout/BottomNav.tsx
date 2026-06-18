@@ -26,7 +26,7 @@ export const BottomNav = () => {
         className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-accent to-success"
       />
 
-      <div className="relative mx-auto grid max-w-lg grid-cols-5 gap-1.5">
+      <div className="relative mx-auto flex max-w-lg gap-1.5 overflow-x-auto pb-1">
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -34,7 +34,7 @@ export const BottomNav = () => {
               key={item.href}
               className={({ isActive }) =>
                 cn(
-                  'group relative flex min-w-0 flex-col items-center gap-1 rounded-[1.15rem] px-1.5 py-2 text-[0.62rem] font-extrabold transition-colors duration-200 ease-out',
+                  'group relative flex min-w-[4.25rem] flex-col items-center gap-1 rounded-[1.15rem] px-1.5 py-2 text-[0.62rem] font-extrabold transition-colors duration-200 ease-out',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar',
                   isActive
                     ? 'bg-card text-sidebar shadow-glow'
