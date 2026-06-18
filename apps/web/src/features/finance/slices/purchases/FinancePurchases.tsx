@@ -1,5 +1,15 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { CheckCircle2, PackagePlus, ReceiptText, Search, TrendingDown, TrendingUp } from 'lucide-react';
+import {
+  CheckCircle2,
+  Eye,
+  PackagePlus,
+  Pencil,
+  ReceiptText,
+  Search,
+  TrendingDown,
+  TrendingUp,
+  XCircle,
+} from 'lucide-react';
 import { getBusinessDateIso } from '@te-pinta/shared';
 
 import { FinanceActionSheet } from '../../components/FinanceActionSheet';
@@ -121,7 +131,7 @@ const moneyFormatter = new Intl.NumberFormat('es-AR', {
 });
 
 const inputClassName =
-  'mt-2 w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20';
+  'mt-1.5 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-semibold text-foreground outline-none transition focus:border-ring focus:ring-4 focus:ring-ring/20';
 
 const formatMoneyFromCents = (cents: number | null | undefined): string =>
   cents === null || cents === undefined ? 'Sin dato' : moneyFormatter.format(cents / 100);
@@ -524,7 +534,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
     {
       id: 'date',
       header: 'Fecha',
-      render: (purchase) => formatDate(purchase.purchaseDate),
+      render: (purchase) => <span className="whitespace-nowrap">{formatDate(purchase.purchaseDate)}</span>,
       sortDirection: sortDirectionFor(sort, 'date'),
       sortLabel: 'Ordenar por fecha',
       onSort: () => setSort((current) => toggleSort(current, 'date')),
@@ -545,7 +555,11 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
     {
       id: 'total',
       header: 'Total',
-      render: (purchase) => formatMoneyFromCents(purchase.totalCents),
+      render: (purchase) => (
+        <span className="whitespace-nowrap font-black tabular-nums">
+          {formatMoneyFromCents(purchase.totalCents)}
+        </span>
+      ),
       align: 'right',
       sortDirection: sortDirectionFor(sort, 'total'),
       sortLabel: 'Ordenar por total',
@@ -568,35 +582,38 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
       id: 'actions',
       header: 'Acciones',
       render: (purchase) => (
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-nowrap justify-end gap-1.5">
           {purchase.status === 'active' ? (
             <button
               aria-label={`Editar compra ${purchase.supplier || formatDate(purchase.purchaseDate)}`}
-              className="rounded-full bg-primary/10 px-3 py-2 text-xs font-black text-primary ring-1 ring-primary/15 transition hover:bg-primary/15"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15 transition hover:bg-primary/15"
               onClick={() => openEditPurchase(purchase)}
+              title="Editar"
               type="button"
             >
-              Editar
+              <Pencil className="h-3.5 w-3.5" aria-hidden={true} />
             </button>
           ) : null}
           <button
             aria-label={`Ver detalle de compra ${purchase.supplier || formatDate(purchase.purchaseDate)}`}
-            className="rounded-full bg-muted px-3 py-2 text-xs font-black text-foreground transition hover:bg-muted/80"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-foreground transition hover:bg-muted/80"
             aria-haspopup="dialog"
             onClick={() => setSelectedPurchaseId(purchase.id)}
+            title="Ver detalle"
             type="button"
           >
-            Detalle
+            <Eye className="h-3.5 w-3.5" aria-hidden={true} />
           </button>
           {purchase.status === 'active' ? (
             <button
               aria-label={`Anular compra ${purchase.supplier || formatDate(purchase.purchaseDate)}`}
-              className="rounded-full bg-red-50 px-3 py-2 text-xs font-black text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 disabled:opacity-60"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 disabled:opacity-60"
               disabled={cancelPurchase.isPending}
               onClick={() => handleCancel(purchase)}
+              title="Anular"
               type="button"
             >
-              Anular compra
+              <XCircle className="h-3.5 w-3.5" aria-hidden={true} />
             </button>
           ) : null}
         </div>
@@ -689,6 +706,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
         <div className="space-y-4">
           <FinanceTable
             ariaLabel="Historial de compras"
+            className="[&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3 [&_th]:py-2.5 max-sm:[&_td:nth-child(3)]:hidden max-sm:[&_td:nth-child(5)]:hidden max-sm:[&_td:nth-child(6)]:hidden max-sm:[&_th:nth-child(3)]:hidden max-sm:[&_th:nth-child(5)]:hidden max-sm:[&_th:nth-child(6)]:hidden"
             columns={columns}
             emptyState="No hay compras para mostrar."
             getRowKey={(purchase) => purchase.id}
@@ -735,6 +753,9 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
         <form className="space-y-4" onSubmit={handleEdit}>
           <FeedbackBanner feedback={editFeedback} />
           <div className="grid gap-3 md:grid-cols-2">
+            <h3 className="border-b border-border/70 pb-2 text-xs font-black uppercase tracking-[0.16em] text-primary md:col-span-2">
+              Datos de compra
+            </h3>
             <label className="text-sm font-bold text-foreground">
               Producto
               <select
@@ -808,6 +829,9 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
                 ))}
               </select>
             </label>
+            <h3 className="mt-2 border-b border-border/70 pb-2 text-xs font-black uppercase tracking-[0.16em] text-primary md:col-span-2">
+              Cantidad y precio
+            </h3>
             <label className="text-sm font-bold text-foreground">
               Unidad de compra
               <select
@@ -892,7 +916,10 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
                 value={editForm.price}
               />
             </label>
-            <label className="text-sm font-bold text-foreground">
+            <h3 className="mt-2 border-b border-border/70 pb-2 text-xs font-black uppercase tracking-[0.16em] text-primary md:col-span-2">
+              Notas
+            </h3>
+            <label className="text-sm font-bold text-foreground md:col-span-2">
               Notas del ítem
               <input
                 className={inputClassName}
@@ -912,7 +939,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
               value={editForm.notes}
             />
           </label>
-          <div className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground">
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground">
             <p>
               Al editar una compra activa, se recalcula el costo del ítem y se reemplaza el
               movimiento de stock asociado.
@@ -948,6 +975,9 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
         <form className="space-y-4" onSubmit={handleCreate}>
           <FeedbackBanner feedback={createFeedback} />
           <div className="grid gap-3 md:grid-cols-2">
+            <h3 className="border-b border-border/70 pb-2 text-xs font-black uppercase tracking-[0.16em] text-primary md:col-span-2">
+              Datos de compra
+            </h3>
             <label className="text-sm font-bold text-foreground">
               Producto
               <select
@@ -1021,6 +1051,9 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
                 ))}
               </select>
             </label>
+            <h3 className="mt-2 border-b border-border/70 pb-2 text-xs font-black uppercase tracking-[0.16em] text-primary md:col-span-2">
+              Cantidad y precio
+            </h3>
             <label className="text-sm font-bold text-foreground">
               Unidad de compra
               <select
@@ -1103,7 +1136,10 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
                 value={createForm.price}
               />
             </label>
-            <label className="text-sm font-bold text-foreground">
+            <h3 className="mt-2 border-b border-border/70 pb-2 text-xs font-black uppercase tracking-[0.16em] text-primary md:col-span-2">
+              Notas
+            </h3>
+            <label className="text-sm font-bold text-foreground md:col-span-2">
               Notas del ítem
               <input
                 className={inputClassName}
@@ -1123,7 +1159,7 @@ export const FinancePurchases = ({ products, purchases, isLoading }: FinancePurc
               value={createForm.notes}
             />
           </label>
-          <div className="rounded-2xl border border-border/70 bg-background px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground">
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-semibold leading-6 text-muted-foreground">
             <p>
               La unidad base del producto alimenta stock, recetas y costos. Si comprás packs,
               indicá cuántas unidades base trae cada pack.
