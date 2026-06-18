@@ -4,7 +4,6 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute';
 import { HomePage } from '@/routes/HomePage';
 import { LoginPage } from '@/routes/LoginPage';
-import { PlaceholderPage } from '@/routes/PlaceholderPage';
 
 import { lazyRoute } from './lazy-route';
 
@@ -31,6 +30,7 @@ const SettingsPage = lazyRoute(
   () => import('@/features/settings/SettingsPage'),
   'SettingsPage',
 );
+const StockPage = lazyRoute(() => import('@/features/stock/StockPage'), 'StockPage');
 
 export const protectedRoutes = [
   {
@@ -67,12 +67,7 @@ export const protectedRoutes = [
   },
   {
     path: 'stock',
-    element: (
-      <PlaceholderPage
-        title="Stock"
-        description="Vista dedicada para stock operativo. Los insumos y costos se gestionan desde Gestión."
-      />
-    ),
+    element: <StockPage />,
   },
   {
     path: 'settings',

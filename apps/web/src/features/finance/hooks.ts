@@ -5,6 +5,7 @@ import type {
   CreateFinanceBaseCostRuleInput,
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
+  CreateFinanceStockAdjustmentInput,
   CreateFinanceWalletAdjustmentInput,
   CancelFinancePurchaseInput,
   FinanceCostingPreviewOrderInput,
@@ -156,7 +157,8 @@ export const useCreateFinanceStockAdjustment = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createFinanceStockAdjustment,
+    mutationFn: (input: CreateFinanceStockAdjustmentInput) =>
+      createFinanceStockAdjustment(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: financeQueryKeys.all }),
   });
 };
