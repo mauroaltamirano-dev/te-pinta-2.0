@@ -8,6 +8,8 @@ import { defaultSettings } from '../modules/settings/settings-service';
 import { createDbClientFromEnv } from './index';
 import { settings, users } from './schema';
 
+type DbClient = ReturnType<typeof createDbClientFromEnv>['db'];
+
 export type AdminSeedUser = {
   id: string;
   name: string;
@@ -16,6 +18,12 @@ export type AdminSeedUser = {
 };
 
 export const initialSettings = defaultSettings;
+
+export const bootstrapInitialSettings = async (db: DbClient): Promise<void> => {
+  await db.insert(settings).values(initialSettings).onConflictDoNothing({
+    target: settings.key,
+  });
+};
 
 export const buildAdminSeedUser = async ({
   ADMIN_EMAIL,
@@ -48,15 +56,7 @@ export const seed = async (): Promise<void> => {
         },
       });
 
-    for (const setting of initialSettings) {
-      await db
-        .insert(settings)
-        .values(setting)
-        .onConflictDoUpdate({
-          target: settings.key,
-          set: { value: setting.value },
-        });
-    }
+    await bootstrapInitialSettings(db);
   } finally {
     await sql.end();
   }

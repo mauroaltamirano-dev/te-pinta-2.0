@@ -24,6 +24,7 @@ import {
   financeWalletMovementSchema,
   financeWalletMovementSourceTypeSchema,
   orderStatusSchema,
+  updateOrderSchema,
   updateFinanceBaseCostRuleSchema,
   updateFinanceProductSchema,
   updateFinanceRecipeSchema,
@@ -86,6 +87,12 @@ describe('shared domain schemas', () => {
     expect(orderStatusSchema.options).toEqual(['confirmado', 'preparado', 'entregado']);
     expect(deliveryTimeSchema.options).toEqual(['mediodia', 'tarde', 'noche']);
     expect(deliveryTypeSchema.options).toEqual(['retiro', 'envio']);
+  });
+
+  it('rejects empty order updates while allowing explicit values', () => {
+    expect(updateOrderSchema.safeParse({}).success).toBe(false);
+    expect(updateOrderSchema.safeParse({ notes: '' }).success).toBe(true);
+    expect(updateOrderSchema.safeParse({ isPaid: false }).success).toBe(true);
   });
 
   it('validates finance product catalog and purchase contracts', () => {

@@ -15,9 +15,6 @@ import type {
   DashboardTopVariety,
 } from './dashboard-api';
 import {
-  dashboardCriticalAlertsMock,
-  dashboardCustomerSummaryMock,
-  dashboardSecondaryAlertsMock,
   type DashboardAlert,
   type DashboardCustomerSummary,
   type DashboardWallet,
@@ -453,13 +450,6 @@ export const mapOrderToCard = (
   status: order.status,
 });
 
-export const mapMockOrderToCard = (order: DashboardMockOrder): DashboardOrderCard => ({
-  ...order,
-  href: `/orders?orderId=${encodeURIComponent(order.id)}`,
-  isPaid: order.paymentStatus === 'Pagado',
-  status: order.productionStatus === 'Producido' ? 'preparado' : 'confirmado',
-});
-
 // ── Builders ───────────────────────────────────────────────────────────────────
 
 export const buildProductionSummaryFromOrders = (
@@ -537,11 +527,8 @@ export const buildCustomerSummary = (
   if (!topCustomer) return null;
 
   return {
-    newCustomers: dashboardCustomerSummaryMock.newCustomers,
-    recurringCustomers: Math.max(
-      topClients.length,
-      dashboardCustomerSummaryMock.recurringCustomers,
-    ),
+    newCustomers: 0,
+    recurringCustomers: topClients.filter((client) => client.orderCount > 1).length,
     topCustomer: {
       name: topCustomer.name,
       revenue: topCustomer.totalRevenue,
@@ -555,15 +542,11 @@ export const buildCriticalAlerts = ({
   orders,
   pendingRevenue,
   productionSummary,
-  useMock,
 }: {
   orders: DashboardOrderCard[];
   pendingRevenue: number;
   productionSummary: DashboardProductionSummary;
-  useMock: boolean;
 }): DashboardAlert[] => {
-  if (useMock) return dashboardCriticalAlertsMock;
-
   const alerts: DashboardAlert[] = [];
   const urgentOrder = orders.find(
     (order) => order.urgency === 'Urgente' || order.urgency === 'Hoy',
@@ -605,14 +588,10 @@ export const buildCriticalAlerts = ({
 export const buildSecondaryAlerts = ({
   criticalAlerts,
   pendingRevenue,
-  useMock,
 }: {
   criticalAlerts: DashboardAlert[];
   pendingRevenue: number;
-  useMock: boolean;
 }): DashboardAlert[] => {
-  if (useMock) return dashboardSecondaryAlertsMock;
-
   const alerts: DashboardAlert[] = [...criticalAlerts];
 
   if (pendingRevenue === 0) {

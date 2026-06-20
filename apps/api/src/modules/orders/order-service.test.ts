@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../../middlewares/error-handler';
 import type {
@@ -199,7 +199,7 @@ describe('order service', () => {
       menuItemId: 'menu-1',
       menuItemName: 'Carne suave',
       quantity: 13,
-      unitPrice: 16500,
+      unitPrice: 1269.23,
       subtotal: 16500,
     });
     expect(result.total).toBe(15850);
@@ -643,6 +643,7 @@ describe('order service', () => {
 
   it('preserves item pricing snapshots when updating an order without replacing items', async () => {
     let persisted: Parameters<OrderRepository['replaceOrder']>[1] | undefined;
+    let readCurrentSettings = false;
     const current = orderDetail({
       deliveryType: 'retiro',
       deliveryFee: 0,
@@ -652,6 +653,10 @@ describe('order service', () => {
     });
     const repository = createRepository({
       getById: async () => current,
+      getSetting: async () => {
+        readCurrentSettings = true;
+        throw new Error('Settings should not be read for metadata-only updates');
+      },
       getMenuItemsByIds: async () => {
         throw new Error('Menu prices should not be re-read when items are unchanged');
       },
@@ -663,6 +668,7 @@ describe('order service', () => {
 
     await updateOrder('order-1', { notes: 'Corregir dirección en puerta' }, repository);
 
+    expect(readCurrentSettings).toBe(false);
     expect(persisted).toMatchObject({
       id: 'order-1',
       notes: 'Corregir dirección en puerta',
@@ -676,6 +682,18 @@ describe('order service', () => {
       unitPrice: 16500,
       subtotal: 16500,
     });
+  });
+
+  it('rejects an empty update before reading or replacing the historical order', async () => {
+    const getById = vi.fn<OrderRepository['getById']>();
+    const replaceOrder = vi.fn<OrderRepository['replaceOrder']>();
+    const repository = createRepository({ getById, replaceOrder });
+
+    await expect(updateOrder('order-1', {}, repository)).rejects.toMatchObject(
+      new ApiError(400, 'At least one order field is required', 'ORDER_UPDATE_EMPTY'),
+    );
+    expect(getById).not.toHaveBeenCalled();
+    expect(replaceOrder).not.toHaveBeenCalled();
   });
 
   it('preserves finance cost snapshots when updating an order without replacing items', async () => {

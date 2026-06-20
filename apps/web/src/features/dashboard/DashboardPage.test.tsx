@@ -492,7 +492,7 @@ describe('DashboardPage', () => {
     );
 
     expect(screen.getByText('Ventas del período')).toBeInTheDocument();
-    expect(screen.getByText('$185.000')).toBeInTheDocument();
+    expect(await screen.findByText('$185.000')).toBeInTheDocument();
     expect(await screen.findByText('+26,7%')).toBeInTheDocument();
     expect(screen.getAllByText(/vs período anterior real/i).length).toBeGreaterThan(0);
     expect(screen.queryByText('+12,4%')).not.toBeInTheDocument();
@@ -561,7 +561,7 @@ describe('DashboardPage', () => {
     expect(walletsSection).not.toBeNull();
     const wallets = within(walletsSection!);
 
-    expect(wallets.getByRole('heading', { name: /costo base/i })).toBeInTheDocument();
+    expect(await wallets.findByRole('heading', { name: /costo base/i })).toBeInTheDocument();
     expect(wallets.getByRole('heading', { name: /servicios/i })).toBeInTheDocument();
     expect(wallets.getByRole('heading', { name: /ganancia/i })).toBeInTheDocument();
     expect(await wallets.findByText('$42.000')).toBeInTheDocument();
@@ -753,5 +753,21 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/no hay pedidos próximos/i)).toBeInTheDocument();
     expect(screen.getAllByText(/no hay ventas en el período/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/no hay clientes para este período/i)).toBeInTheDocument();
+  });
+
+  it('shows errors and real empty states instead of mock business data when APIs fail', async () => {
+    vi.mocked(getDailyDashboard).mockRejectedValue(new Error('Dashboard unavailable'));
+    vi.mocked(listOrders).mockRejectedValue(new Error('Orders unavailable'));
+
+    renderDashboardPage();
+
+    expect(
+      await screen.findByText(/no se pudo cargar el dashboard completo/i, {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/no hay pedidos próximos/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/no hay ventas en el período/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/no hay clientes para este período/i)).toBeInTheDocument();
+    expect(screen.queryByText(/maría gómez/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/datos mockeados/i)).not.toBeInTheDocument();
   });
 });

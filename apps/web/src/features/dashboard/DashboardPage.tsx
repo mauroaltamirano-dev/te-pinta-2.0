@@ -10,14 +10,6 @@ import {
 } from 'lucide-react';
 
 import { dashboardQueryKeys, useDailyDashboard } from './dashboard-hooks';
-import {
-  dashboardCustomerSummaryMock,
-  dashboardKpiComparisons,
-  dashboardMockOrders,
-  dashboardTotalsMock,
-  dashboardVarietySalesMock,
-  dashboardWalletsMock,
-} from './dashboard.mock';
 import { useOrders, useUpdateOrderPayment, useUpdateOrderStatus } from '../orders/orders-hooks';
 
 import {
@@ -32,7 +24,6 @@ import {
   getPeriodRange,
   getRelativeDeliveryLabel,
   getUrgency,
-  mapMockOrderToCard,
   mapOrderToCard,
   productionStatusByOrderStatus,
   today,
@@ -41,7 +32,7 @@ import {
   type KpiCardData,
 } from './dashboard-utils';
 
-import type { DashboardKpiComparison } from './dashboard-api';
+import type { DashboardKpiComparison, DashboardTotals } from './dashboard-api';
 import { DashboardHeader } from './components/DashboardHeader';
 import { DashboardPeriodControls } from './components/DashboardPeriodControls';
 import { KpiCard } from './components/KpiCard';
@@ -50,10 +41,10 @@ import { WalletsSummary } from './components/WalletsSummary';
 import { CommercialAnalyticsSection } from './components/AnalyticsCards';
 import { CriticalAlertsBar } from './components/CriticalAlertsBar';
 
-const fallbackComparison = (
-  comparison: (typeof dashboardKpiComparisons)[keyof typeof dashboardKpiComparisons],
-): DashboardKpiComparison => ({
-  ...comparison,
+const emptyComparison = (): DashboardKpiComparison => ({
+  value: '—',
+  label: 'Sin datos disponibles',
+  direction: 'neutral',
   currentValue: 0,
   previousValue: null,
   difference: null,
@@ -61,12 +52,27 @@ const fallbackComparison = (
 });
 
 const fallbackKpiComparisons = {
-  sales: fallbackComparison(dashboardKpiComparisons.sales),
-  profit: fallbackComparison(dashboardKpiComparisons.profit),
-  orders: fallbackComparison(dashboardKpiComparisons.orders),
-  dozens: fallbackComparison(dashboardKpiComparisons.dozens),
-  averageTicket: fallbackComparison(dashboardKpiComparisons.averageTicket),
-  pendingRevenue: fallbackComparison(dashboardKpiComparisons.pendingRevenue),
+  sales: emptyComparison(),
+  profit: emptyComparison(),
+  orders: emptyComparison(),
+  dozens: emptyComparison(),
+  averageTicket: emptyComparison(),
+  pendingRevenue: emptyComparison(),
+};
+
+const emptyDashboardTotals: DashboardTotals = {
+  orderCount: 0,
+  activeOrderCount: 0,
+  finalizedOrderCount: 0,
+  unpaidOrderCount: 0,
+  grossRevenue: 0,
+  paidRevenue: 0,
+  pendingRevenue: 0,
+  estimatedCosts: 0,
+  estimatedProfit: 0,
+  totalUnits: 0,
+  soldDozens: 0,
+  averageTicket: 0,
 };
 
 export const DashboardPage = () => {
@@ -113,12 +119,10 @@ export const DashboardPage = () => {
   const updateOrderPaymentMutation = useUpdateOrderPayment();
   const updateOrderStatusMutation = useUpdateOrderStatus();
   const dashboard = dashboardQuery.data;
-  const commercialDashboard = commercialDashboardQuery.data ?? dashboard;
+  const commercialDashboard = commercialDashboardQuery.data;
   const selectedRangeAnalytics = dashboard?.selectedRangeAnalytics;
   const commercialRangeAnalytics = commercialDashboard?.selectedRangeAnalytics;
   const selectedTotals = selectedRangeAnalytics?.totals;
-  const hasDashboardResponse = Boolean(dashboard);
-  const useMockDashboardData = !hasDashboardResponse && !dashboardQuery.isLoading;
 
   const handleGlobalPeriodChange = (nextPeriod: DashboardPeriod) => {
     setGlobalPeriod(nextPeriod);
@@ -161,7 +165,7 @@ export const DashboardPage = () => {
     );
   };
 
-  const totals = selectedTotals ?? (hasDashboardResponse ? dashboard!.totals : dashboardTotalsMock);
+  const totals = selectedTotals ?? dashboard?.totals ?? emptyDashboardTotals;
   const topClients = commercialRangeAnalytics?.topClients ?? commercialDashboard?.topClients ?? [];
   const topVarieties =
     commercialRangeAnalytics?.topVarieties ?? commercialDashboard?.topVarieties ?? [];
@@ -172,7 +176,7 @@ export const DashboardPage = () => {
       return ordersQuery.data.orders.map((order) => mapOrderToCard(order, date));
     }
 
-    if (dashboard?.upcomingOrders?.length && !ordersQuery.isError) {
+    if (dashboard?.upcomingOrders?.length) {
       return dashboard.upcomingOrders.map((order) => ({
         id: order.id,
         customerName: order.customerName,
@@ -189,8 +193,8 @@ export const DashboardPage = () => {
       }));
     }
 
-    return dashboardMockOrders.map(mapMockOrderToCard);
-  }, [dashboard?.upcomingOrders, date, ordersQuery.data, ordersQuery.isError]);
+    return [];
+  }, [dashboard?.upcomingOrders, date, ordersQuery.data]);
 
   const productionSummary = useMemo(() => {
     if (ordersQuery.data) {
@@ -207,25 +211,14 @@ export const DashboardPage = () => {
     };
   }, [date, ordersQuery.data]);
 
-  const varietySales = useMemo(() => {
-    if (useMockDashboardData) return dashboardVarietySalesMock;
+  const varietySales = useMemo(() => buildVarietySales(topVarieties), [topVarieties]);
 
-    return buildVarietySales(topVarieties);
-  }, [topVarieties, useMockDashboardData]);
+  const customerSummary = useMemo(() => buildCustomerSummary(topClients), [topClients]);
 
-  const customerSummary = useMemo(() => {
-    if (useMockDashboardData) return dashboardCustomerSummaryMock;
-
-    return buildCustomerSummary(topClients);
-  }, [topClients, useMockDashboardData]);
-
-  const wallets = useMemo(() => {
-    if (useMockDashboardData) {
-      return dashboardWalletsMock;
-    }
-
-    return dashboard?.accountingSummary?.wallets ?? dashboardWalletsMock;
-  }, [dashboard?.accountingSummary?.wallets, useMockDashboardData]);
+  const wallets = useMemo(
+    () => dashboard?.accountingSummary?.wallets ?? [],
+    [dashboard?.accountingSummary?.wallets],
+  );
 
   const criticalAlerts = useMemo(
     () =>
@@ -233,9 +226,8 @@ export const DashboardPage = () => {
         orders,
         pendingRevenue: totals.pendingRevenue ?? 0,
         productionSummary,
-        useMock: useMockDashboardData && !ordersQuery.data,
       }),
-    [orders, ordersQuery.data, productionSummary, totals.pendingRevenue, useMockDashboardData],
+    [orders, productionSummary, totals.pendingRevenue],
   );
 
   const kpis = useMemo<KpiCardData[]>(
@@ -335,8 +327,8 @@ export const DashboardPage = () => {
       ) : null}
       {dashboardQuery.isError || commercialDashboardQuery.isError ? (
         <p className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
-          No se pudo cargar el dashboard. Mostrando datos mockeados de referencia para no bloquear
-          el diseño.
+          No se pudo cargar el dashboard completo. Las secciones sin respuesta muestran valores
+          vacíos.
         </p>
       ) : null}
 

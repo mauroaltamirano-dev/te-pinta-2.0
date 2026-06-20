@@ -4,6 +4,7 @@ import type { Customer } from './customers-api';
 import type { OrderListItem } from '../orders/orders-api';
 import {
   buildCustomerProfile,
+  buildCustomerProfiles,
   formatMoney,
   formatRelativePurchaseDate,
   matchesCustomerFilter,
@@ -75,7 +76,11 @@ describe('customers-utils', () => {
     expect(profile.orderCount).toBeGreaterThanOrEqual(2);
     expect(profile.totalPurchased).toBe(45000);
     expect(profile.debtAmount).toBe(15000);
-    expect(profile.favoriteVariety).toBe('Salteña');
+    expect(profile.favoriteVariety).toBe('Sin datos');
     expect(matchesCustomerFilter(profile, 'con-deuda')).toBe(true);
+  });
+
+  it('does not create demo customers when the API returns an empty list', () => {
+    expect(buildCustomerProfiles([], [], new Date(2026, 5, 4))).toEqual([]);
   });
 });

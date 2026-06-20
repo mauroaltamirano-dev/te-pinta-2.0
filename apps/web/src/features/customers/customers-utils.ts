@@ -2,11 +2,6 @@ import type { OrderStatus } from '@te-pinta/shared';
 
 import type { OrderListItem } from '../orders/orders-api';
 import type { Customer } from './customers-api';
-import {
-  crmDemoCustomers,
-  getCustomerEnrichment,
-  mergeDemoPurchaseHistory,
-} from './customers.mock';
 import type {
   CustomerEnrichment,
   CustomerFilterId,
@@ -220,42 +215,37 @@ export const buildCustomerProfile = (
   apiOrders: OrderListItem[],
   reference = new Date(),
 ): CustomerProfile => {
-  const enrichment = getCustomerEnrichment(customer.id, customer.name);
   const customerOrders = apiOrders
     .filter((order) => order.customer.id === customer.id)
     .sort((a, b) => b.deliveryDate.localeCompare(a.deliveryDate));
 
   const apiPurchaseHistory = customerOrders.map(orderListItemToPurchaseRecord);
-  const orders = mergeDemoPurchaseHistory(apiPurchaseHistory, enrichment?.purchaseHistory).slice(0, 20);
+  const orders = apiPurchaseHistory.slice(0, 20);
 
-  const orderCount = Math.max(customerOrders.length, orders.length);
-  const totalPurchased = customerOrders.length
-    ? customerOrders.reduce((sum, order) => sum + order.total, 0)
-    : orders.reduce((sum, order) => sum + order.total, 0);
+  const orderCount = customerOrders.length;
+  const totalPurchased = customerOrders.reduce((sum, order) => sum + order.total, 0);
 
   const unpaidFromApi = customerOrders
     .filter((order) => !order.isPaid)
     .reduce((sum, order) => sum + order.total, 0);
 
-  const debtAmount = enrichment?.debtAmount ?? unpaidFromApi;
-  const lastPurchaseAt = orders[0]?.date ?? customerOrders[0]?.deliveryDate ?? null;
+  const debtAmount = unpaidFromApi;
+  const lastPurchaseAt = orders[0]?.date ?? null;
   const daysSinceLastPurchase = daysSinceIsoDate(lastPurchaseAt, reference);
 
-  const dozensPurchased = customerOrders.length
-    ? customerOrders.reduce((sum, order) => sum + order.totalQuantity, 0) / 12
-    : orders.reduce((sum, order) => sum + order.dozens, 0);
+  const dozensPurchased =
+    customerOrders.reduce((sum, order) => sum + order.totalQuantity, 0) / 12;
 
   const averageTicket = orderCount ? totalPurchased / orderCount : 0;
   const purchaseFrequencyDays = computePurchaseFrequencyDays(orders);
 
-  const varietyRanking = recalculateVarietyPercents(enrichment?.varietyBreakdown ?? []);
+  const varietyRanking = recalculateVarietyPercents([]);
   const favoriteVariety = varietyRanking[0]?.variety ?? 'Sin datos';
 
   const { status, displayStatuses } = resolveCustomerStatuses({
     orderCount,
     daysSinceLastPurchase,
     debtAmount,
-    enrichment,
     reference,
   });
 
@@ -265,14 +255,14 @@ export const buildCustomerProfile = (
 
   return {
     ...customer,
-    neighborhood: enrichment?.neighborhood ?? extractNeighborhood(customer.address),
-    createdAt: enrichment?.createdAt ?? inferCreatedAt(customerOrders),
+    neighborhood: extractNeighborhood(customer.address),
+    createdAt: inferCreatedAt(customerOrders),
     status,
     displayStatuses,
-    tags: enrichment?.tags ?? [],
-    notes: enrichment?.notes ?? [],
-    importantNote: enrichment?.importantNote ?? null,
-    nextOrderLabel: enrichment?.nextOrderLabel ?? null,
+    tags: [],
+    notes: [],
+    importantNote: null,
+    nextOrderLabel: null,
     orders,
     debtAmount,
     favoriteVariety,
@@ -287,9 +277,7 @@ export const buildCustomerProfile = (
     varietyInsight: buildVarietyInsight(varietyRanking, customer.name),
     pendingCollection: debtAmount > 0 ? debtAmount : pendingFromOrders,
     isForReactivation: displayStatuses.includes('para-reactivar'),
-    isWholesale: Boolean(
-      enrichment?.isWholesale || enrichment?.tags?.some((tag) => tag.toLowerCase().includes('mayorista')),
-    ),
+    isWholesale: false,
   };
 };
 
@@ -309,19 +297,8 @@ export const buildCustomerProfiles = (
   customers: Customer[],
   orders: OrderListItem[],
   reference = new Date(),
-): CustomerProfile[] => {
-  const sourceCustomers =
-    customers.length > 0
-      ? customers
-      : crmDemoCustomers.map((demo) => ({
-          id: demo.id,
-          name: demo.name,
-          phone: demo.phone,
-          address: demo.address,
-        }));
-
-  return sourceCustomers.map((customer) => buildCustomerProfile(customer, orders, reference));
-};
+): CustomerProfile[] =>
+  customers.map((customer) => buildCustomerProfile(customer, orders, reference));
 
 export const computeCustomersSummary = (profiles: CustomerProfile[]): CustomersSummaryMetrics => {
   const reference = new Date();

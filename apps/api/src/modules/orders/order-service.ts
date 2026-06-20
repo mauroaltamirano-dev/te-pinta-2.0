@@ -248,7 +248,7 @@ const buildSnapshotItems = async (
       menuItemId: item.menuItemId,
       menuItemName: menuItem.name,
       quantity: item.quantity,
-      unitPrice: calculated.total,
+      unitPrice: roundMoney(calculated.total / item.quantity),
       subtotal: calculated.total,
       priceHalfDozen: menuItem.priceHalfDozen,
     };
@@ -486,7 +486,51 @@ export const updateOrder = async (
   input: UpdateOrderInput,
   repository: OrderRepository,
 ): Promise<OrderDetail> => {
+  if (!Object.values(input).some((value) => value !== undefined)) {
+    throw new ApiError(400, 'At least one order field is required', 'ORDER_UPDATE_EMPTY');
+  }
+
   const current = await getOrder(id, repository);
+  const shouldRecalculatePricing =
+    input.deliveryType !== undefined ||
+    input.cooked !== undefined ||
+    input.discountPercent !== undefined ||
+    input.deliveryFee !== undefined ||
+    input.items !== undefined ||
+    input.addons !== undefined;
+
+  if (!shouldRecalculatePricing) {
+    const customer = input.customer
+      ? await resolveCustomer(input.customer, repository)
+      : current.customer;
+    const persistInput: PersistOrderInput = {
+      id,
+      customerId: customer.id,
+      deliveryDate: input.deliveryDate ?? current.deliveryDate,
+      deliveryTime: input.deliveryTime ?? current.deliveryTime,
+      deliveryType: current.deliveryType,
+      cooked: current.cooked,
+      notes: input.notes === undefined ? current.notes : normalizeOptionalText(input.notes),
+      discountPercent: current.discountPercent,
+      deliveryFee: current.deliveryFee,
+      cookingFee: current.cookingFee,
+      subtotal: current.subtotal,
+      total: current.total,
+      ...pickFinanceSnapshot(current),
+      status: input.status ?? current.status,
+      isPaid: input.isPaid ?? current.isPaid,
+      items: current.items.map((item) => ({ ...item })),
+      addons: current.addons.map((addon) => ({ ...addon })),
+    };
+    const updated = await repository.replaceOrder(id, persistInput);
+
+    if (!updated) {
+      throw new ApiError(404, 'Order not found', 'ORDER_NOT_FOUND');
+    }
+
+    return updated;
+  }
+
   const effectiveInput: CreateOrderInput = input.items
     ? toCreateOrderInput({
         customer: input.customer ?? { existingCustomerId: current.customer.id },

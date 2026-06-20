@@ -300,6 +300,8 @@ describe('OrdersPage', () => {
     expect(drawer.getByRole('tab', { name: /resumen/i })).toHaveAttribute('aria-selected', 'true');
     expect(drawer.getByText('Carne suave')).toBeInTheDocument();
     expect(drawer.getByText('Humita')).toBeInTheDocument();
+    expect(drawer.getAllByText(/^12 unidades$/i)).toHaveLength(2);
+    expect(drawer.queryByText(/12 unidades ·/i)).not.toBeInTheDocument();
     expect(drawer.getByText('$ 23.100')).toBeInTheDocument();
     expect(screen.getByLabelText(/pedido ana pérez/i)).toHaveAttribute('aria-selected', 'true');
     expect(getOrder).toHaveBeenCalledWith('order-1');

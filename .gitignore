@@ -30,6 +30,9 @@ yarn-error.log*
 deploy/self-host/backups/
 /customer-merge-map.csv
 /customer-merge-map.*.csv
+/sorteo-*.csv
+/sorteo-*.json
+/te-pinta-viejo-*.sql
 
 # OS / editor
 .DS_Store

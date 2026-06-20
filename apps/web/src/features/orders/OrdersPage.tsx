@@ -879,7 +879,7 @@ const OrderDetailPanel = ({
                     <div>
                       <p className="font-black text-foreground">{item.menuItemName}</p>
                       <p className="text-sm font-semibold text-muted-foreground">
-                        {item.quantity} unidades · {formatMoney(item.unitPrice)}
+                        {item.quantity} unidades
                       </p>
                     </div>
                     <p className="font-black tabular-nums text-foreground">

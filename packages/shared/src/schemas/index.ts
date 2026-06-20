@@ -360,10 +360,19 @@ export const createOrderSchema = z.object({
   addons: z.array(orderAddonInputSchema).default([]),
 });
 
-export const updateOrderSchema = createOrderSchema.partial().extend({
-  status: orderStatusSchema.optional(),
-  isPaid: z.boolean().optional(),
-});
+export const updateOrderSchema = createOrderSchema
+  .partial()
+  .extend({
+    cooked: z.boolean().optional(),
+    discountPercent: percentSchema.optional(),
+    deliveryFee: moneySchema.optional(),
+    addons: z.array(orderAddonInputSchema).optional(),
+    status: orderStatusSchema.optional(),
+    isPaid: z.boolean().optional(),
+  })
+  .refine((input) => Object.values(input).some((value) => value !== undefined), {
+    message: 'At least one order field must be provided',
+  });
 
 export const orderFiltersSchema = z.object({
   fecha: z.iso.date().optional(),

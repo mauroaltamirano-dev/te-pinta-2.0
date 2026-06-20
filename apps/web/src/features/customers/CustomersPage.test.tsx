@@ -174,6 +174,19 @@ describe('CustomersPage', () => {
     expect(screen.getByText('Bruno Gómez')).toBeInTheDocument();
   });
 
+  it('shows the API error without injecting demo customers', async () => {
+    vi.mocked(listCustomers).mockRejectedValue(new Error('Customers unavailable'));
+    vi.mocked(listAllOrders).mockResolvedValue([]);
+
+    renderCustomersPage();
+
+    expect(
+      await screen.findByText(/no se pudieron cargar los clientes/i, {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/no hay clientes cargados/i)).toBeInTheDocument();
+    expect(screen.queryByText(/maría gómez/i)).not.toBeInTheDocument();
+  });
+
   it('creates a customer from the form', async () => {
     vi.mocked(createCustomer).mockResolvedValue({
       id: 'customer-3',
