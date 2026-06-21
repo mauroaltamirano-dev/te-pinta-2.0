@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./dist/server.js",
+  "main": "./dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
-    "start": "tsx src/server.ts",
+    "start": "tsx dist/src/server.js",
     "db:import-legacy": "tsx src/db/import-legacy.ts",
     "db:merge-customers": "tsx src/db/merge-customers.ts",
     "db:import-history-map": "tsx src/db/import-history-map.ts"
@@ -31,6 +31,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "postgres": "^3.4.9",
+    "tsx": "^4.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -40,7 +41,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/supertest": "^7.2.0",
     "drizzle-kit": "^0.31.10",
-    "supertest": "^7.2.2",
-    "tsx": "^4.21.0"
+    "supertest": "^7.2.2"
   }
 }

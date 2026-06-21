@@ -40,6 +40,7 @@ corepack enable && pnpm install --frozen-lockfile && pnpm --filter @te-pinta/sha
 pnpm --filter @te-pinta/api start
 ```
 
+- El script `start` ejecuta `apps/api/dist/src/server.js`, no TypeScript fuente.
 - Health check path: `/health`
 
 Variables de entorno en Render:
@@ -58,7 +59,7 @@ ADMIN_NAME=Admin Te Pinta
 
 ## 3. Migrar y seedear DB
 
-Render Free no ofrece pre-deploy command para web services free, así que correr desde local apuntando a Neon:
+Render Free no ofrece pre-deploy command para web services free, así que correr desde una terminal confiable apuntando a Neon **antes** del deploy:
 
 ```bash
 cd apps/api
@@ -66,7 +67,9 @@ DATABASE_URL='<neon-postgres-url>' pnpm db:migrate
 DATABASE_URL='<neon-postgres-url>' JWT_SECRET='dummy-secret-32-chars-minimum-xxxx' JWT_REFRESH_SECRET='dummy-refresh-secret-32-chars-minimum' ALLOWED_ORIGIN='http://localhost:5173' ADMIN_EMAIL='<email admin>' ADMIN_PASSWORD='<password fuerte>' ADMIN_NAME='Admin Te Pinta' NODE_ENV=production pnpm db:seed
 ```
 
-> `db:seed` usa las env de admin y crea/actualiza el usuario admin y settings operativos.
+> `db:seed` crea o actualiza el usuario admin. En settings sólo inserta claves faltantes y no pisa valores comerciales existentes. No lo ejecutes si no querés actualizar las credenciales configuradas.
+
+La metadata Drizzle debe reconciliarse antes de generar migraciones nuevas. Consultá [Operaciones técnicas](operations.md).
 
 ## 4. Deploy web en Vercel
 
