@@ -46,3 +46,4 @@ deploy/self-host/backups/
 .vercel
 
 /customer-history-manual/
+/cookies.txt
