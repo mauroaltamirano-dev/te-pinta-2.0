@@ -600,21 +600,21 @@ describe('OrdersPage', () => {
 
     expect(await screen.findByLabelText(/pedido ana pérez/i)).toBeInTheDocument();
     const closestCards = screen.getAllByRole('article', { name: /pedido /i });
-    expect(closestCards[0]).toHaveAccessibleName(/pedido lejano/i);
-    expect(closestCards[1]).toHaveAccessibleName(/ana pérez/i);
+    expect(closestCards[0]).toHaveAccessibleName(/ana pérez/i);
+    expect(closestCards[1]).toHaveAccessibleName(/pedido lejano/i);
     expect(vi.mocked(listOrders).mock.calls[0]?.[0]).toMatchObject({
       sortBy: 'deliveryDate',
-      sortDir: 'desc',
+      sortDir: 'asc',
     });
 
     await userEvent.selectOptions(screen.getByLabelText(/ordenar por/i), 'date_desc');
 
     const farthestCards = screen.getAllByRole('article', { name: /pedido /i });
-    expect(farthestCards[0]).toHaveAccessibleName(/ana pérez/i);
-    expect(farthestCards[1]).toHaveAccessibleName(/pedido lejano/i);
+    expect(farthestCards[0]).toHaveAccessibleName(/pedido lejano/i);
+    expect(farthestCards[1]).toHaveAccessibleName(/ana pérez/i);
     expect(vi.mocked(listOrders).mock.calls.at(-1)?.[0]).toMatchObject({
       sortBy: 'deliveryDate',
-      sortDir: 'asc',
+      sortDir: 'desc',
     });
   });
 

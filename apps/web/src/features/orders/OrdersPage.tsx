@@ -763,12 +763,12 @@ const OrderDetailPanel = ({
                   )}
                 </div>
                 <button
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 text-sm font-black text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
+                  aria-label="Copiar para cliente"
+                  className="inline-flex items-center justify-center rounded-full bg-primary p-3 text-primary-foreground shadow-primary-glow transition hover:bg-primary/90 active:scale-[0.98]"
                   onClick={() => void copyCustomerMessage()}
                   type="button"
                 >
-                  <ReceiptText className="h-4 w-4" />
-                  Copiar para cliente
+                  <ReceiptText aria-hidden="true" className="h-4 w-4" />
                 </button>
               </div>
             </section>
@@ -1039,7 +1039,7 @@ export const OrdersPage = () => {
   const [methodFilter, setMethodFilter] = useState<OrderMethodFilter>('todos');
   const [sortOption, setSortOption] = useState<OrderSortOption>('date_asc');
   const [tableSortCol, setTableSortCol] = useState<TableSortColumn>('date');
-  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('desc');
+  const [tableSortDir, setTableSortDir] = useState<TableSortDir>('asc');
   const [orderPage, setOrderPage] = useState(1);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -1624,8 +1624,8 @@ export const OrdersPage = () => {
   const handleSortOptionChange = (option: OrderSortOption) => {
     setSortOption(option);
     const sortMap: Record<OrderSortOption, { col: TableSortColumn; dir: TableSortDir }> = {
-      date_asc: { col: 'date', dir: 'desc' },
-      date_desc: { col: 'date', dir: 'asc' },
+      date_asc: { col: 'date', dir: 'asc' },
+      date_desc: { col: 'date', dir: 'desc' },
       name_asc: { col: 'name', dir: 'asc' },
       name_desc: { col: 'name', dir: 'desc' },
       total_desc: { col: 'total', dir: 'desc' },
