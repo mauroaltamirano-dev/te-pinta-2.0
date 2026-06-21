@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -249,11 +250,16 @@ export const financeStockMovements = pgTable(
       .references(() => financeProducts.id),
     movementType: financeStockMovementTypeEnum('movement_type').notNull(),
     quantityBase: numeric('quantity_base', { precision: 14, scale: 3 }).notNull(),
-    sourcePurchaseItemId: text('source_purchase_item_id').references(() => financePurchaseItems.id),
+    sourcePurchaseItemId: text('source_purchase_item_id'),
     notes: text('notes'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: 'finance_stock_movements_source_purchase_item_id_finance_purchas',
+      columns: [table.sourcePurchaseItemId],
+      foreignColumns: [financePurchaseItems.id],
+    }),
     index('finance_stock_movements_product_id_idx').on(table.productId),
     index('finance_stock_movements_source_purchase_item_id_idx').on(table.sourcePurchaseItemId),
   ],
@@ -292,9 +298,7 @@ export const financeRecipeItems = pgTable(
   'finance_recipe_items',
   {
     id: id(),
-    menuItemId: text('menu_item_id')
-      .notNull()
-      .references(() => financeRecipes.menuItemId),
+    menuItemId: text('menu_item_id').notNull(),
     productId: text('product_id')
       .notNull()
       .references(() => financeProducts.id),
@@ -305,6 +309,11 @@ export const financeRecipeItems = pgTable(
     ...timestamps,
   },
   (table) => [
+    foreignKey({
+      name: 'finance_recipe_items_menu_item_id_finance_recipes_menu_item_id_',
+      columns: [table.menuItemId],
+      foreignColumns: [financeRecipes.menuItemId],
+    }),
     index('finance_recipe_items_menu_item_id_idx').on(table.menuItemId),
     index('finance_recipe_items_product_id_idx').on(table.productId),
   ],
