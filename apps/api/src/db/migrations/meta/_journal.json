@@ -78,6 +78,13 @@
       "when": 1781558400000,
       "tag": "0010_finance_wallet_adjustments",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782085397805,
+      "tag": "0011_amusing_the_hand",
+      "breakpoints": true
     }
   ]
 }

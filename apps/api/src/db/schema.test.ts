@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest';
 import {
   customers,
   financeBaseCostRules,
+  financeLedgerEntries,
+  financeLedgerEvents,
   financeProducts,
   financePurchaseItems,
   financePurchases,
@@ -42,6 +44,8 @@ describe('database schema', () => {
       getTableName(financeRecipes),
       getTableName(financeRecipeItems),
       getTableName(financeWalletAdjustments),
+      getTableName(financeLedgerEvents),
+      getTableName(financeLedgerEntries),
     ]).toEqual([
       'users',
       'customers',
@@ -58,6 +62,8 @@ describe('database schema', () => {
       'finance_recipes',
       'finance_recipe_items',
       'finance_wallet_adjustments',
+      'finance_ledger_events',
+      'finance_ledger_entries',
     ]);
   });
 
@@ -147,6 +153,23 @@ describe('database schema', () => {
     expect(migration).toContain('finance_wallet_adjustments_occurred_at_idx');
   });
 
+  it('adds immutable finance ledger infrastructure in migration 0011', async () => {
+    const migration = await readFile(
+      join(currentDir, 'migrations', '0011_amusing_the_hand.sql'),
+      'utf8',
+    );
+
+    expect(migration).toContain('CREATE TABLE "finance_ledger_events"');
+    expect(migration).toContain('CREATE TABLE "finance_ledger_entries"');
+    expect(migration).toContain('finance_ledger_events_idempotency_key_unique');
+    expect(migration).toContain('finance_ledger_entries_event_line_unique');
+    expect(migration).toContain('finance_ledger_entries_amount_positive');
+    expect(migration).toContain('jsonb_typeof');
+    expect(migration).toContain('CREATE FUNCTION "reject_finance_ledger_mutation"');
+    expect(migration).toContain('CREATE TRIGGER "finance_ledger_events_append_only"');
+    expect(migration).toContain('CREATE TRIGGER "finance_ledger_entries_append_only"');
+  });
+
   it('registers latest migrations in the Drizzle journal', async () => {
     const journal = JSON.parse(
       await readFile(join(currentDir, 'migrations', 'meta', '_journal.json'), 'utf8'),
@@ -159,28 +182,34 @@ describe('database schema', () => {
       }>;
     };
 
-    expect(journal.entries.at(-4)).toMatchObject({
+    expect(journal.entries.at(-5)).toMatchObject({
       idx: 7,
       version: '7',
       tag: '0007_finance_purchase_cancellation',
       breakpoints: true,
     });
-    expect(journal.entries.at(-3)).toMatchObject({
+    expect(journal.entries.at(-4)).toMatchObject({
       idx: 8,
       version: '7',
       tag: '0008_menu_item_archival',
       breakpoints: true,
     });
-    expect(journal.entries.at(-2)).toMatchObject({
+    expect(journal.entries.at(-3)).toMatchObject({
       idx: 9,
       version: '7',
       tag: '0009_finance_purchase_funding_source',
       breakpoints: true,
     });
-    expect(journal.entries.at(-1)).toMatchObject({
+    expect(journal.entries.at(-2)).toMatchObject({
       idx: 10,
       version: '7',
       tag: '0010_finance_wallet_adjustments',
+      breakpoints: true,
+    });
+    expect(journal.entries.at(-1)).toMatchObject({
+      idx: 11,
+      version: '7',
+      tag: '0011_amusing_the_hand',
       breakpoints: true,
     });
   });

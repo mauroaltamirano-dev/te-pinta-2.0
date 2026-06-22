@@ -12,6 +12,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 
@@ -62,6 +63,42 @@ export const financeCostRuleAppliesToEnum = pgEnum('finance_cost_rule_applies_to
   'per_started_dozen',
 ]);
 export const financeRoundingModeEnum = pgEnum('finance_rounding_mode', ['exact', 'ceil']);
+export const financeLedgerEventTypeEnum = pgEnum('finance_ledger_event_type', [
+  'sale_confirmed',
+  'order_canceled',
+  'payment_received',
+  'payment_reversed',
+  'purchase_recorded',
+  'purchase_canceled',
+  'wallet_adjustment',
+  'stock_movement',
+  'correction',
+]);
+export const financeLedgerOriginEnum = pgEnum('finance_ledger_origin', [
+  'live',
+  'manual',
+  'backfill',
+  'system',
+]);
+export const financeLedgerSourceTypeEnum = pgEnum('finance_ledger_source_type', [
+  'order',
+  'purchase',
+  'wallet_adjustment',
+  'stock_movement',
+]);
+export const financeLedgerEntryKindEnum = pgEnum('finance_ledger_entry_kind', [
+  'income',
+  'expense',
+  'adjustment',
+  'reversal',
+]);
+export const financeLedgerCategoryEnum = pgEnum('finance_ledger_category', [
+  'sale',
+  'purchase',
+  'wallet_adjustment',
+  'stock_valuation',
+  'correction',
+]);
 
 const id = (name = 'id') => text(name).primaryKey();
 const timestamps = {
@@ -337,5 +374,90 @@ export const financeWalletAdjustments = pgTable(
     index('finance_wallet_adjustments_occurred_at_idx').on(table.occurredAt),
     index('finance_wallet_adjustments_actor_id_idx').on(table.actorId),
     check('finance_wallet_adjustments_amount_positive', sql`${table.amountCents} > 0`),
+  ],
+);
+
+export const financeLedgerEvents = pgTable(
+  'finance_ledger_events',
+  {
+    id: id(),
+    eventType: financeLedgerEventTypeEnum('event_type').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    origin: financeLedgerOriginEnum('origin').notNull(),
+    sourceType: financeLedgerSourceTypeEnum('source_type').notNull(),
+    sourceId: text('source_id').notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull(),
+    createdById: text('created_by_id'),
+    createdByName: varchar('created_by_name', { length: 160 }),
+    reversesEventId: text('reverses_event_id'),
+    metadataJson: jsonb('metadata_json'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'finance_ledger_events_reverses_event_fk',
+      columns: [table.reversesEventId],
+      foreignColumns: [table.id],
+    }).onDelete('restrict'),
+    uniqueIndex('finance_ledger_events_idempotency_key_unique').on(table.idempotencyKey),
+    index('finance_ledger_events_source_idx').on(table.sourceType, table.sourceId),
+    index('finance_ledger_events_occurred_at_idx').on(table.occurredAt),
+    index('finance_ledger_events_event_type_idx').on(table.eventType),
+    check(
+      'finance_ledger_events_actor_pair',
+      sql`(${table.createdById} IS NULL) = (${table.createdByName} IS NULL)`,
+    ),
+    check(
+      'finance_ledger_events_metadata_object',
+      sql`${table.metadataJson} IS NULL OR jsonb_typeof(${table.metadataJson}) = 'object'`,
+    ),
+  ],
+);
+
+export const financeLedgerEntries = pgTable(
+  'finance_ledger_entries',
+  {
+    id: id(),
+    eventId: text('event_id').notNull(),
+    lineKey: varchar('line_key', { length: 120 }).notNull(),
+    entryKind: financeLedgerEntryKindEnum('entry_kind').notNull(),
+    direction: financeWalletMovementDirectionEnum('direction').notNull(),
+    wallet: financePurchaseFundingSourceEnum('wallet'),
+    category: financeLedgerCategoryEnum('category').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull().default('ARS'),
+    description: text('description').notNull(),
+    reversesEntryId: text('reverses_entry_id'),
+    metadataJson: jsonb('metadata_json'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'finance_ledger_entries_event_fk',
+      columns: [table.eventId],
+      foreignColumns: [financeLedgerEvents.id],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'finance_ledger_entries_reverses_entry_fk',
+      columns: [table.reversesEntryId],
+      foreignColumns: [table.id],
+    }).onDelete('restrict'),
+    uniqueIndex('finance_ledger_entries_event_line_unique').on(table.eventId, table.lineKey),
+    uniqueIndex('finance_ledger_entries_reverses_entry_unique')
+      .on(table.reversesEntryId)
+      .where(sql`${table.reversesEntryId} IS NOT NULL`),
+    index('finance_ledger_entries_event_id_idx').on(table.eventId),
+    index('finance_ledger_entries_wallet_idx').on(table.wallet),
+    index('finance_ledger_entries_category_idx').on(table.category),
+    index('finance_ledger_entries_created_at_idx').on(table.createdAt),
+    check('finance_ledger_entries_amount_positive', sql`${table.amountCents} > 0`),
+    check(
+      'finance_ledger_entries_not_self_reversal',
+      sql`${table.reversesEntryId} IS NULL OR ${table.reversesEntryId} <> ${table.id}`,
+    ),
+    check(
+      'finance_ledger_entries_metadata_object',
+      sql`${table.metadataJson} IS NULL OR jsonb_typeof(${table.metadataJson}) = 'object'`,
+    ),
   ],
 );
