@@ -176,6 +176,24 @@ const orderSortLabels: Record<OrderSortOption, string> = {
   total_asc: 'Precio menor',
 };
 
+const resolveSortConfig = (
+  option: OrderSortOption,
+  visibility: OrderVisibilityFilter,
+): { col: TableSortColumn; dir: TableSortDir } => {
+  const closestDateDirection = visibility === 'finalized' ? 'desc' : 'asc';
+  const farthestDateDirection = visibility === 'finalized' ? 'asc' : 'desc';
+  const sortMap: Record<OrderSortOption, { col: TableSortColumn; dir: TableSortDir }> = {
+    date_asc: { col: 'date', dir: closestDateDirection },
+    date_desc: { col: 'date', dir: farthestDateDirection },
+    name_asc: { col: 'name', dir: 'asc' },
+    name_desc: { col: 'name', dir: 'desc' },
+    total_desc: { col: 'total', dir: 'desc' },
+    total_asc: { col: 'total', dir: 'asc' },
+  };
+
+  return sortMap[option];
+};
+
 const orderMethodFilterLabels: Record<OrderMethodFilter, string> = {
   todos: 'Método: Todos',
   envio: 'Envío',
@@ -1623,16 +1641,16 @@ export const OrdersPage = () => {
 
   const handleSortOptionChange = (option: OrderSortOption) => {
     setSortOption(option);
-    const sortMap: Record<OrderSortOption, { col: TableSortColumn; dir: TableSortDir }> = {
-      date_asc: { col: 'date', dir: 'asc' },
-      date_desc: { col: 'date', dir: 'desc' },
-      name_asc: { col: 'name', dir: 'asc' },
-      name_desc: { col: 'name', dir: 'desc' },
-      total_desc: { col: 'total', dir: 'desc' },
-      total_asc: { col: 'total', dir: 'asc' },
-    };
-    setTableSortCol(sortMap[option].col);
-    setTableSortDir(sortMap[option].dir);
+    const sortConfig = resolveSortConfig(option, visibilityFilter);
+    setTableSortCol(sortConfig.col);
+    setTableSortDir(sortConfig.dir);
+  };
+
+  const handleVisibilityFilterChange = (filter: OrderVisibilityFilter) => {
+    setVisibilityFilter(filter);
+    const sortConfig = resolveSortConfig(sortOption, filter);
+    setTableSortCol(sortConfig.col);
+    setTableSortDir(sortConfig.dir);
   };
 
   const toggleOrderDetail = (id: string) => {
@@ -3582,7 +3600,7 @@ export const OrdersPage = () => {
                     'relative pb-3 text-sm font-black transition-colors',
                     isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                   ].join(' ')}
-                  onClick={() => setVisibilityFilter(filter)}
+                  onClick={() => handleVisibilityFilterChange(filter)}
                   type="button"
                 >
                   {filter === 'active' ? 'Activos' : 'Finalizados'}

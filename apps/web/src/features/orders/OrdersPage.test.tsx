@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
@@ -616,6 +616,57 @@ describe('OrdersPage', () => {
       sortBy: 'deliveryDate',
       sortDir: 'desc',
     });
+  });
+
+  it('sorts finalized closest dates as the most recently delivered orders', async () => {
+    vi.mocked(listOrders).mockResolvedValue(
+      orderListResponse([
+        {
+          ...finalizedOrderListItem,
+          id: 'order-old-finalized',
+          customer: { ...finalizedOrderListItem.customer, id: 'customer-old', name: 'Pedido Viejo' },
+          deliveryDate: '2026-03-21',
+        },
+        {
+          ...finalizedOrderListItem,
+          id: 'order-recent-finalized',
+          customer: {
+            ...finalizedOrderListItem.customer,
+            id: 'customer-recent',
+            name: 'Pedido Reciente',
+          },
+          deliveryDate: '2026-06-22',
+        },
+      ]),
+    );
+
+    renderOrdersPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /finalizados/i }));
+    await waitFor(() =>
+      expect(vi.mocked(listOrders).mock.calls.at(-1)?.[0]).toMatchObject({
+        visibility: 'finalized',
+        sortBy: 'deliveryDate',
+        sortDir: 'desc',
+      }),
+    );
+
+    const closestCards = screen.getAllByRole('article', { name: /pedido /i });
+    expect(closestCards[0]).toHaveAccessibleName(/pedido reciente/i);
+    expect(closestCards[1]).toHaveAccessibleName(/pedido viejo/i);
+
+    await userEvent.selectOptions(screen.getByLabelText(/ordenar por/i), 'date_desc');
+
+    await waitFor(() =>
+      expect(vi.mocked(listOrders).mock.calls.at(-1)?.[0]).toMatchObject({
+        visibility: 'finalized',
+        sortBy: 'deliveryDate',
+        sortDir: 'asc',
+      }),
+    );
+    const farthestCards = screen.getAllByRole('article', { name: /pedido /i });
+    expect(farthestCards[0]).toHaveAccessibleName(/pedido viejo/i);
+    expect(farthestCards[1]).toHaveAccessibleName(/pedido reciente/i);
   });
 
   it('orders same-day deliveries by shift from mediodía to noche', async () => {
