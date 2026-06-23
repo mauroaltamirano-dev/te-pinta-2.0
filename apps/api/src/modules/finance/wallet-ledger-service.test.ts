@@ -228,6 +228,28 @@ describe('wallet ledger service', () => {
     expect(filterWalletMovements(movements, { sourceId: 'missing-source' })).toEqual([]);
   });
 
+  it('shows the newest wallet movements first', () => {
+    const movements = buildWalletMovements({
+      sales: [paidSale()],
+      purchases: [
+        {
+          ...purchase(),
+          id: 'purchase-new',
+          occurredAt: '2026-06-20',
+        },
+      ],
+      adjustments: [],
+      servicePercent: 25,
+    });
+
+    expect(filterWalletMovements(movements).map(({ id }) => id)).toEqual([
+      'purchase:purchase-new:services',
+      'sale:order-1:services',
+      'sale:order-1:profit',
+      'sale:order-1:production_cost',
+    ]);
+  });
+
   it('explains balances as the signed movement sum per wallet', () => {
     const movements = buildWalletMovements({
       sales: [paidSale()],

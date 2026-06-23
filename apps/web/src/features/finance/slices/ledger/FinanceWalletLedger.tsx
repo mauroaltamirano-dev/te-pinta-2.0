@@ -33,6 +33,16 @@ type AdjustmentFormState = {
   occurredAt: string;
 };
 
+type WalletMovementGroup = {
+  id: string;
+  sourceType: FinanceWalletMovementSourceType;
+  sourceId: string;
+  occurredAt: string;
+  movements: FinanceWalletMovement[];
+};
+
+const MOVEMENT_GROUPS_PAGE_SIZE = 20;
+
 const walletLabels: Record<FinanceWallet, string> = {
   production_cost: 'Costo base',
   services: 'Servicios',
@@ -79,6 +89,55 @@ const formatDate = (value: string): string => {
   return dateFormatter.format(date);
 };
 
+const sourceCode = (sourceId: string): string => {
+  const segment = sourceId.split(/[-_]/).filter(Boolean).at(-1) ?? sourceId;
+
+  return segment.slice(-6).toUpperCase();
+};
+
+const formatSource = (group: WalletMovementGroup): string => {
+  const prefix =
+    group.sourceType === 'sale'
+      ? 'Pedido'
+      : group.sourceType === 'purchase'
+        ? 'Compra'
+        : 'Ajuste';
+
+  return `${prefix} #${sourceCode(group.sourceId)}`;
+};
+
+const groupWalletMovements = (movements: FinanceWalletMovement[]): WalletMovementGroup[] => {
+  const groups = new Map<string, WalletMovementGroup>();
+
+  for (const movement of movements) {
+    const id = `${movement.sourceType}:${movement.sourceId}`;
+    const group = groups.get(id);
+
+    if (group) {
+      group.movements.push(movement);
+    } else {
+      groups.set(id, {
+        id,
+        sourceType: movement.sourceType,
+        sourceId: movement.sourceId,
+        occurredAt: movement.occurredAt,
+        movements: [movement],
+      });
+    }
+  }
+
+  return [...groups.values()].sort(
+    (left, right) =>
+      right.occurredAt.localeCompare(left.occurredAt) || right.id.localeCompare(left.id),
+  );
+};
+
+const groupReason = (group: WalletMovementGroup): string => {
+  if (group.sourceType === 'sale') return 'Distribución de venta';
+
+  return group.movements[0]?.reason ?? '—';
+};
+
 const toCents = (value: string): number => Math.round(Number(value || 0) * 100);
 const toIsoTimestamp = (value: string): string | undefined =>
   value ? new Date(value).toISOString() : undefined;
@@ -115,10 +174,24 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>(() =>
     initialAdjustmentForm(initialWallet),
   );
+  const [movementPage, setMovementPage] = useState(1);
   const filters = useMemo(() => buildFilters(filterState), [filterState]);
   const movementsQuery = useFinanceWalletMovements(filters);
   const createAdjustment = useCreateFinanceWalletAdjustment();
   const ledger = movementsQuery.data;
+  const movementGroups = useMemo(
+    () => groupWalletMovements(ledger?.movements ?? []),
+    [ledger?.movements],
+  );
+  const totalMovementPages = Math.max(
+    1,
+    Math.ceil(movementGroups.length / MOVEMENT_GROUPS_PAGE_SIZE),
+  );
+  const currentMovementPage = Math.min(movementPage, totalMovementPages);
+  const visibleMovementGroups = movementGroups.slice(
+    (currentMovementPage - 1) * MOVEMENT_GROUPS_PAGE_SIZE,
+    currentMovementPage * MOVEMENT_GROUPS_PAGE_SIZE,
+  );
 
   useEffect(() => {
     if (!initialWallet) return;
@@ -131,37 +204,50 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
     );
   }, [initialWallet]);
 
-  const columns: FinanceTableColumn<FinanceWalletMovement>[] = [
+  useEffect(() => {
+    setMovementPage(1);
+  }, [filters]);
+
+  const columns: FinanceTableColumn<WalletMovementGroup>[] = [
     {
       id: 'date',
       header: 'Fecha',
-      render: (movement) => formatDate(movement.occurredAt),
-    },
-    {
-      id: 'wallet',
-      header: 'Billetera',
-      render: (movement) => walletLabels[movement.wallet],
-    },
-    {
-      id: 'direction',
-      header: 'Movimiento',
-      render: (movement) => directionLabels[movement.direction],
-    },
-    {
-      id: 'amount',
-      header: 'Monto',
-      align: 'right',
-      render: (movement) => formatSignedMoneyFromCents(movement.signedAmountCents),
+      render: (group) => formatDate(group.occurredAt),
     },
     {
       id: 'source',
       header: 'Origen',
-      render: (movement) => `${sourceTypeLabels[movement.sourceType]} ${movement.sourceId}`,
+      render: (group) => <span title={group.sourceId}>{formatSource(group)}</span>,
+    },
+    {
+      id: 'distribution',
+      header: 'Distribución',
+      render: (group) => (
+        <div className="space-y-1">
+          {group.movements.map((movement) => (
+            <div className="flex items-center justify-between gap-4" key={movement.id}>
+              <span className="font-bold">{walletLabels[movement.wallet]}</span>
+              <span className="whitespace-nowrap text-muted-foreground">
+                {formatSignedMoneyFromCents(movement.signedAmountCents)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'amount',
+      header: 'Total',
+      align: 'right',
+      render: (group) =>
+        formatSignedMoneyFromCents(
+          group.movements.reduce((total, movement) => total + movement.signedAmountCents, 0),
+        ),
     },
     {
       id: 'reason',
       header: 'Motivo',
-      render: (movement) => movement.reason ?? '—',
+      render: groupReason,
     },
   ];
 
@@ -332,19 +418,46 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
-        <FinanceTable
-          ariaLabel="Movimientos de billetera"
-          caption={
-            movementsQuery.isLoading
-              ? 'Cargando movimientos...'
-              : `${ledger?.movements.length ?? 0} movimiento(s) visibles`
-          }
-          className="min-w-0"
-          columns={columns}
-          emptyState="No hay movimientos para los filtros seleccionados."
-          getRowKey={(movement) => movement.id}
-          rows={ledger?.movements ?? []}
-        />
+        <div className="min-w-0 space-y-3">
+          <FinanceTable
+            ariaLabel="Movimientos de billetera"
+            caption={
+              movementsQuery.isLoading
+                ? 'Cargando movimientos...'
+                : `${movementGroups.length} operación(es) · ${ledger?.movements.length ?? 0} movimiento(s)`
+            }
+            columns={columns}
+            emptyState="No hay movimientos para los filtros seleccionados."
+            getRowKey={(group) => group.id}
+            rows={visibleMovementGroups}
+          />
+
+          {movementGroups.length > MOVEMENT_GROUPS_PAGE_SIZE ? (
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-white/85 p-3 text-sm font-bold text-muted-foreground shadow-card">
+              <span>
+                Página {currentMovementPage} de {totalMovementPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  className="rounded-full border border-border bg-white px-4 py-2 text-foreground disabled:opacity-45"
+                  disabled={currentMovementPage === 1}
+                  onClick={() => setMovementPage((page) => Math.max(1, page - 1))}
+                  type="button"
+                >
+                  Anterior
+                </button>
+                <button
+                  className="rounded-full border border-border bg-white px-4 py-2 text-foreground disabled:opacity-45"
+                  disabled={currentMovementPage === totalMovementPages}
+                  onClick={() => setMovementPage((page) => Math.min(totalMovementPages, page + 1))}
+                  type="button"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <form
           className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-card xl:sticky xl:top-4"

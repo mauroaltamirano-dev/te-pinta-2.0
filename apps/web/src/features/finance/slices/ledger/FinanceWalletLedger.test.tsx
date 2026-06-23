@@ -14,11 +14,31 @@ vi.mock('../../hooks', () => ({
 const ledger: FinanceWalletMovementLedger = {
   movements: [
     {
+      id: 'sale:order-1:production_cost',
+      wallet: 'production_cost',
+      direction: 'credit',
+      amountCents: 600000,
+      signedAmountCents: 600000,
+      sourceType: 'sale',
+      sourceId: 'order-1',
+      occurredAt: '2026-06-15',
+    },
+    {
+      id: 'sale:order-1:services',
+      wallet: 'services',
+      direction: 'credit',
+      amountCents: 100000,
+      signedAmountCents: 100000,
+      sourceType: 'sale',
+      sourceId: 'order-1',
+      occurredAt: '2026-06-15',
+    },
+    {
       id: 'sale:order-1:profit',
       wallet: 'profit',
-      direction: 'credit',
-      amountCents: 900000,
-      signedAmountCents: 900000,
+      direction: 'credit' as const,
+      amountCents: 200000,
+      signedAmountCents: 200000,
       sourceType: 'sale',
       sourceId: 'order-1',
       occurredAt: '2026-06-15',
@@ -35,7 +55,7 @@ const ledger: FinanceWalletMovementLedger = {
       reason: 'Gas bill',
     },
   ],
-  balances: { production_cost: 0, services: -250000, profit: 900000 },
+  balances: { production_cost: 600000, services: -150000, profit: 200000 },
 };
 
 const createMutation = {
@@ -69,12 +89,14 @@ describe('FinanceWalletLedger', () => {
       screen.getByRole('heading', { name: /trazabilidad de billeteras/i }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/^billetera$/i)).toHaveValue('profit');
-    expect(screen.getByRole('article', { name: /ganancia: \$9\.000/i })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: /ganancia: \$2\.000/i })).toBeInTheDocument();
 
     const table = screen.getByRole('table', { name: /movimientos de billetera/i });
-    expect(within(table).getByRole('cell', { name: /venta order-1/i })).toBeInTheDocument();
-    expect(within(table).getByRole('cell', { name: /\+\$9\.000/i })).toBeInTheDocument();
-    expect(within(table).getByRole('cell', { name: /compra purchase-1/i })).toBeInTheDocument();
+    expect(within(table).getByRole('cell', { name: /pedido #1/i })).toBeInTheDocument();
+    expect(within(table).getByRole('cell', { name: /compra #1/i })).toBeInTheDocument();
+    expect(within(table).getByText(/costo base/i)).toBeInTheDocument();
+    expect(within(table).getByText(/distribución de venta/i)).toBeInTheDocument();
+    expect(within(table).getAllByRole('row')).toHaveLength(3);
 
     await user.selectOptions(screen.getByLabelText(/^billetera$/i), 'services');
     await user.selectOptions(screen.getByLabelText(/^origen$/i), 'purchase');
@@ -89,6 +111,42 @@ describe('FinanceWalletLedger', () => {
         from: '2026-06-16',
       }),
     );
+  });
+
+  it('shows newest operations first and paginates grouped movements', async () => {
+    const user = userEvent.setup();
+    const movements = Array.from({ length: 21 }, (_, index) => ({
+      id: `adjustment-${index + 1}`,
+      wallet: 'profit' as const,
+      direction: 'credit' as const,
+      amountCents: 100,
+      signedAmountCents: 100,
+      sourceType: 'adjustment' as const,
+      sourceId: `adjustment-${index + 1}`,
+      occurredAt: `2026-06-${String(index + 1).padStart(2, '0')}`,
+      reason: `Adjustment ${index + 1}`,
+    }));
+    vi.mocked(useFinanceWalletMovements).mockReturnValue({
+      data: {
+        movements,
+        balances: { production_cost: 0, services: 0, profit: 2_100 },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useFinanceWalletMovements>);
+
+    render(<FinanceWalletLedger />);
+
+    const table = screen.getByRole('table', { name: /movimientos de billetera/i });
+    expect(within(table).getAllByRole('row')).toHaveLength(21);
+    expect(within(table).getByRole('cell', { name: /ajuste #21/i })).toBeInTheDocument();
+    expect(within(table).queryByRole('cell', { name: /ajuste #1$/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /siguiente/i }));
+
+    expect(within(table).getAllByRole('row')).toHaveLength(2);
+    expect(within(table).getByRole('cell', { name: /ajuste #1$/i })).toBeInTheDocument();
   });
 
   it('submits wallet adjustments with a required reason and pesos converted to cents', async () => {

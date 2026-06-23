@@ -271,16 +271,21 @@ export const filterWalletMovements = (
   movements: FinanceWalletMovement[],
   filters: FinanceWalletMovementFilters = {},
 ): FinanceWalletMovement[] =>
-  movements.filter((item) => {
-    if (filters.wallet && item.wallet !== filters.wallet) return false;
-    if (filters.direction && item.direction !== filters.direction) return false;
-    if (filters.sourceType && item.sourceType !== filters.sourceType) return false;
-    if (filters.sourceId && item.sourceId !== filters.sourceId) return false;
-    if (filters.from && movementDate(item.occurredAt) < filters.from) return false;
-    if (filters.to && movementDate(item.occurredAt) > filters.to) return false;
+  movements
+    .filter((item) => {
+      if (filters.wallet && item.wallet !== filters.wallet) return false;
+      if (filters.direction && item.direction !== filters.direction) return false;
+      if (filters.sourceType && item.sourceType !== filters.sourceType) return false;
+      if (filters.sourceId && item.sourceId !== filters.sourceId) return false;
+      if (filters.from && movementDate(item.occurredAt) < filters.from) return false;
+      if (filters.to && movementDate(item.occurredAt) > filters.to) return false;
 
-    return true;
-  });
+      return true;
+    })
+    .sort(
+      (left, right) =>
+        right.occurredAt.localeCompare(left.occurredAt) || right.id.localeCompare(left.id),
+    );
 
 export const calculateWalletBalances = (movements: FinanceWalletMovement[]): WalletBalances =>
   movements.reduce<WalletBalances>((balances, item) => {
