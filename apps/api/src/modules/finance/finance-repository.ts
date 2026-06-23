@@ -14,6 +14,8 @@ import {
 import type { createDbClient } from '../../db/index';
 import {
   financeBaseCostRules,
+  financeLedgerEntries,
+  financeLedgerEvents,
   financeProducts,
   financePurchaseItems,
   financePurchases,
@@ -56,6 +58,8 @@ type FinancePurchaseItemRow = typeof financePurchaseItems.$inferSelect;
 type FinanceStockMovementRow = typeof financeStockMovements.$inferSelect;
 type FinanceWalletAdjustmentRow = typeof financeWalletAdjustments.$inferSelect;
 type FinanceWalletAdjustmentInsert = typeof financeWalletAdjustments.$inferInsert;
+type FinanceLedgerEventInsert = typeof financeLedgerEvents.$inferInsert;
+type FinanceLedgerEntryInsert = typeof financeLedgerEntries.$inferInsert;
 type FinanceBaseCostRuleRow = typeof financeBaseCostRules.$inferSelect;
 type FinanceBaseCostRuleInsert = typeof financeBaseCostRules.$inferInsert;
 type FinanceRecipeItemRow = typeof financeRecipeItems.$inferSelect;
@@ -181,6 +185,49 @@ const toWalletAdjustmentValues = (
   actorId: adjustment.actorId,
   actorName: adjustment.actorName,
   occurredAt: adjustment.occurredAt,
+  createdAt: adjustment.createdAt,
+});
+
+const walletAdjustmentLedgerKey = (adjustmentId: string): string =>
+  `wallet-adjustment:${adjustmentId}`;
+
+const toWalletAdjustmentLedgerEventValues = (
+  adjustment: FinanceWalletAdjustmentRecord,
+): FinanceLedgerEventInsert => ({
+  id: walletAdjustmentLedgerKey(adjustment.id),
+  eventType: 'wallet_adjustment',
+  occurredAt: adjustment.occurredAt,
+  createdAt: adjustment.createdAt,
+  origin: 'live',
+  sourceType: 'wallet_adjustment',
+  sourceId: adjustment.id,
+  idempotencyKey: walletAdjustmentLedgerKey(adjustment.id),
+  createdById: adjustment.actorId,
+  createdByName: adjustment.actorName,
+  metadataJson: {
+    producer: 'finance_wallet_adjustment',
+    schemaVersion: 1,
+  },
+});
+
+const toWalletAdjustmentLedgerEntryValues = (
+  adjustment: FinanceWalletAdjustmentRecord,
+  eventId: string,
+): FinanceLedgerEntryInsert => ({
+  id: `${walletAdjustmentLedgerKey(adjustment.id)}:main`,
+  eventId,
+  lineKey: 'main',
+  entryKind: 'adjustment',
+  direction: adjustment.direction,
+  wallet: adjustment.wallet,
+  category: 'wallet_adjustment',
+  amountCents: adjustment.amountCents,
+  currency: 'ARS',
+  description: adjustment.reason,
+  metadataJson: {
+    producer: 'finance_wallet_adjustment',
+    schemaVersion: 1,
+  },
   createdAt: adjustment.createdAt,
 });
 
@@ -1056,12 +1103,46 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
   async createWalletAdjustment(
     input: FinanceWalletAdjustmentRecord,
   ): Promise<FinanceWalletAdjustmentRecord> {
-    const [row] = await db
-      .insert(financeWalletAdjustments)
-      .values(toWalletAdjustmentValues(input))
-      .returning();
+    return db.transaction(async (transaction) => {
+      const [insertedAdjustment] = await transaction
+        .insert(financeWalletAdjustments)
+        .values(toWalletAdjustmentValues(input))
+        .onConflictDoNothing({ target: financeWalletAdjustments.id })
+        .returning();
+      const [insertedEvent] = await transaction
+        .insert(financeLedgerEvents)
+        .values(toWalletAdjustmentLedgerEventValues(input))
+        .onConflictDoNothing({ target: financeLedgerEvents.idempotencyKey })
+        .returning({ id: financeLedgerEvents.id });
+      const [existingEvent] =
+        insertedEvent === undefined
+          ? await transaction
+              .select({ id: financeLedgerEvents.id })
+              .from(financeLedgerEvents)
+              .where(eq(financeLedgerEvents.idempotencyKey, walletAdjustmentLedgerKey(input.id)))
+              .limit(1)
+          : [];
+      const eventId = requireReturnedRow(insertedEvent ?? existingEvent).id;
 
-    return mapWalletAdjustment(requireReturnedRow(row));
+      await transaction
+        .insert(financeLedgerEntries)
+        .values(toWalletAdjustmentLedgerEntryValues(input, eventId))
+        .onConflictDoNothing({
+          target: [financeLedgerEntries.eventId, financeLedgerEntries.lineKey],
+        });
+
+      if (insertedAdjustment) {
+        return mapWalletAdjustment(insertedAdjustment);
+      }
+
+      const [existingAdjustment] = await transaction
+        .select()
+        .from(financeWalletAdjustments)
+        .where(eq(financeWalletAdjustments.id, input.id))
+        .limit(1);
+
+      return mapWalletAdjustment(requireReturnedRow(existingAdjustment));
+    });
   },
 
   async getSetting(key): Promise<{ key: string; value: string } | null> {
