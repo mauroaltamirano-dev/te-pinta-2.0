@@ -16,6 +16,33 @@ type RetryableRequestConfig = InternalAxiosRequestConfig & {
   _authRetry?: boolean;
 };
 
+const refreshExcludedAuthPaths = new Set(['/auth/login', '/auth/refresh', '/auth/logout']);
+
+const getRequestPath = (config: InternalAxiosRequestConfig) => {
+  const requestUrl = config.url ?? '';
+
+  try {
+    if (/^https?:\/\//i.test(requestUrl)) {
+      return new URL(requestUrl).pathname.replace(/^\/api\/v1(?=\/)/, '');
+    }
+  } catch {
+    return requestUrl;
+  }
+
+  const path = requestUrl.startsWith('/') ? requestUrl : `/${requestUrl}`;
+
+  return path.replace(/^\/api\/v1(?=\/)/, '');
+};
+
+const shouldAttemptSessionRefresh = (
+  status: number | undefined,
+  request: RetryableRequestConfig | undefined,
+): request is RetryableRequestConfig => {
+  if (status !== 401 || !request || request._authRetry) return false;
+
+  return !refreshExcludedAuthPaths.has(getRequestPath(request));
+};
+
 let refreshPromise: Promise<string> | null = null;
 
 const requestFreshAccessToken = async (): Promise<string> => {
@@ -66,7 +93,7 @@ apiClient.interceptors.response.use(
       ? (error.config as RetryableRequestConfig | undefined)
       : undefined;
 
-    if (status !== 401 || !originalRequest || originalRequest._authRetry) {
+    if (!shouldAttemptSessionRefresh(status, originalRequest)) {
       return Promise.reject(error);
     }
 
