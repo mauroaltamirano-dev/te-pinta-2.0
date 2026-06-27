@@ -197,12 +197,12 @@ describe('finance routes', () => {
           sourceId: 'order-1',
         },
       ],
-      balances: { production_cost: 0, services: 0, profit: 9_000 },
+      balances: { production_cost: 0, services: 0, profit: 9_000, reserve: 0 },
     });
     expect(emptyResponse.status).toBe(200);
     expect(emptyResponse.body).toEqual({
       movements: [],
-      balances: { production_cost: 0, services: 0, profit: 0 },
+      balances: { production_cost: 0, services: 0, profit: 0, reserve: 0 },
     });
   });
 

@@ -5,6 +5,7 @@ import { FinanceTable, type FinanceTableColumn } from '../../components/FinanceT
 import { MetricCard } from '../../components/MetricCard';
 import { useCreateFinanceWalletAdjustment, useFinanceWalletMovements } from '../../hooks';
 import type {
+  CreateFinanceWalletAdjustmentInput,
   FinanceWallet,
   FinanceWalletMovement,
   FinanceWalletMovementDirection,
@@ -16,6 +17,8 @@ type FinanceWalletLedgerProps = {
   initialWallet?: FinanceWallet;
 };
 
+type AdjustableFinanceWallet = CreateFinanceWalletAdjustmentInput['wallet'];
+
 type WalletFilterState = {
   wallet: FinanceWallet | '';
   direction: FinanceWalletMovementDirection | '';
@@ -26,7 +29,7 @@ type WalletFilterState = {
 };
 
 type AdjustmentFormState = {
-  wallet: FinanceWallet;
+  wallet: AdjustableFinanceWallet;
   direction: FinanceWalletMovementDirection;
   amount: string;
   reason: string;
@@ -43,7 +46,7 @@ type WalletMovementGroup = {
 
 const MOVEMENT_GROUPS_PAGE_SIZE = 20;
 
-const walletLabels: Record<FinanceWallet, string> = {
+const walletLabels: Record<AdjustableFinanceWallet, string> = {
   production_cost: 'Costo base',
   services: 'Servicios',
   profit: 'Ganancia',
@@ -60,9 +63,15 @@ const sourceTypeLabels: Record<FinanceWalletMovementSourceType, string> = {
   adjustment: 'Ajuste',
 };
 
-const wallets = Object.keys(walletLabels) as FinanceWallet[];
+const wallets = Object.keys(walletLabels) as AdjustableFinanceWallet[];
 const directions = Object.keys(directionLabels) as FinanceWalletMovementDirection[];
 const sourceTypes = Object.keys(sourceTypeLabels) as FinanceWalletMovementSourceType[];
+
+const isAdjustableWallet = (wallet: FinanceWallet): wallet is AdjustableFinanceWallet =>
+  wallet in walletLabels;
+
+const walletLabel = (wallet: FinanceWallet): string =>
+  isAdjustableWallet(wallet) ? walletLabels[wallet] : wallet;
 
 const numberFormatter = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('es-AR', {
@@ -151,13 +160,17 @@ const buildFilters = (state: WalletFilterState): FinanceWalletMovementFilters =>
   ...(state.to ? { to: state.to } : {}),
 });
 
-const initialAdjustmentForm = (wallet: FinanceWallet = 'production_cost'): AdjustmentFormState => ({
-  wallet,
-  direction: 'credit',
-  amount: '0',
-  reason: '',
-  occurredAt: '',
-});
+const initialAdjustmentForm = (wallet: FinanceWallet = 'production_cost'): AdjustmentFormState => {
+  const adjustmentWallet = isAdjustableWallet(wallet) ? wallet : 'production_cost';
+
+  return {
+    wallet: adjustmentWallet,
+    direction: 'credit',
+    amount: '0',
+    reason: '',
+    occurredAt: '',
+  };
+};
 
 const getErrorDescription = (error: unknown): string =>
   error instanceof Error ? error.message : 'No se pudo completar la operación.';
@@ -200,7 +213,9 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
       current.wallet === initialWallet ? current : { ...current, wallet: initialWallet },
     );
     setAdjustmentForm((current) =>
-      current.wallet === initialWallet ? current : { ...current, wallet: initialWallet },
+      current.wallet === initialWallet || !isAdjustableWallet(initialWallet)
+        ? current
+        : { ...current, wallet: initialWallet },
     );
   }, [initialWallet]);
 
@@ -226,7 +241,7 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
         <div className="space-y-1">
           {group.movements.map((movement) => (
             <div className="flex items-center justify-between gap-4" key={movement.id}>
-              <span className="font-bold">{walletLabels[movement.wallet]}</span>
+              <span className="font-bold">{walletLabel(movement.wallet)}</span>
               <span className="whitespace-nowrap text-muted-foreground">
                 {formatSignedMoneyFromCents(movement.signedAmountCents)}
               </span>
@@ -308,7 +323,7 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
               <option value="">Todas</option>
               {wallets.map((wallet) => (
                 <option key={wallet} value={wallet}>
-                  {walletLabels[wallet]}
+                  {walletLabel(wallet)}
                 </option>
               ))}
             </select>
@@ -476,7 +491,7 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
                 onChange={(event) =>
                   setAdjustmentForm((current) => ({
                     ...current,
-                    wallet: event.target.value as FinanceWallet,
+                    wallet: event.target.value as AdjustableFinanceWallet,
                   }))
                 }
                 value={adjustmentForm.wallet}

@@ -123,7 +123,7 @@ describe('finance api client', () => {
           actorName: undefined,
         },
       ],
-      balances: { production_cost: 0, services: 0, profit: 900000 },
+      balances: { production_cost: 0, services: 0, profit: 900000, reserve: 0 },
     };
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: ledger });
     vi.mocked(apiClient.post).mockResolvedValueOnce({

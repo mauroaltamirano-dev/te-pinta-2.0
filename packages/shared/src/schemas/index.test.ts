@@ -6,6 +6,7 @@ import {
   createFinanceBaseCostRuleSchema,
   createFinanceProductSchema,
   createFinancePurchaseSchema,
+  createFinanceReserveMovementSchema,
   createFinanceStockAdjustmentSchema,
   createFinanceWalletAdjustmentSchema,
   createIngredientSchema,
@@ -19,10 +20,12 @@ import {
   financeProductCategorySchema,
   financePurchaseFundingSourceSchema,
   financePurchaseItemImpactSchema,
+  financeReserveMovementSourceSchema,
   financeWalletMovementDirectionSchema,
   financeWalletMovementFiltersSchema,
   financeWalletMovementSchema,
   financeWalletMovementSourceTypeSchema,
+  financeWalletSchema,
   orderStatusSchema,
   updateOrderSchema,
   updateFinanceBaseCostRuleSchema,
@@ -137,6 +140,7 @@ describe('shared domain schemas', () => {
       'profit',
       'services',
     ]);
+    expect(financePurchaseFundingSourceSchema.options).not.toContain('reserve');
     expect(
       createFinancePurchaseSchema.parse({
         purchaseDate: '2026-05-27',
@@ -152,6 +156,21 @@ describe('shared domain schemas', () => {
         ],
       }).fundingSource,
     ).toBe('services');
+    expect(
+      createFinancePurchaseSchema.safeParse({
+        purchaseDate: '2026-05-27',
+        fundingSource: 'reserve',
+        items: [
+          {
+            productId: 'product-tapa',
+            purchaseUnit: 'pack',
+            purchaseQuantity: 1,
+            unitsPerPackage: 12,
+            totalPriceCents: 12_000,
+          },
+        ],
+      }).success,
+    ).toBe(false);
 
     expect(
       createFinancePurchaseSchema.safeParse({
@@ -257,6 +276,12 @@ describe('shared domain schemas', () => {
   });
 
   it('validates wallet movement filters, trace fields, positive cents, and adjustment reasons', () => {
+    expect(financeWalletSchema.options).toEqual([
+      'production_cost',
+      'services',
+      'profit',
+      'reserve',
+    ]);
     expect(financeWalletMovementDirectionSchema.options).toEqual(['credit', 'debit']);
     expect(financeWalletMovementSourceTypeSchema.options).toEqual([
       'sale',
@@ -282,6 +307,9 @@ describe('shared domain schemas', () => {
     });
     expect(financeWalletMovementFiltersSchema.safeParse({ wallet: 'base-cost' }).success).toBe(
       false,
+    );
+    expect(financeWalletMovementFiltersSchema.parse({ wallet: 'reserve' }).wallet).toBe(
+      'reserve',
     );
     expect(financeWalletMovementFiltersSchema.safeParse({ direction: 'in' }).success).toBe(false);
     expect(financeWalletMovementFiltersSchema.safeParse({ from: '06/01/2026' }).success).toBe(
@@ -322,6 +350,37 @@ describe('shared domain schemas', () => {
         direction: 'credit',
         amountCents: 2_500,
         reason: '  ',
+      }).success,
+    ).toBe(false);
+    expect(
+      createFinanceWalletAdjustmentSchema.safeParse({
+        wallet: 'reserve',
+        direction: 'credit',
+        amountCents: 2_500,
+        reason: 'Use explicit reserve movement',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates reserve movement inputs without exposing reserve as purchase funding', () => {
+    expect(financeReserveMovementSourceSchema.options).toEqual(['profit', 'external']);
+    expect(
+      createFinanceReserveMovementSchema.parse({
+        source: 'profit',
+        amountCents: 10_000,
+        reason: 'Emergency fund',
+      }),
+    ).toEqual({
+      source: 'profit',
+      amountCents: 10_000,
+      reason: 'Emergency fund',
+    });
+    expect(createFinanceReserveMovementSchema.safeParse({ source: 'other' }).success).toBe(false);
+    expect(
+      createFinanceReserveMovementSchema.safeParse({
+        source: 'external',
+        amountCents: 0,
+        reason: 'External contribution',
       }).success,
     ).toBe(false);
   });

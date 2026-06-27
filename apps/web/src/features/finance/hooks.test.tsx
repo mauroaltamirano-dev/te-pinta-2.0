@@ -87,7 +87,7 @@ describe('finance catalog hooks', () => {
           occurredAt: '2026-06-15',
         },
       ],
-      balances: { production_cost: 0, services: 0, profit: 900000 },
+      balances: { production_cost: 0, services: 0, profit: 900000, reserve: 0 },
     });
     const { wrapper } = createWrapper();
     const filters = { wallet: 'profit' as const, sourceType: 'sale' as const };

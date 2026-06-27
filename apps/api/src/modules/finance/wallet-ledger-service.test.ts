@@ -273,6 +273,7 @@ describe('wallet ledger service', () => {
       production_cost: 8_000,
       services: -1_500,
       profit: 9_500,
+      reserve: 0,
     });
   });
 });

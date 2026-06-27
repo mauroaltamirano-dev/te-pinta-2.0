@@ -2,6 +2,7 @@ import {
   createFinanceWalletAdjustmentSchema,
   financeAssumptionsSchema,
   type CreateFinanceWalletAdjustmentInput,
+  type FinancePurchaseFundingSource,
   type FinanceWallet,
   type FinanceWalletMovement,
   type FinanceWalletMovementDirection,
@@ -19,7 +20,7 @@ export type WalletLedgerSaleInput = {
 export type WalletLedgerPurchaseInput = {
   id: string;
   occurredAt: string;
-  fundingSource: FinanceWallet;
+  fundingSource: FinancePurchaseFundingSource;
   totalPriceCents: number;
   canceledAt: Date | string | null;
 };
@@ -69,6 +70,7 @@ const emptyBalances = (): WalletBalances => ({
   production_cost: 0,
   services: 0,
   profit: 0,
+  reserve: 0,
 });
 
 const signedAmountFor = (direction: FinanceWalletMovementDirection, amountCents: number): number =>

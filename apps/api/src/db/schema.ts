@@ -42,9 +42,19 @@ export const financePurchaseFundingSourceEnum = pgEnum('finance_purchase_funding
   'profit',
   'services',
 ]);
+export const financeWalletEnum = pgEnum('finance_wallet', [
+  'production_cost',
+  'services',
+  'profit',
+  'reserve',
+]);
 export const financeWalletMovementDirectionEnum = pgEnum('finance_wallet_movement_direction', [
   'credit',
   'debit',
+]);
+export const financeReserveMovementSourceEnum = pgEnum('finance_reserve_movement_source', [
+  'profit',
+  'external',
 ]);
 export const financeStockMovementTypeEnum = pgEnum('finance_stock_movement_type', [
   'purchase_in',
@@ -71,6 +81,8 @@ export const financeLedgerEventTypeEnum = pgEnum('finance_ledger_event_type', [
   'purchase_recorded',
   'purchase_canceled',
   'wallet_adjustment',
+  'reserve_transfer',
+  'reserve_external_contribution',
   'stock_movement',
   'correction',
 ]);
@@ -84,6 +96,7 @@ export const financeLedgerSourceTypeEnum = pgEnum('finance_ledger_source_type', 
   'order',
   'purchase',
   'wallet_adjustment',
+  'reserve_movement',
   'stock_movement',
 ]);
 export const financeLedgerEntryKindEnum = pgEnum('finance_ledger_entry_kind', [
@@ -96,6 +109,8 @@ export const financeLedgerCategoryEnum = pgEnum('finance_ledger_category', [
   'sale',
   'purchase',
   'wallet_adjustment',
+  'reserve_transfer',
+  'reserve_external_contribution',
   'stock_valuation',
   'correction',
 ]);
@@ -360,7 +375,7 @@ export const financeWalletAdjustments = pgTable(
   'finance_wallet_adjustments',
   {
     id: id(),
-    wallet: financePurchaseFundingSourceEnum('wallet').notNull(),
+    wallet: financeWalletEnum('wallet').notNull(),
     direction: financeWalletMovementDirectionEnum('direction').notNull(),
     amountCents: integer('amount_cents').notNull(),
     reason: text('reason').notNull(),
@@ -374,6 +389,33 @@ export const financeWalletAdjustments = pgTable(
     index('finance_wallet_adjustments_occurred_at_idx').on(table.occurredAt),
     index('finance_wallet_adjustments_actor_id_idx').on(table.actorId),
     check('finance_wallet_adjustments_amount_positive', sql`${table.amountCents} > 0`),
+  ],
+);
+
+export const financeReserveMovements = pgTable(
+  'finance_reserve_movements',
+  {
+    id: id(),
+    source: financeReserveMovementSourceEnum('source').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    createdById: text('created_by_id'),
+    createdByName: varchar('created_by_name', { length: 160 }),
+    metadataJson: jsonb('metadata_json'),
+  },
+  (table) => [
+    index('finance_reserve_movements_created_at_idx').on(table.createdAt),
+    index('finance_reserve_movements_source_idx').on(table.source),
+    check('finance_reserve_movements_amount_positive', sql`${table.amountCents} > 0`),
+    check(
+      'finance_reserve_movements_actor_pair',
+      sql`(${table.createdById} IS NULL) = (${table.createdByName} IS NULL)`,
+    ),
+    check(
+      'finance_reserve_movements_metadata_object',
+      sql`${table.metadataJson} IS NULL OR jsonb_typeof(${table.metadataJson}) = 'object'`,
+    ),
   ],
 );
 
@@ -422,7 +464,7 @@ export const financeLedgerEntries = pgTable(
     lineKey: varchar('line_key', { length: 120 }).notNull(),
     entryKind: financeLedgerEntryKindEnum('entry_kind').notNull(),
     direction: financeWalletMovementDirectionEnum('direction').notNull(),
-    wallet: financePurchaseFundingSourceEnum('wallet'),
+    wallet: financeWalletEnum('wallet'),
     category: financeLedgerCategoryEnum('category').notNull(),
     amountCents: integer('amount_cents').notNull(),
     currency: varchar('currency', { length: 3 }).notNull().default('ARS'),

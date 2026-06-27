@@ -55,7 +55,7 @@ const ledger: FinanceWalletMovementLedger = {
       reason: 'Gas bill',
     },
   ],
-  balances: { production_cost: 600000, services: -150000, profit: 200000 },
+  balances: { production_cost: 600000, services: -150000, profit: 200000, reserve: 0 },
 };
 
 const createMutation = {
@@ -129,7 +129,7 @@ describe('FinanceWalletLedger', () => {
     vi.mocked(useFinanceWalletMovements).mockReturnValue({
       data: {
         movements,
-        balances: { production_cost: 0, services: 0, profit: 2_100 },
+        balances: { production_cost: 0, services: 0, profit: 2_100, reserve: 0 },
       },
       isLoading: false,
       isError: false,

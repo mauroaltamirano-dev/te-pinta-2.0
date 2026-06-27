@@ -14,6 +14,7 @@ import {
   financePurchases,
   financeRecipeItems,
   financeRecipes,
+  financeReserveMovements,
   financeStockMovements,
   financeWalletAdjustments,
   ingredients,
@@ -44,6 +45,7 @@ describe('database schema', () => {
       getTableName(financeRecipes),
       getTableName(financeRecipeItems),
       getTableName(financeWalletAdjustments),
+      getTableName(financeReserveMovements),
       getTableName(financeLedgerEvents),
       getTableName(financeLedgerEntries),
     ]).toEqual([
@@ -62,6 +64,7 @@ describe('database schema', () => {
       'finance_recipes',
       'finance_recipe_items',
       'finance_wallet_adjustments',
+      'finance_reserve_movements',
       'finance_ledger_events',
       'finance_ledger_entries',
     ]);
@@ -170,6 +173,47 @@ describe('database schema', () => {
     expect(migration).toContain('CREATE TRIGGER "finance_ledger_entries_append_only"');
   });
 
+  it('separates reserve wallet infrastructure from purchase funding in migration 0012', async () => {
+    const migration = await readFile(
+      join(currentDir, 'migrations', '0012_reserve_wallet.sql'),
+      'utf8',
+    );
+
+    expect(migration).toContain(
+      `CREATE TYPE "public"."finance_wallet" AS ENUM('production_cost', 'services', 'profit', 'reserve')`,
+    );
+    expect(migration).toContain(
+      `CREATE TYPE "public"."finance_reserve_movement_source" AS ENUM('profit', 'external')`,
+    );
+    expect(migration).toContain('CREATE TABLE "finance_reserve_movements"');
+    expect(migration).toContain('ALTER COLUMN "wallet" SET DATA TYPE "public"."finance_wallet"');
+    expect(migration).toContain('ALTER TABLE "finance_wallet_adjustments"');
+    expect(migration).toContain('ALTER TABLE "finance_ledger_entries"');
+    expect(migration).toContain('finance_reserve_movements_amount_positive');
+    expect(migration).toContain('finance_reserve_movements_actor_pair');
+    expect(migration).toContain('finance_reserve_movements_metadata_object');
+    expect(migration).toContain('finance_reserve_movements_created_at_idx');
+    expect(migration).toContain('finance_reserve_movements_source_idx');
+    expect(migration).toContain(
+      `ALTER TYPE "public"."finance_ledger_event_type" ADD VALUE 'reserve_transfer'`,
+    );
+    expect(migration).toContain(
+      `ALTER TYPE "public"."finance_ledger_event_type" ADD VALUE 'reserve_external_contribution'`,
+    );
+    expect(migration).toContain(
+      `ALTER TYPE "public"."finance_ledger_source_type" ADD VALUE 'reserve_movement'`,
+    );
+    expect(migration).toContain(
+      `ALTER TYPE "public"."finance_ledger_category" ADD VALUE 'reserve_transfer'`,
+    );
+    expect(migration).toContain(
+      `ALTER TYPE "public"."finance_ledger_category" ADD VALUE 'reserve_external_contribution'`,
+    );
+    expect(migration).not.toContain(
+      `ALTER TYPE "public"."finance_purchase_funding_source" ADD VALUE 'reserve'`,
+    );
+  });
+
   it('registers latest migrations in the Drizzle journal', async () => {
     const journal = JSON.parse(
       await readFile(join(currentDir, 'migrations', 'meta', '_journal.json'), 'utf8'),
@@ -182,34 +226,28 @@ describe('database schema', () => {
       }>;
     };
 
-    expect(journal.entries.at(-5)).toMatchObject({
-      idx: 7,
-      version: '7',
-      tag: '0007_finance_purchase_cancellation',
-      breakpoints: true,
-    });
     expect(journal.entries.at(-4)).toMatchObject({
-      idx: 8,
-      version: '7',
-      tag: '0008_menu_item_archival',
-      breakpoints: true,
-    });
-    expect(journal.entries.at(-3)).toMatchObject({
       idx: 9,
       version: '7',
       tag: '0009_finance_purchase_funding_source',
       breakpoints: true,
     });
-    expect(journal.entries.at(-2)).toMatchObject({
+    expect(journal.entries.at(-3)).toMatchObject({
       idx: 10,
       version: '7',
       tag: '0010_finance_wallet_adjustments',
       breakpoints: true,
     });
-    expect(journal.entries.at(-1)).toMatchObject({
+    expect(journal.entries.at(-2)).toMatchObject({
       idx: 11,
       version: '7',
       tag: '0011_amusing_the_hand',
+      breakpoints: true,
+    });
+    expect(journal.entries.at(-1)).toMatchObject({
+      idx: 12,
+      version: '7',
+      tag: '0012_reserve_wallet',
       breakpoints: true,
     });
   });

@@ -26,9 +26,11 @@ export const financeProductCategorySchema = z.enum([
 export const financeBaseUnitSchema = z.enum(['unit', 'g', 'kg', 'ml', 'l', 'pack']);
 export const financePurchaseUnitSchema = financeBaseUnitSchema;
 export const financePurchaseFundingSourceSchema = z.enum(['production_cost', 'profit', 'services']);
-export const financeWalletSchema = financePurchaseFundingSourceSchema;
+export const financeWalletSchema = z.enum(['production_cost', 'services', 'profit', 'reserve']);
+export const financeWalletAdjustmentWalletSchema = financePurchaseFundingSourceSchema;
 export const financeWalletMovementDirectionSchema = z.enum(['credit', 'debit']);
 export const financeWalletMovementSourceTypeSchema = z.enum(['sale', 'purchase', 'adjustment']);
+export const financeReserveMovementSourceSchema = z.enum(['profit', 'external']);
 export const financeStockMovementTypeSchema = z.enum([
   'purchase_in',
   'manual_in',
@@ -233,11 +235,17 @@ export const financeWalletMovementSchema = z.object({
 });
 
 export const createFinanceWalletAdjustmentSchema = z.object({
-  wallet: financeWalletSchema,
+  wallet: financeWalletAdjustmentWalletSchema,
   direction: financeWalletMovementDirectionSchema,
   amountCents: positiveMoneyCentsSchema,
   reason: trimmedString,
   occurredAt: trimmedString.optional(),
+});
+
+export const createFinanceReserveMovementSchema = z.object({
+  source: financeReserveMovementSourceSchema,
+  amountCents: positiveMoneyCentsSchema,
+  reason: trimmedString,
 });
 
 export const financePurchaseItemImpactSchema = z.object({
