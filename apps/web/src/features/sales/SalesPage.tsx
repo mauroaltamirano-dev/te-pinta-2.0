@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react';
-import { BarChart3, CircleDollarSign, ClipboardList, CreditCard, PackageCheck, Wallet } from 'lucide-react';
+import {
+  BarChart3,
+  CircleDollarSign,
+  ClipboardList,
+  CreditCard,
+  PackageCheck,
+  Wallet,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { PageHero } from '@/components/layout/PageHero';
@@ -23,7 +30,10 @@ import {
   type DashboardPeriod,
   type KpiCardData,
 } from '../dashboard/dashboard-utils';
-import { CommercialAnalyticsSection, WeeklySalesChart } from '../dashboard/components/AnalyticsCards';
+import {
+  CommercialAnalyticsSection,
+  WeeklySalesChart,
+} from '../dashboard/components/AnalyticsCards';
 import { DashboardPeriodControls } from '../dashboard/components/DashboardPeriodControls';
 import { KpiCard } from '../dashboard/components/KpiCard';
 import { EmptyState, SectionCard, StatusBadge } from '../dashboard/components/shared';
@@ -91,8 +101,12 @@ export const SalesPage = () => {
     [analytics?.topVarieties, dashboard?.topVarieties],
   );
   const customerSummary = useMemo(
-    () => buildCustomerSummary(analytics?.topClients ?? dashboard?.topClients ?? []),
-    [analytics?.topClients, dashboard?.topClients],
+    () =>
+      buildCustomerSummary(
+        analytics?.topClients ?? dashboard?.topClients ?? [],
+        analytics?.customerStats,
+      ),
+    [analytics?.customerStats, analytics?.topClients, dashboard?.topClients],
   );
   const weeklySales = useMemo(
     () => buildWeeklySales(analytics?.chartDays ?? dashboard?.lastSevenDays ?? []),
@@ -199,14 +213,17 @@ export const SalesPage = () => {
         </p>
       ) : null}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Indicadores de ventas">
+      <section
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        aria-label="Indicadores de ventas"
+      >
         {kpis.map((kpi) => (
           <KpiCard key={kpi.id} kpi={kpi} />
         ))}
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,.85fr)]">
-        <WeeklySalesChart weeklySales={weeklySales} />
+        <WeeklySalesChart comparison={comparisons.sales} weeklySales={weeklySales} />
         <SectionCard aria-label="Ventas recientes">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>

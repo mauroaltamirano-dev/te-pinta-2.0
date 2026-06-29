@@ -85,8 +85,13 @@ const comparisons = {
 };
 
 const chartDays = [
-  { date: '2026-06-15', count: 1, revenue: 24000 },
-  { date: '2026-06-16', count: 2, revenue: 48000 },
+  { date: '2026-06-22', count: 1, revenue: 24000 },
+  { date: '2026-06-23', count: 2, revenue: 48000 },
+  { date: '2026-06-24', count: 0, revenue: 0 },
+  { date: '2026-06-25', count: 0, revenue: 0 },
+  { date: '2026-06-26', count: 0, revenue: 0 },
+  { date: '2026-06-27', count: 0, revenue: 0 },
+  { date: '2026-06-28', count: 0, revenue: 0 },
 ];
 
 const dashboard: DailyDashboard = {
@@ -95,9 +100,7 @@ const dashboard: DailyDashboard = {
   totalRevenue: 72000,
   deliveryShifts: { mediodia: 1, tarde: 1, noche: 1 },
   topVarieties: [{ menuItemId: 'menu-1', name: 'Carne suave', quantity: 36 }],
-  topClients: [
-    { customerId: 'customer-1', name: 'Ana Pérez', orderCount: 2, totalRevenue: 50000 },
-  ],
+  topClients: [{ customerId: 'customer-1', name: 'Ana Pérez', orderCount: 2, totalRevenue: 50000 }],
   upcomingOrders: [],
   nextSevenDays: chartDays,
   lastSevenDays: chartDays,
@@ -124,6 +127,10 @@ const dashboard: DailyDashboard = {
   },
   selectedRangeAnalytics: {
     totals,
+    customerStats: {
+      newCustomers: 1,
+      recurringCustomers: 2,
+    },
     topClients: [
       { customerId: 'customer-1', name: 'Ana Pérez', orderCount: 2, totalRevenue: 50000 },
     ],
@@ -170,5 +177,10 @@ describe('SalesPage', () => {
     expect(screen.getAllByText('Ana Pérez').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Carne suave').length).toBeGreaterThan(0);
     expect(screen.getByText(/\$\s*30\.000/i)).toBeInTheDocument();
+    expect(screen.getByText('Nuevos').nextElementSibling).toHaveTextContent('1');
+    expect(screen.getByText('Recurrentes').nextElementSibling).toHaveTextContent('2');
+    expect(screen.getByLabelText(/Lun: \$\s*24\.000/i).parentElement).toHaveClass('flex-1');
+    expect(screen.getByLabelText(/Mié: \$\s*0/i)).toHaveStyle({ height: '0%' });
+    expect(screen.getByText('+20% vs período anterior')).toBeInTheDocument();
   });
 });

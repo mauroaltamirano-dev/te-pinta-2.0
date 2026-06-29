@@ -26,6 +26,7 @@ const order = (overrides: Partial<DashboardOrder> = {}): DashboardOrder => ({
   id: 'order-1',
   customerId: 'customer-1',
   customerName: 'Ana',
+  customerCreatedAt: new Date('2026-04-01T10:00:00.000Z'),
   deliveryDate: '2026-05-06',
   deliveryTime: 'noche',
   status: 'entregado',
@@ -281,6 +282,64 @@ describe('dashboard service', () => {
       soldDozens: 2,
     });
     expect(result.selectedRangeAnalytics.chartDays).toHaveLength(15);
+  });
+
+  it('classifies distinct customers by when they were added to the database', async () => {
+    const testRepository = repository([
+      order({
+        id: 'existing-customer-order',
+        customerId: 'existing-customer',
+        customerName: 'Existing customer',
+        customerCreatedAt: new Date('2026-06-01T12:00:00.000Z'),
+        deliveryDate: '2026-06-22',
+      }),
+      order({
+        id: 'single-order-existing-customer',
+        customerId: 'single-order-existing',
+        customerName: 'Single order existing customer',
+        customerCreatedAt: new Date('2026-06-21T12:00:00.000Z'),
+        deliveryDate: '2026-06-28',
+      }),
+      order({
+        id: 'new-customer-first-order',
+        customerId: 'new-customer',
+        customerName: 'New customer',
+        customerCreatedAt: new Date('2026-06-24T12:00:00.000Z'),
+        deliveryDate: '2026-06-24',
+      }),
+      order({
+        id: 'new-customer-second-order',
+        customerId: 'new-customer',
+        customerName: 'New customer',
+        customerCreatedAt: new Date('2026-06-24T12:00:00.000Z'),
+        deliveryDate: '2026-06-27',
+      }),
+    ]);
+
+    const result = await getDailyDashboard(
+      {
+        date: '2026-06-28',
+        analyticsMode: 'custom',
+        startDate: '2026-06-22',
+        endDate: '2026-06-28',
+      },
+      testRepository,
+      () => new Date('2026-06-28T12:00:00.000Z'),
+    );
+
+    expect(result.selectedRangeAnalytics.customerStats).toEqual({
+      newCustomers: 1,
+      recurringCustomers: 2,
+    });
+    expect(result.selectedRangeAnalytics.chartDays.map((day) => day.date)).toEqual([
+      '2026-06-22',
+      '2026-06-23',
+      '2026-06-24',
+      '2026-06-25',
+      '2026-06-26',
+      '2026-06-27',
+      '2026-06-28',
+    ]);
   });
 
   it('compares variety sales by arbitrary monday-to-sunday week starts', async () => {

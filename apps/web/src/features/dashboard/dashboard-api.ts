@@ -145,6 +145,10 @@ export type DashboardAccountingSummary = {
 
 export type DashboardRangeAnalytics = {
   totals: DashboardTotals;
+  customerStats?: {
+    newCustomers: number;
+    recurringCustomers: number;
+  };
   topClients: DashboardTopClient[];
   topVarieties: DashboardTopVariety[];
   statusSummary: DashboardStatusSummary;

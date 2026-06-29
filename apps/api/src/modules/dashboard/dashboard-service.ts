@@ -25,6 +25,7 @@ export type DashboardOrder = {
   id: string;
   customerId: string;
   customerName: string;
+  customerCreatedAt: Date;
   deliveryDate: string;
   deliveryTime: DeliveryTime;
   status: OrderStatus;
@@ -196,11 +197,17 @@ export type DashboardRange = 'all' | 'last31' | 'last7';
 
 export type DashboardRangeAnalytics = {
   totals: DashboardTotals;
+  customerStats: DashboardCustomerStats;
   topClients: DashboardTopClient[];
   topVarieties: DashboardTopVariety[];
   statusSummary: DashboardStatusSummary;
   recentOrders: DashboardRecentOrder[];
   chartDays: DashboardCalendarDay[];
+};
+
+export type DashboardCustomerStats = {
+  newCustomers: number;
+  recurringCustomers: number;
 };
 
 export type DashboardSelectedRange = {
@@ -648,6 +655,34 @@ const buildTopClients = (orders: DashboardOrder[]): DashboardTopClient[] => {
     .slice(0, 6);
 };
 
+const buildCustomerStats = (
+  orders: DashboardOrder[],
+  range: DashboardWeekRange | null,
+): DashboardCustomerStats => {
+  if (!range) return { newCustomers: 0, recurringCustomers: 0 };
+
+  const customers = new Map<string, Date>();
+
+  for (const order of orders) {
+    customers.set(order.customerId, order.customerCreatedAt);
+  }
+
+  let newCustomers = 0;
+  let recurringCustomers = 0;
+
+  for (const createdAt of customers.values()) {
+    const createdDate = getBusinessDateIso(createdAt);
+
+    if (createdDate >= range.startDate && createdDate <= range.endDate) {
+      newCustomers += 1;
+    } else if (createdDate < range.startDate) {
+      recurringCustomers += 1;
+    }
+  }
+
+  return { newCustomers, recurringCustomers };
+};
+
 const buildTotals = (orders: DashboardOrder[]): DashboardTotals => {
   const grossRevenue = roundMoney(orders.reduce((total, order) => total + order.total, 0));
   const paidRevenue = roundMoney(
@@ -939,14 +974,23 @@ export const getDailyDashboard = async (
   const buildRangeAnalytics = (
     orders: DashboardOrder[],
     chartDays: DashboardCalendarDay[],
-  ): DashboardRangeAnalytics => ({
-    totals: buildTotals(orders),
-    topClients: buildTopClients(orders),
-    topVarieties: buildTopVarieties(orders),
-    statusSummary: buildStatusSummary(orders),
-    recentOrders: buildRecentOrders(orders),
-    chartDays,
-  });
+  ): DashboardRangeAnalytics => {
+    const firstDay = chartDays[0]?.date;
+    const lastDay = chartDays.at(-1)?.date;
+
+    return {
+      totals: buildTotals(orders),
+      customerStats:
+        firstDay && lastDay
+          ? buildCustomerStats(orders, { startDate: firstDay, endDate: lastDay })
+          : buildCustomerStats(orders, null),
+      topClients: buildTopClients(orders),
+      topVarieties: buildTopVarieties(orders),
+      statusSummary: buildStatusSummary(orders),
+      recentOrders: buildRecentOrders(orders),
+      chartDays,
+    };
+  };
   const todayIso = currentBusinessDate;
   const nextSevenDays = Array.from({ length: 7 }, (_, index) =>
     buildCalendarDay(toIsoDate(addDays(anchorDate, index))),

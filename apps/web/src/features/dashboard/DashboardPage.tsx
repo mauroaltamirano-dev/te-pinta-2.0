@@ -167,6 +167,7 @@ export const DashboardPage = () => {
 
   const totals = selectedTotals ?? dashboard?.totals ?? emptyDashboardTotals;
   const topClients = commercialRangeAnalytics?.topClients ?? commercialDashboard?.topClients ?? [];
+  const customerStats = commercialRangeAnalytics?.customerStats;
   const topVarieties =
     commercialRangeAnalytics?.topVarieties ?? commercialDashboard?.topVarieties ?? [];
   const comparisons = dashboard?.kpiComparisons ?? fallbackKpiComparisons;
@@ -213,7 +214,10 @@ export const DashboardPage = () => {
 
   const varietySales = useMemo(() => buildVarietySales(topVarieties), [topVarieties]);
 
-  const customerSummary = useMemo(() => buildCustomerSummary(topClients), [topClients]);
+  const customerSummary = useMemo(
+    () => buildCustomerSummary(topClients, customerStats),
+    [customerStats, topClients],
+  );
 
   const wallets = useMemo(
     () => dashboard?.accountingSummary?.wallets ?? [],

@@ -4,6 +4,7 @@ import { ArrowUpRight, BarChart3, ShoppingBag, Users } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
+import type { DashboardKpiComparison } from '../dashboard-api';
 import { formatMoney, getMoneyAxisTicks, type DashboardMoneyChartPoint } from '../dashboard-utils';
 import type {
   DashboardCustomerSummary,
@@ -371,7 +372,13 @@ export const CommercialAnalyticsSection = ({
   </SectionCard>
 );
 
-export const WeeklySalesChart = ({ weeklySales }: { weeklySales: DashboardWeeklySale[] }) => {
+export const WeeklySalesChart = ({
+  comparison,
+  weeklySales,
+}: {
+  comparison: DashboardKpiComparison;
+  weeklySales: DashboardWeeklySale[];
+}) => {
   const total = weeklySales.reduce((sum, day) => sum + day.value, 0);
   const maxValue = Math.max(...weeklySales.map((day) => day.value), 1);
   const peak = weeklySales.reduce<DashboardWeeklySale | null>(
@@ -409,11 +416,11 @@ export const WeeklySalesChart = ({ weeklySales }: { weeklySales: DashboardWeekly
                   className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2"
                   key={day.day}
                 >
-                  <div className="flex min-h-0 items-end">
+                  <div className="flex min-h-0 flex-1 items-end">
                     <div
                       aria-label={`${day.day}: ${formatMoney(day.value)}`}
                       className={cn('w-full rounded-t-2xl', isPeak ? 'bg-primary' : 'bg-accent/75')}
-                      style={{ height: `${Math.max((day.value / maxValue) * 100, 8)}%` }}
+                      style={{ height: `${(day.value / maxValue) * 100}%` }}
                     />
                   </div>
                   <span className="truncate text-center text-[0.7rem] font-black uppercase text-muted-foreground">
@@ -424,8 +431,17 @@ export const WeeklySalesChart = ({ weeklySales }: { weeklySales: DashboardWeekly
             })}
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <p className="rounded-2xl bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-800 ring-1 ring-emerald-100">
-              +12,4% vs semana anterior
+            <p
+              className={cn(
+                'rounded-2xl px-3 py-2 text-sm font-black ring-1',
+                comparison.direction === 'positive'
+                  ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
+                  : comparison.direction === 'negative'
+                    ? 'bg-red-50 text-red-800 ring-red-100'
+                    : 'bg-background text-muted-foreground ring-border/70',
+              )}
+            >
+              {comparison.value} vs período anterior
             </p>
             <p className="rounded-2xl bg-background px-3 py-2 text-sm font-black text-sidebar ring-1 ring-border/70">
               Pico de ventas: {peak?.day ?? 'Sin dato'}

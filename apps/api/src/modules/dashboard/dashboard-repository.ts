@@ -45,6 +45,7 @@ export const createDashboardRepository = (db: DbClient): DashboardRepository => 
         id: row.order.id,
         customerId: row.customer.id,
         customerName: row.customer.name,
+        customerCreatedAt: row.customer.createdAt,
         deliveryDate: row.order.deliveryDate,
         deliveryTime: row.order.deliveryTime,
         status: row.order.status,

@@ -521,14 +521,15 @@ export const buildWeeklySales = (days: DashboardCalendarDay[]): DashboardWeeklyS
 
 export const buildCustomerSummary = (
   topClients: DashboardTopClient[],
+  customerStats?: { newCustomers: number; recurringCustomers: number },
 ): DashboardCustomerSummary | null => {
   const topCustomer = topClients[0];
 
   if (!topCustomer) return null;
 
   return {
-    newCustomers: 0,
-    recurringCustomers: topClients.filter((client) => client.orderCount > 1).length,
+    newCustomers: customerStats?.newCustomers ?? 0,
+    recurringCustomers: customerStats?.recurringCustomers ?? 0,
     topCustomer: {
       name: topCustomer.name,
       revenue: topCustomer.totalRevenue,
