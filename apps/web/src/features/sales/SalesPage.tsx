@@ -10,6 +10,7 @@ import {
 import { Link } from 'react-router-dom';
 
 import { PageHero } from '@/components/layout/PageHero';
+import { cn } from '@/lib/utils';
 
 import type {
   DashboardKpiComparison,
@@ -168,14 +169,15 @@ export const SalesPage = () => {
   const recentOrders = analytics?.recentOrders ?? dashboard?.recentOrders ?? [];
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-6">
       <PageHero
+        compactOnMobile
         eyebrow="Análisis comercial"
         title="Ventas"
         description="Ingresos, cobros, clientes y variedades en una vista de lectura. La operación sigue viviendo en Pedidos."
       >
         <Link
-          className="rounded-full bg-white px-4 py-2 text-sm font-black text-sidebar transition hover:bg-card"
+          className="inline-flex min-h-11 items-center rounded-full bg-white px-3 text-xs font-black text-sidebar transition hover:bg-card lg:px-4 lg:text-sm"
           to="/orders"
         >
           Ir a Pedidos
@@ -214,18 +216,18 @@ export const SalesPage = () => {
       ) : null}
 
       <section
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3"
         aria-label="Indicadores de ventas"
       >
         {kpis.map((kpi) => (
-          <KpiCard key={kpi.id} kpi={kpi} />
+          <KpiCard compactOnMobile key={kpi.id} kpi={kpi} />
         ))}
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,.85fr)]">
+      <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,.85fr)]">
         <WeeklySalesChart comparison={comparisons.sales} weeklySales={weeklySales} />
-        <SectionCard aria-label="Ventas recientes">
-          <div className="mb-4 flex items-start justify-between gap-3">
+        <SectionCard className="p-3 sm:p-5" aria-label="Ventas recientes">
+          <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
                 Actividad
@@ -237,9 +239,12 @@ export const SalesPage = () => {
 
           {recentOrders.length ? (
             <div className="grid gap-2">
-              {recentOrders.slice(0, 8).map((order) => (
+              {recentOrders.slice(0, 8).map((order, index) => (
                 <Link
-                  className="grid gap-2 rounded-2xl bg-background px-3 py-3 ring-1 ring-border/70 transition hover:bg-white sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  className={cn(
+                    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl bg-background px-3 py-2.5 ring-1 ring-border/70 transition hover:bg-white',
+                    index >= 5 && 'hidden sm:grid',
+                  )}
                   key={order.id}
                   to={`/orders?orderId=${encodeURIComponent(order.id)}`}
                 >
@@ -251,7 +256,7 @@ export const SalesPage = () => {
                       {formatCompactDate(order.deliveryDate)} · {statusLabels[order.status]}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between gap-2 sm:justify-end">
+                  <div className="flex flex-col items-end gap-1">
                     <StatusBadge tone={order.isPaid ? 'success' : 'danger'}>
                       {order.isPaid ? 'Cobrado' : 'Pendiente'}
                     </StatusBadge>
@@ -261,6 +266,14 @@ export const SalesPage = () => {
                   </div>
                 </Link>
               ))}
+              {recentOrders.length > 5 ? (
+                <Link
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl text-sm font-black text-primary ring-1 ring-border/70 sm:hidden"
+                  to="/orders"
+                >
+                  Ver todos los pedidos
+                </Link>
+              ) : null}
             </div>
           ) : (
             <EmptyState

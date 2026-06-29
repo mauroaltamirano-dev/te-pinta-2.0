@@ -202,13 +202,13 @@ export const VarietySalesChart = ({ varieties }: { varieties: DashboardVarietySa
 };
 
 const CustomerAnalyticsPanel = ({ summary }: { summary: DashboardCustomerSummary | null }) => (
-  <article className="rounded-[1.35rem] border border-border/70 bg-background/80 p-4">
-    <div className="mb-4 flex items-start justify-between gap-3">
+  <article className="rounded-[1.35rem] border border-border/70 bg-background/80 p-3 sm:p-4">
+    <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
       <div>
         <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
           <Users className="size-4" aria-hidden /> Clientes
         </p>
-        <h3 className="mt-1 text-xl font-black text-foreground">Top clientes</h3>
+        <h3 className="mt-1 text-lg font-black text-foreground sm:text-xl">Top clientes</h3>
       </div>
       <Link
         aria-label="Ver clientes"
@@ -225,8 +225,8 @@ const CustomerAnalyticsPanel = ({ summary }: { summary: DashboardCustomerSummary
         description="El resumen se activa cuando existan pedidos asociados a clientes."
       />
     ) : (
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+      <div className="space-y-3 sm:space-y-4">
+        <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3 sm:p-4">
           <p className="text-xs font-black uppercase tracking-wide text-primary">
             Mejor cliente del período
           </p>
@@ -235,7 +235,7 @@ const CustomerAnalyticsPanel = ({ summary }: { summary: DashboardCustomerSummary
             {formatMoney(summary.topCustomer.revenue)} · {summary.topCustomer.orders} pedidos
           </p>
         </div>
-        <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+        <dl className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-1">
           <div className="rounded-2xl bg-white p-3 ring-1 ring-border/70">
             <dt className="text-xs font-black uppercase tracking-wide text-muted-foreground">
               Nuevos
@@ -261,13 +261,15 @@ const TopProductsPanel = ({ varieties }: { varieties: DashboardVarietySale[] }) 
   );
 
   return (
-    <article className="rounded-[1.35rem] border border-border/70 bg-background/80 p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <article className="rounded-[1.35rem] border border-border/70 bg-background/80 p-3 sm:p-4">
+      <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
         <div>
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
             <ShoppingBag className="size-4" aria-hidden /> Ventas por variedad
           </p>
-          <h3 className="mt-1 text-xl font-black text-foreground">Productos más vendidos</h3>
+          <h3 className="mt-1 text-lg font-black text-foreground sm:text-xl">
+            Productos más vendidos
+          </h3>
         </div>
         {bestSeller ? <StatusBadge tone="info">Top: {bestSeller.name}</StatusBadge> : null}
       </div>
@@ -305,12 +307,14 @@ const VarietyPerformancePanel = ({ varieties }: { varieties: DashboardVarietySal
   const maxUnits = Math.max(...varieties.map((variety) => variety.units), 1);
 
   return (
-    <article className="rounded-[1.35rem] border border-border/70 bg-background/80 p-4">
-      <div className="mb-4">
+    <article className="rounded-[1.35rem] border border-border/70 bg-background/80 p-3 sm:p-4">
+      <div className="mb-3 sm:mb-4">
         <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
           <BarChart3 className="size-4" aria-hidden /> Performance
         </p>
-        <h3 className="mt-1 text-xl font-black text-foreground">Desempeño por variedad</h3>
+        <h3 className="mt-1 text-lg font-black text-foreground sm:text-xl">
+          Desempeño por variedad
+        </h3>
       </div>
 
       {varieties.length === 0 ? (
@@ -351,20 +355,20 @@ export const CommercialAnalyticsSection = ({
   summary: DashboardCustomerSummary | null;
   varieties: DashboardVarietySale[];
 }) => (
-  <SectionCard className="order-6" aria-label="Analítica comercial">
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  <SectionCard className="order-6 p-3 sm:p-5" aria-label="Analítica comercial">
+    <div className="mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
           Analítica comercial
         </p>
-        <h2 className="mt-1 text-2xl font-black text-foreground">
+        <h2 className="mt-1 text-xl font-black text-foreground sm:text-2xl">
           Clientes, productos y desempeño
         </h2>
       </div>
       {filterControls}
     </div>
 
-    <div className="grid gap-4 xl:grid-cols-3">
+    <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
       <CustomerAnalyticsPanel summary={summary} />
       <TopProductsPanel varieties={varieties} />
       <VarietyPerformancePanel varieties={varieties} />
@@ -387,16 +391,18 @@ export const WeeklySalesChart = ({
   );
 
   return (
-    <SectionCard>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <SectionCard className="p-3 sm:p-5">
+      <div className="mb-3 flex items-start justify-between gap-3 sm:mb-5">
         <div>
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-primary">
             <BarChart3 className="size-4" aria-hidden /> Ventas semanales
           </p>
           <h2 className="mt-1 text-xl font-black text-foreground">Ritmo de venta</h2>
         </div>
-        <div className="rounded-2xl bg-background px-3 py-2 text-sm font-black text-sidebar ring-1 ring-border/70">
-          Total semanal: {formatMoney(total)}
+        <div className="shrink-0 rounded-2xl bg-background px-2.5 py-2 text-xs font-black text-sidebar ring-1 ring-border/70 sm:px-3 sm:text-sm">
+          <span className="sm:hidden">Total: </span>
+          <span className="hidden sm:inline">Total semanal: </span>
+          {formatMoney(total)}
         </div>
       </div>
 
@@ -407,7 +413,7 @@ export const WeeklySalesChart = ({
         />
       ) : (
         <>
-          <div className="flex h-56 items-end gap-2 rounded-[1.35rem] border border-border/70 bg-gradient-to-br from-white to-crema-maiz/55 p-4 sm:gap-3">
+          <div className="flex h-40 items-end gap-1.5 rounded-[1.35rem] border border-border/70 bg-gradient-to-br from-white to-crema-maiz/55 p-3 sm:h-56 sm:gap-3 sm:p-4">
             {weeklySales.map((day) => {
               const isPeak = peak?.day === day.day;
 
@@ -430,10 +436,10 @@ export const WeeklySalesChart = ({
               );
             })}
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4">
             <p
               className={cn(
-                'rounded-2xl px-3 py-2 text-sm font-black ring-1',
+                'rounded-2xl px-2.5 py-2 text-[0.68rem] font-black ring-1 sm:px-3 sm:text-sm',
                 comparison.direction === 'positive'
                   ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
                   : comparison.direction === 'negative'
@@ -441,10 +447,14 @@ export const WeeklySalesChart = ({
                     : 'bg-background text-muted-foreground ring-border/70',
               )}
             >
-              {comparison.value} vs período anterior
+              {comparison.value}
+              <span className="sm:hidden"> vs anterior</span>
+              <span className="hidden sm:inline"> vs período anterior</span>
             </p>
-            <p className="rounded-2xl bg-background px-3 py-2 text-sm font-black text-sidebar ring-1 ring-border/70">
-              Pico de ventas: {peak?.day ?? 'Sin dato'}
+            <p className="rounded-2xl bg-background px-2.5 py-2 text-[0.68rem] font-black text-sidebar ring-1 ring-border/70 sm:px-3 sm:text-sm">
+              <span className="sm:hidden">Pico: </span>
+              <span className="hidden sm:inline">Pico de ventas: </span>
+              {peak?.day ?? 'Sin dato'}
             </p>
           </div>
         </>

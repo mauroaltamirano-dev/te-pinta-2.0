@@ -181,6 +181,10 @@ describe('SalesPage', () => {
     expect(screen.getByText('Recurrentes').nextElementSibling).toHaveTextContent('2');
     expect(screen.getByLabelText(/Lun: \$\s*24\.000/i).parentElement).toHaveClass('flex-1');
     expect(screen.getByLabelText(/Mié: \$\s*0/i)).toHaveStyle({ height: '0%' });
-    expect(screen.getByText('+20% vs período anterior')).toBeInTheDocument();
+    expect(screen.getByText('+20%', { selector: 'p' })).toHaveTextContent('+20%');
+    expect(screen.getByRole('heading', { name: 'Ventas' }).closest('section')).toHaveClass('p-4');
+    expect(screen.getByLabelText('Indicadores de ventas')).toHaveClass('grid-cols-2');
+    expect(screen.getByLabelText(/ventas del período/i)).toHaveClass('p-3');
+    expect(screen.getByRole('button', { name: /Rango/ }).parentElement).toHaveClass('grid-cols-4');
   });
 });
