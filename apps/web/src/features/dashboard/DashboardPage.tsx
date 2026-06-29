@@ -307,7 +307,7 @@ export const DashboardPage = () => {
   );
 
   return (
-    <div className="space-y-6 pb-4">
+    <div className="space-y-4 pb-4 sm:space-y-6">
       <DashboardHeader date={date} />
 
       <DashboardPeriodControls
@@ -336,14 +336,14 @@ export const DashboardPage = () => {
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:gap-6">
         <CriticalAlertsBar alerts={criticalAlerts} />
 
         <section
-          className="order-2 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+          className="order-2 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3 2xl:grid-cols-6"
           aria-label="Indicadores principales"
         >
-          <div className="sm:col-span-2 xl:col-span-3 2xl:col-span-6">
+          <div className="col-span-2 hidden lg:block xl:col-span-3 2xl:col-span-6">
             <DashboardPeriodControls
               ariaLabel="Filtro de indicadores"
               customEndDate={customEndDate}
@@ -358,11 +358,12 @@ export const DashboardPage = () => {
             />
           </div>
           {kpis.map((kpi) => (
-            <KpiCard key={kpi.id} kpi={kpi} />
+            <KpiCard compactOnMobile key={kpi.id} kpi={kpi} />
           ))}
         </section>
 
         <UpcomingOrdersCard
+          compactOnMobile
           isActionPending={
             updateOrderPaymentMutation.isPending || updateOrderStatusMutation.isPending
           }
@@ -374,18 +375,20 @@ export const DashboardPage = () => {
         <WalletsSummary wallets={wallets} />
         <CommercialAnalyticsSection
           filterControls={
-            <DashboardPeriodControls
-              ariaLabel="Filtro comercial"
-              customEndDate={customEndDate}
-              customStartDate={customStartDate}
-              date={date}
-              onCustomEndDateChange={handleCustomEndDateChange}
-              onCustomStartDateChange={handleCustomStartDateChange}
-              onDateChange={setDate}
-              onPeriodChange={(nextPeriod) => handleSectionPeriodChange('commercial', nextPeriod)}
-              period={sectionPeriods.commercial}
-              periodRange={commercialPeriodRange}
-            />
+            <div className="hidden lg:block">
+              <DashboardPeriodControls
+                ariaLabel="Filtro comercial"
+                customEndDate={customEndDate}
+                customStartDate={customStartDate}
+                date={date}
+                onCustomEndDateChange={handleCustomEndDateChange}
+                onCustomStartDateChange={handleCustomStartDateChange}
+                onDateChange={setDate}
+                onPeriodChange={(nextPeriod) => handleSectionPeriodChange('commercial', nextPeriod)}
+                period={sectionPeriods.commercial}
+                periodRange={commercialPeriodRange}
+              />
+            </div>
           }
           summary={customerSummary}
           varieties={varietySales}

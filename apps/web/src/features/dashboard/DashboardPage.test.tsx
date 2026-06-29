@@ -520,21 +520,36 @@ describe('DashboardPage', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps the header compact and moves filters to KPI and commercial sections', async () => {
+  it('keeps the mobile header, filters and KPIs compact', async () => {
     renderDashboardPage();
 
     const header = await screen.findByRole('banner');
+    expect(header).toHaveClass('p-4', 'lg:p-5');
+    expect(
+      within(header).getByText(/resumen operativo y financiero del emprendimiento/i),
+    ).toHaveClass('hidden', 'lg:block');
     expect(
       within(header).queryByRole('group', { name: /presets rápidos/i }),
     ).not.toBeInTheDocument();
     expect(within(header).queryByRole('group', { name: /rango manual/i })).not.toBeInTheDocument();
     expect(within(header).queryByLabelText(/fecha de referencia/i)).not.toBeInTheDocument();
 
-    expect(
-      screen.getByRole('group', { name: /filtro general del dashboard/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /filtro de indicadores/i })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /filtro comercial/i })).toBeInTheDocument();
+    const generalFilter = screen.getByRole('group', {
+      name: /filtro general del dashboard/i,
+    });
+    const kpiFilter = screen.getByRole('group', { name: /filtro de indicadores/i });
+    const commercialFilter = screen.getByRole('group', { name: /filtro comercial/i });
+
+    expect(generalFilter).toHaveClass('p-3', 'lg:p-4');
+    expect(kpiFilter.parentElement).toHaveClass('hidden', 'lg:block');
+    expect(commercialFilter.parentElement).toHaveClass('hidden', 'lg:block');
+
+    const kpiSection = screen.getByRole('region', { name: /indicadores principales/i });
+    expect(kpiSection).toHaveClass('grid-cols-2');
+    expect(await screen.findByLabelText(/ventas del período: \$185\.000/i)).toHaveClass(
+      'p-3',
+      'lg:p-5',
+    );
 
     const commercialAnalytics = await screen.findByRole('region', {
       name: /analítica comercial/i,
@@ -561,7 +576,12 @@ describe('DashboardPage', () => {
     expect(walletsSection).not.toBeNull();
     const wallets = within(walletsSection!);
 
-    expect(await wallets.findByRole('heading', { name: /costo base/i })).toBeInTheDocument();
+    const baseCostHeading = await wallets.findByRole('heading', { name: /costo base/i });
+    expect(baseCostHeading.closest('article')?.parentElement).toHaveClass(
+      'grid-flow-col',
+      'auto-cols-[85%]',
+      'lg:grid-cols-3',
+    );
     expect(wallets.getByRole('heading', { name: /servicios/i })).toBeInTheDocument();
     expect(wallets.getByRole('heading', { name: /ganancia/i })).toBeInTheDocument();
     expect(await wallets.findByText('$42.000')).toBeInTheDocument();

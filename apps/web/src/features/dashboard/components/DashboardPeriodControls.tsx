@@ -38,7 +38,7 @@ export const DashboardPeriodControls = ({
 }: DashboardPeriodControlsProps) => (
   <fieldset
     aria-label={ariaLabel}
-    className="rounded-[1.35rem] border border-white/80 bg-white p-3 shadow-card sm:p-4"
+    className="rounded-[1.35rem] border border-white/80 bg-white p-3 shadow-card lg:p-4"
   >
     <legend className="sr-only">{ariaLabel}</legend>
     <div
@@ -51,17 +51,17 @@ export const DashboardPeriodControls = ({
     >
       <div className="min-w-0">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">
-          <span className="sm:hidden">Período</span>
-          <span className="hidden sm:inline">{ariaLabel}</span>
+          <span className="lg:hidden">Período</span>
+          <span className="hidden lg:inline">{ariaLabel}</span>
         </p>
         <p className="mt-1 text-sm font-bold text-muted-foreground">{periodRange.label}</p>
       </div>
       {showDateControls ? (
         <label className="grid min-w-0 gap-1.5 text-xs font-black uppercase tracking-wide text-muted-foreground">
-          <span className="sm:hidden">Fecha</span>
-          <span className="hidden sm:inline">Fecha de referencia</span>
+          <span className="lg:hidden">Fecha</span>
+          <span className="hidden lg:inline">Fecha de referencia</span>
           <input
-            className="min-h-11 w-full min-w-0 rounded-2xl border border-border bg-background px-3 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25 sm:px-4"
+            className="min-h-11 w-full min-w-0 rounded-2xl border border-border bg-background px-3 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25 lg:px-4"
             onChange={(event) => onDateChange(event.target.value)}
             type="date"
             value={date}
@@ -81,7 +81,7 @@ export const DashboardPeriodControls = ({
             <button
               aria-pressed={isSelected}
               className={cn(
-                'min-h-11 min-w-0 rounded-xl px-1.5 py-2 text-[0.68rem] font-black transition-colors sm:px-3 sm:text-xs',
+                'min-h-11 min-w-0 rounded-xl px-1.5 py-2 text-[0.68rem] font-black transition-colors lg:px-3 lg:text-xs',
                 isSelected
                   ? 'bg-sidebar text-white shadow-sm'
                   : 'text-muted-foreground hover:bg-white hover:text-foreground',
@@ -90,8 +90,8 @@ export const DashboardPeriodControls = ({
               onClick={() => onPeriodChange(option.value)}
               type="button"
             >
-              <span className="sm:hidden">{mobilePeriodLabels[option.value]}</span>
-              <span className="hidden sm:inline">{option.label}</span>
+              <span className="lg:hidden">{mobilePeriodLabels[option.value]}</span>
+              <span className="hidden lg:inline">{option.label}</span>
             </button>
           );
         })}
@@ -103,7 +103,7 @@ export const DashboardPeriodControls = ({
         <label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
           Desde
           <input
-            className="mt-1 min-h-11 w-full min-w-0 rounded-2xl border border-border bg-background px-3 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25 sm:px-4"
+            className="mt-1 min-h-11 w-full min-w-0 rounded-2xl border border-border bg-background px-3 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25 lg:px-4"
             onChange={(event) => onCustomStartDateChange(event.target.value)}
             type="date"
             value={customStartDate}
@@ -112,7 +112,7 @@ export const DashboardPeriodControls = ({
         <label className="text-xs font-black uppercase tracking-wide text-muted-foreground">
           Hasta
           <input
-            className="mt-1 min-h-11 w-full min-w-0 rounded-2xl border border-border bg-background px-3 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25 sm:px-4"
+            className="mt-1 min-h-11 w-full min-w-0 rounded-2xl border border-border bg-background px-3 text-sm font-black text-sidebar outline-none transition-colors focus:border-accent focus:ring-4 focus:ring-accent/25 lg:px-4"
             onChange={(event) => onCustomEndDateChange(event.target.value)}
             type="date"
             value={customEndDate}

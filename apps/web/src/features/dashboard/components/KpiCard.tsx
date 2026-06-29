@@ -108,7 +108,14 @@ export const KpiCard = ({
         {kpi.comparison.label}
       </p>
       {kpi.helpText ? (
-        <p className="relative mt-3 text-xs font-semibold text-muted-foreground">{kpi.helpText}</p>
+        <p
+          className={cn(
+            'relative mt-3 text-xs font-semibold text-muted-foreground',
+            compactOnMobile && 'hidden lg:block',
+          )}
+        >
+          {kpi.helpText}
+        </p>
       ) : null}
     </article>
   );

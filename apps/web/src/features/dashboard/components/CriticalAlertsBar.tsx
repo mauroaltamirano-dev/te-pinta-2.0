@@ -32,13 +32,13 @@ export const AlertPill = ({ alert }: { alert: DashboardAlert }) => {
   return (
     <article
       className={cn(
-        'flex items-start gap-3 rounded-[1.35rem] border px-4 py-3 shadow-card ring-1',
+        'flex items-start gap-2 rounded-[1.35rem] border p-3 shadow-card ring-1 lg:gap-3 lg:px-4',
         alertClasses[alert.level],
       )}
     >
       <span
         className={cn(
-          'mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl',
+          'mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl lg:size-9',
           alertIconClasses[alert.level],
         )}
       >
@@ -46,7 +46,7 @@ export const AlertPill = ({ alert }: { alert: DashboardAlert }) => {
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-black leading-snug">{alert.title}</p>
-        <p className="mt-0.5 text-sm font-semibold opacity-80">{alert.detail}</p>
+        <p className="mt-0.5 text-xs font-semibold opacity-80 lg:text-sm">{alert.detail}</p>
       </div>
       <ChevronRight className="mt-2 size-4 shrink-0 opacity-55" aria-hidden />
     </article>
