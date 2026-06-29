@@ -5,6 +5,7 @@ import {
   createFinanceProductSchema,
   createFinancePurchaseSchema,
   createFinanceBaseCostRuleSchema,
+  createFinanceReserveMovementSchema,
   createFinanceStockAdjustmentSchema,
   createFinanceWalletAdjustmentSchema,
   financeCostingPreviewOrderSchema,
@@ -27,6 +28,7 @@ import {
   createFinanceBaseCostRule,
   createFinanceProduct,
   createFinancePurchase,
+  createFinanceReserveMovement,
   createFinanceStockAdjustment,
   createFinanceWalletAdjustment,
   cancelFinancePurchase,
@@ -311,6 +313,27 @@ export const createFinanceRouter = ({
         }
 
         const movement = await createFinanceWalletAdjustment(
+          req.body,
+          { id: req.user.id, name: req.user.name },
+          repository,
+        );
+        res.status(201).json({ movement });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    '/reserve-movements',
+    validate({ body: createFinanceReserveMovementSchema }),
+    async (req, res, next) => {
+      try {
+        if (!req.user) {
+          throw new ApiError(401, 'Unauthorized', 'UNAUTHORIZED');
+        }
+
+        const movement = await createFinanceReserveMovement(
           req.body,
           { id: req.user.id, name: req.user.name },
           repository,

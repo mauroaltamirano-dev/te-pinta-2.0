@@ -10,6 +10,8 @@ import {
   type CreateFinanceBaseCostRuleInput,
   type CreateFinanceProductInput,
   type CreateFinancePurchaseInput,
+  createFinanceReserveMovementSchema,
+  type CreateFinanceReserveMovementInput,
   type CreateFinanceStockAdjustmentInput,
   type FinanceBaseUnit,
   type FinanceCostComponentType,
@@ -25,6 +27,7 @@ import {
   type FinancePurchaseItemImpact,
   type FinancePurchaseFilters,
   type FinanceRecipeCostItem,
+  type FinanceReserveMovementSource,
   type FinanceRoundingMode,
   type FinanceWallet,
   type FinanceWalletMovement,
@@ -211,6 +214,16 @@ export type FinanceWalletAdjustmentActor = {
   name: string;
 };
 
+export type FinanceReserveMovementRecord = {
+  id: string;
+  source: FinanceReserveMovementSource;
+  amountCents: number;
+  reason: string;
+  createdAt: Date;
+  createdById: string;
+  createdByName: string;
+};
+
 export type PersistFinanceRecipeInput = {
   menuItemId: string;
   items: Array<{
@@ -261,6 +274,9 @@ export type FinanceRepository = WalletLedgerRepository & {
   listRecipes(): Promise<FinanceRecipeDetail[]>;
   getRecipe(menuItemId: string): Promise<FinanceRecipeDetail | null>;
   replaceRecipe(input: PersistFinanceRecipeInput): Promise<FinanceRecipeDetail | null>;
+  createReserveMovement(
+    input: FinanceReserveMovementRecord,
+  ): Promise<FinanceReserveMovementRecord>;
   getSetting(key: string): Promise<FinanceSetting | null>;
 };
 
@@ -593,6 +609,22 @@ export const createFinanceWalletAdjustment = async (
   }
 
   return movement;
+};
+
+export const createFinanceReserveMovement = async (
+  input: CreateFinanceReserveMovementInput,
+  actor: FinanceWalletAdjustmentActor,
+  repository: FinanceRepository,
+): Promise<FinanceReserveMovementRecord> => {
+  const parsed = createFinanceReserveMovementSchema.parse(input);
+
+  return repository.createReserveMovement({
+    id: randomUUID(),
+    ...parsed,
+    createdAt: new Date(),
+    createdById: actor.id,
+    createdByName: actor.name,
+  });
 };
 
 export const getFinancePurchase = async (

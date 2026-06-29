@@ -11,6 +11,7 @@ import {
   createFinanceBaseCostRule,
   cancelFinancePurchase,
   createFinancePurchase,
+  createFinanceReserveMovement,
   createFinanceStockAdjustment,
   getFinanceProductHistory,
   listFinanceProducts,
@@ -117,10 +118,46 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   listWalletLedgerPurchases: async () => [],
   listWalletAdjustments: async () => [],
   createWalletAdjustment: async (input) => input,
+  createReserveMovement: async (input) => input,
   ...overrides,
 });
 
 describe('finance service', () => {
+  it('validates and snapshots reserve movement inputs', async () => {
+    const createReserveMovement = vi.fn<FinanceRepository['createReserveMovement']>(
+      async (input) => input,
+    );
+    const repository = createRepository({ createReserveMovement });
+
+    const movement = await createFinanceReserveMovement(
+      {
+        source: 'profit',
+        amountCents: 10_000,
+        reason: ' Emergency fund ',
+      },
+      { id: 'admin', name: 'Admin Te Pinta' },
+      repository,
+    );
+
+    expect(movement).toMatchObject({
+      source: 'profit',
+      amountCents: 10_000,
+      reason: 'Emergency fund',
+      createdById: 'admin',
+      createdByName: 'Admin Te Pinta',
+    });
+    expect(movement.id).toEqual(expect.any(String));
+    expect(movement.createdAt).toBeInstanceOf(Date);
+    await expect(
+      createFinanceReserveMovement(
+        { source: 'external', amountCents: 0, reason: 'Invalid contribution' },
+        { id: 'admin', name: 'Admin Te Pinta' },
+        repository,
+      ),
+    ).rejects.toThrow();
+    expect(createReserveMovement).toHaveBeenCalledTimes(1);
+  });
+
   it('records purchase item costs and stock ledger movements atomically for tracked products', async () => {
     let persisted: Parameters<FinanceRepository['createPurchaseWithItems']>[0] | undefined;
     const repository = createRepository({

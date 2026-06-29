@@ -132,6 +132,7 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   listWalletLedgerPurchases: async () => [],
   listWalletAdjustments: async () => [],
   createWalletAdjustment: async (input) => input,
+  createReserveMovement: async (input) => input,
   ...overrides,
 });
 
@@ -276,6 +277,89 @@ describe('finance routes', () => {
       code: 'FINANCE_WALLET_ADJUSTMENT_INVALID_OCCURRED_AT',
     });
     expect(createWalletAdjustment).not.toHaveBeenCalled();
+  });
+
+  it('creates reserve movements with the authenticated actor', async () => {
+    const createReserveMovement = vi.fn<FinanceRepository['createReserveMovement']>(
+      async (input) => ({
+        ...input,
+        createdAt: new Date('2026-06-27T12:00:00.000Z'),
+      }),
+    );
+    const app = createFinanceApp(createRepository({ createReserveMovement }));
+
+    const unauthorizedResponse = await request(app)
+      .post('/api/v1/finance/reserve-movements')
+      .send({
+        source: 'external',
+        amountCents: 15_000,
+        reason: 'External contribution',
+      });
+    const response = await request(app)
+      .post('/api/v1/finance/reserve-movements')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        source: 'external',
+        amountCents: 15_000,
+        reason: ' External contribution ',
+      });
+    const persisted = createReserveMovement.mock.calls[0]?.[0];
+
+    expect(unauthorizedResponse.status).toBe(401);
+    expect(unauthorizedResponse.body).toEqual({
+      error: 'Unauthorized',
+      code: 'UNAUTHORIZED',
+    });
+    expect(response.status).toBe(201);
+    expect(persisted).toMatchObject({
+      source: 'external',
+      amountCents: 15_000,
+      reason: 'External contribution',
+      createdById: 'admin',
+      createdByName: 'Admin Te Pinta',
+    });
+    expect(persisted?.id).toEqual(expect.any(String));
+    expect(response.body.movement).toMatchObject({
+      id: persisted?.id,
+      source: 'external',
+      amountCents: 15_000,
+      reason: 'External contribution',
+    });
+    expect(createReserveMovement).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects invalid reserve movement payloads before persisting', async () => {
+    const createReserveMovement = vi.fn<FinanceRepository['createReserveMovement']>();
+    const app = createFinanceApp(createRepository({ createReserveMovement }));
+
+    const invalidAmountResponse = await request(app)
+      .post('/api/v1/finance/reserve-movements')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        source: 'profit',
+        amountCents: 0,
+        reason: 'Invalid transfer',
+      });
+    const invalidSourceResponse = await request(app)
+      .post('/api/v1/finance/reserve-movements')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        source: 'other',
+        amountCents: 10_000,
+        reason: 'Invalid source',
+      });
+
+    expect(invalidAmountResponse.status).toBe(400);
+    expect(invalidAmountResponse.body).toEqual({
+      error: 'Validation error',
+      code: 'VALIDATION_ERROR',
+    });
+    expect(invalidSourceResponse.status).toBe(400);
+    expect(invalidSourceResponse.body).toEqual({
+      error: 'Validation error',
+      code: 'VALIDATION_ERROR',
+    });
+    expect(createReserveMovement).not.toHaveBeenCalled();
   });
 
   it('returns the standard validation error and does not persist partial purchases', async () => {

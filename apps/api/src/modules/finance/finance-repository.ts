@@ -21,6 +21,7 @@ import {
   financePurchases,
   financeRecipeItems,
   financeRecipes,
+  financeReserveMovements,
   financeStockMovements,
   financeWalletAdjustments,
   menuItems,
@@ -35,6 +36,7 @@ import type {
   FinanceProductRecord,
   FinancePurchaseDetail,
   FinanceRecipeDetail,
+  FinanceReserveMovementRecord,
   FinanceRepository,
   FinanceStockItem,
   FinanceStockMovement,
@@ -58,6 +60,8 @@ type FinancePurchaseItemRow = typeof financePurchaseItems.$inferSelect;
 type FinanceStockMovementRow = typeof financeStockMovements.$inferSelect;
 type FinanceWalletAdjustmentRow = typeof financeWalletAdjustments.$inferSelect;
 type FinanceWalletAdjustmentInsert = typeof financeWalletAdjustments.$inferInsert;
+type FinanceReserveMovementRow = typeof financeReserveMovements.$inferSelect;
+type FinanceReserveMovementInsert = typeof financeReserveMovements.$inferInsert;
 type FinanceLedgerEventInsert = typeof financeLedgerEvents.$inferInsert;
 type FinanceLedgerEntryInsert = typeof financeLedgerEntries.$inferInsert;
 type FinanceBaseCostRuleRow = typeof financeBaseCostRules.$inferSelect;
@@ -65,8 +69,8 @@ type FinanceBaseCostRuleInsert = typeof financeBaseCostRules.$inferInsert;
 type FinanceRecipeItemRow = typeof financeRecipeItems.$inferSelect;
 type MenuItemRow = typeof menuItems.$inferSelect;
 
-const requireReturnedRow = <T>(row: T | undefined): T => {
-  if (!row) {
+const requireReturnedRow = <T>(row: T | null | undefined): T => {
+  if (row == null) {
     throw new Error('Database write did not return a row');
   }
 
@@ -121,6 +125,16 @@ const mapWalletAdjustment = (row: FinanceWalletAdjustmentRow): FinanceWalletAdju
   actorName: row.actorName,
   occurredAt: row.occurredAt,
   createdAt: row.createdAt,
+});
+
+const mapReserveMovement = (row: FinanceReserveMovementRow): FinanceReserveMovementRecord => ({
+  id: row.id,
+  source: row.source,
+  amountCents: row.amountCents,
+  reason: row.reason,
+  createdAt: row.createdAt,
+  createdById: requireReturnedRow(row.createdById),
+  createdByName: requireReturnedRow(row.createdByName),
 });
 
 const toPurchaseValues = (
@@ -230,6 +244,88 @@ const toWalletAdjustmentLedgerEntryValues = (
   },
   createdAt: adjustment.createdAt,
 });
+
+const reserveMovementLedgerKey = (movementId: string): string =>
+  `reserve-movement:${movementId}`;
+
+const toReserveMovementValues = (
+  movement: FinanceReserveMovementRecord,
+): FinanceReserveMovementInsert => ({
+  id: movement.id,
+  source: movement.source,
+  amountCents: movement.amountCents,
+  reason: movement.reason,
+  createdAt: movement.createdAt,
+  createdById: movement.createdById,
+  createdByName: movement.createdByName,
+  metadataJson: null,
+});
+
+const isSameReserveMovement = (
+  left: FinanceReserveMovementRecord,
+  right: FinanceReserveMovementRecord,
+): boolean =>
+  left.id === right.id &&
+  left.source === right.source &&
+  left.amountCents === right.amountCents &&
+  left.reason === right.reason &&
+  left.createdById === right.createdById &&
+  left.createdByName === right.createdByName;
+
+const toReserveMovementLedgerEventValues = (
+  movement: FinanceReserveMovementRecord,
+): FinanceLedgerEventInsert => ({
+  id: reserveMovementLedgerKey(movement.id),
+  eventType:
+    movement.source === 'profit' ? 'reserve_transfer' : 'reserve_external_contribution',
+  occurredAt: movement.createdAt,
+  createdAt: movement.createdAt,
+  origin: 'live',
+  sourceType: 'reserve_movement',
+  sourceId: movement.id,
+  idempotencyKey: reserveMovementLedgerKey(movement.id),
+  createdById: movement.createdById,
+  createdByName: movement.createdByName,
+  metadataJson: {
+    producer: 'finance_reserve_movement',
+    schemaVersion: 1,
+  },
+});
+
+const toReserveMovementLedgerEntryValues = (
+  movement: FinanceReserveMovementRecord,
+  eventId: string,
+): FinanceLedgerEntryInsert[] => {
+  const category =
+    movement.source === 'profit' ? 'reserve_transfer' : 'reserve_external_contribution';
+  const entry = (
+    lineKey: 'profit_debit' | 'reserve_credit',
+    direction: 'credit' | 'debit',
+    wallet: 'profit' | 'reserve',
+  ): FinanceLedgerEntryInsert => ({
+    id: `${reserveMovementLedgerKey(movement.id)}:${lineKey}`,
+    eventId,
+    lineKey,
+    entryKind: 'adjustment',
+    direction,
+    wallet,
+    category,
+    amountCents: movement.amountCents,
+    currency: 'ARS',
+    description: movement.reason,
+    metadataJson: {
+      producer: 'finance_reserve_movement',
+      schemaVersion: 1,
+    },
+    createdAt: movement.createdAt,
+  });
+
+  const reserveCredit = entry('reserve_credit', 'credit', 'reserve');
+
+  return movement.source === 'profit'
+    ? [entry('profit_debit', 'debit', 'profit'), reserveCredit]
+    : [reserveCredit];
+};
 
 const toProductUpdateValues = (
   updates: Parameters<FinanceRepository['updateProduct']>[1],
@@ -1142,6 +1238,53 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
         .limit(1);
 
       return mapWalletAdjustment(requireReturnedRow(existingAdjustment));
+    });
+  },
+
+  async createReserveMovement(
+    input: FinanceReserveMovementRecord,
+  ): Promise<FinanceReserveMovementRecord> {
+    return db.transaction(async (transaction) => {
+      const [insertedMovement] = await transaction
+        .insert(financeReserveMovements)
+        .values(toReserveMovementValues(input))
+        .onConflictDoNothing({ target: financeReserveMovements.id })
+        .returning();
+
+      if (!insertedMovement) {
+        const [existingMovement] = await transaction
+          .select()
+          .from(financeReserveMovements)
+          .where(eq(financeReserveMovements.id, input.id))
+          .limit(1);
+        const movement = mapReserveMovement(requireReturnedRow(existingMovement));
+
+        if (!isSameReserveMovement(movement, input)) {
+          throw new Error('Reserve movement id already exists with different data');
+        }
+
+        const [existingEvent] = await transaction
+          .select({ id: financeLedgerEvents.id })
+          .from(financeLedgerEvents)
+          .where(eq(financeLedgerEvents.idempotencyKey, reserveMovementLedgerKey(input.id)))
+          .limit(1);
+        requireReturnedRow(existingEvent);
+
+        return movement;
+      }
+
+      const movement = mapReserveMovement(insertedMovement);
+      const [insertedEvent] = await transaction
+        .insert(financeLedgerEvents)
+        .values(toReserveMovementLedgerEventValues(movement))
+        .returning({ id: financeLedgerEvents.id });
+      const eventId = requireReturnedRow(insertedEvent).id;
+
+      await transaction
+        .insert(financeLedgerEntries)
+        .values(toReserveMovementLedgerEntryValues(movement, eventId));
+
+      return movement;
     });
   },
 
