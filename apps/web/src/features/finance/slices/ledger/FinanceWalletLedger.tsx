@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CircleDollarSign, SlidersHorizontal } from 'lucide-react';
+import { isAxiosError } from 'axios';
+import { CircleDollarSign, PiggyBank, SlidersHorizontal } from 'lucide-react';
+import type { ApiError } from '@te-pinta/shared';
 
 import { FinanceTable, type FinanceTableColumn } from '../../components/FinanceTable';
 import { MetricCard } from '../../components/MetricCard';
-import { useCreateFinanceWalletAdjustment, useFinanceWalletMovements } from '../../hooks';
+import {
+  useCreateFinanceReserveMovement,
+  useCreateFinanceWalletAdjustment,
+  useFinanceWalletMovements,
+} from '../../hooks';
 import type {
+  CreateFinanceReserveMovementInput,
   CreateFinanceWalletAdjustmentInput,
   FinanceWallet,
   FinanceWalletMovement,
@@ -34,6 +41,17 @@ type AdjustmentFormState = {
   amount: string;
   reason: string;
   occurredAt: string;
+};
+
+type ReserveFormState = {
+  amount: string;
+  source: CreateFinanceReserveMovementInput['source'];
+  reason: string;
+};
+
+type ReserveValidationError = {
+  field: 'amount' | 'reason';
+  message: string;
 };
 
 type WalletMovementGroup = {
@@ -172,8 +190,18 @@ const initialAdjustmentForm = (wallet: FinanceWallet = 'production_cost'): Adjus
   };
 };
 
+const initialReserveForm: ReserveFormState = {
+  amount: '',
+  source: 'profit',
+  reason: '',
+};
+
 const getErrorDescription = (error: unknown): string =>
-  error instanceof Error ? error.message : 'No se pudo completar la operación.';
+  isAxiosError<ApiError>(error) && error.response?.data.error
+    ? error.response.data.error
+    : error instanceof Error
+      ? error.message
+      : 'No se pudo completar la operación.';
 
 export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps) => {
   const [filterState, setFilterState] = useState<WalletFilterState>({
@@ -187,10 +215,14 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
   const [adjustmentForm, setAdjustmentForm] = useState<AdjustmentFormState>(() =>
     initialAdjustmentForm(initialWallet),
   );
+  const [reserveForm, setReserveForm] = useState<ReserveFormState>(initialReserveForm);
+  const [reserveValidationError, setReserveValidationError] =
+    useState<ReserveValidationError | null>(null);
   const [movementPage, setMovementPage] = useState(1);
   const filters = useMemo(() => buildFilters(filterState), [filterState]);
   const movementsQuery = useFinanceWalletMovements(filters);
   const createAdjustment = useCreateFinanceWalletAdjustment();
+  const createReserveMovement = useCreateFinanceReserveMovement();
   const ledger = movementsQuery.data;
   const movementGroups = useMemo(
     () => groupWalletMovements(ledger?.movements ?? []),
@@ -287,6 +319,44 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
       },
     );
   };
+
+  const handleReserveSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amountCents = toCents(reserveForm.amount);
+    const reason = reserveForm.reason.trim();
+
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      setReserveValidationError({
+        field: 'amount',
+        message: 'Ingresá un monto mayor a 0.',
+      });
+      return;
+    }
+
+    if (!reason) {
+      setReserveValidationError({
+        field: 'reason',
+        message: 'Ingresá un motivo o nota.',
+      });
+      return;
+    }
+
+    setReserveValidationError(null);
+    createReserveMovement.mutate(
+      {
+        amountCents,
+        source: reserveForm.source,
+        reason,
+      },
+      {
+        onSuccess: () => setReserveForm(initialReserveForm),
+      },
+    );
+  };
+
+  const reserveError =
+    reserveValidationError?.message ??
+    (createReserveMovement.isError ? getErrorDescription(createReserveMovement.error) : null);
 
   return (
     <div className="space-y-5">
@@ -434,6 +504,111 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
         <div className="min-w-0 space-y-3">
+          <form
+            aria-busy={createReserveMovement.isPending}
+            className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-card"
+            noValidate
+            onSubmit={handleReserveSubmit}
+          >
+            <div className="flex items-center gap-2 text-primary">
+              <PiggyBank className="h-4 w-4" aria-hidden={true} />
+              <h3 className="text-sm font-black uppercase tracking-wide">Cargar Reserva</h3>
+            </div>
+            <p className="mt-2 text-sm font-semibold leading-6 text-muted-foreground">
+              Registrá fondos destinados a Reserva sin usar los ajustes manuales comunes.
+            </p>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="text-sm font-bold text-foreground">
+                Monto
+                <input
+                  aria-describedby={
+                    reserveValidationError?.field === 'amount' ? 'reserve-form-error' : undefined
+                  }
+                  aria-invalid={reserveValidationError?.field === 'amount'}
+                  className={inputClassName}
+                  min="0.01"
+                  onChange={(event) => {
+                    setReserveValidationError(null);
+                    setReserveForm((current) => ({ ...current, amount: event.target.value }));
+                  }}
+                  required
+                  step="0.01"
+                  type="number"
+                  value={reserveForm.amount}
+                />
+              </label>
+
+              <label className="text-sm font-bold text-foreground">
+                Origen de la carga
+                <select
+                  aria-describedby="reserve-source-help"
+                  className={`${inputClassName} appearance-none`}
+                  onChange={(event) =>
+                    setReserveForm((current) => ({
+                      ...current,
+                      source: event.target.value as CreateFinanceReserveMovementInput['source'],
+                    }))
+                  }
+                  value={reserveForm.source}
+                >
+                  <option value="profit">Ganancia</option>
+                  <option value="external">Otra (aporte externo)</option>
+                </select>
+                <span
+                  className="mt-1 block text-xs font-semibold leading-5 text-muted-foreground"
+                  id="reserve-source-help"
+                >
+                  “Otra” registra un aporte externo; no descuenta Ganancia.
+                </span>
+              </label>
+
+              <label className="text-sm font-bold text-foreground md:col-span-2">
+                Motivo / nota
+                <textarea
+                  aria-describedby={
+                    reserveValidationError?.field === 'reason' ? 'reserve-form-error' : undefined
+                  }
+                  aria-invalid={reserveValidationError?.field === 'reason'}
+                  className={inputClassName}
+                  onChange={(event) => {
+                    setReserveValidationError(null);
+                    setReserveForm((current) => ({ ...current, reason: event.target.value }));
+                  }}
+                  required
+                  rows={2}
+                  value={reserveForm.reason}
+                />
+              </label>
+            </div>
+
+            {reserveError ? (
+              <p
+                className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-900"
+                id="reserve-form-error"
+                role="alert"
+              >
+                {reserveError}
+              </p>
+            ) : null}
+            {createReserveMovement.isSuccess ? (
+              <p
+                className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900"
+                role="status"
+              >
+                Reserva cargada correctamente.
+              </p>
+            ) : null}
+
+            <button
+              className="mt-4 inline-flex justify-center rounded-full bg-primary px-5 py-2 text-sm font-black text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+              disabled={createReserveMovement.isPending}
+              type="submit"
+            >
+              {createReserveMovement.isPending ? 'Cargando Reserva…' : 'Cargar Reserva'}
+            </button>
+          </form>
+
           <FinanceTable
             ariaLabel="Movimientos de billetera"
             caption={

@@ -7,6 +7,7 @@ import { createQueryClient } from '@/lib/query-client';
 
 import {
   cancelFinancePurchase,
+  createFinanceReserveMovement,
   createFinanceWalletAdjustment,
   createFinanceProduct,
   createFinancePurchase,
@@ -19,6 +20,7 @@ import { dashboardQueryKeys } from '../dashboard/dashboard-hooks';
 import {
   financeQueryKeys,
   useCancelFinancePurchase,
+  useCreateFinanceReserveMovement,
   useCreateFinanceWalletAdjustment,
   useCreateFinanceProduct,
   useCreateFinancePurchase,
@@ -30,6 +32,7 @@ import {
 
 vi.mock('./api', () => ({
   cancelFinancePurchase: vi.fn(),
+  createFinanceReserveMovement: vi.fn(),
   createFinanceWalletAdjustment: vi.fn(),
   createFinanceProduct: vi.fn(),
   createFinancePurchase: vi.fn(),
@@ -294,5 +297,28 @@ describe('finance catalog hooks', () => {
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: financeQueryKeys.all });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: dashboardQueryKeys.all });
+  });
+
+  it('invalidates finance queries after loading reserve', async () => {
+    vi.mocked(createFinanceReserveMovement).mockResolvedValueOnce();
+    const { queryClient, wrapper } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    const { result } = renderHook(() => useCreateFinanceReserveMovement(), { wrapper });
+
+    result.current.mutate({
+      source: 'profit',
+      amountCents: 100_000,
+      reason: 'Emergency fund',
+    });
+
+    await waitFor(() => expect(createFinanceReserveMovement).toHaveBeenCalled());
+    expect(createFinanceReserveMovement).toHaveBeenCalledWith({
+      source: 'profit',
+      amountCents: 100_000,
+      reason: 'Emergency fund',
+    });
+    expect(invalidateSpy).toHaveBeenCalledOnce();
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: financeQueryKeys.all });
   });
 });

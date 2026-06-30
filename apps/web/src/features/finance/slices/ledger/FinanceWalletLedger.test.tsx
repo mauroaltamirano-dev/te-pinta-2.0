@@ -1,12 +1,17 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useCreateFinanceWalletAdjustment, useFinanceWalletMovements } from '../../hooks';
+import {
+  useCreateFinanceReserveMovement,
+  useCreateFinanceWalletAdjustment,
+  useFinanceWalletMovements,
+} from '../../hooks';
 import { FinanceWalletLedger } from './FinanceWalletLedger';
 import type { FinanceWalletMovementLedger } from '../../types';
 
 vi.mock('../../hooks', () => ({
+  useCreateFinanceReserveMovement: vi.fn(),
   useCreateFinanceWalletAdjustment: vi.fn(),
   useFinanceWalletMovements: vi.fn(),
 }));
@@ -66,6 +71,14 @@ const createMutation = {
   error: null,
 };
 
+const reserveMutation = {
+  mutate: vi.fn(),
+  isPending: false,
+  isSuccess: false,
+  isError: false,
+  error: null,
+};
+
 describe('FinanceWalletLedger', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -77,6 +90,9 @@ describe('FinanceWalletLedger', () => {
     } as ReturnType<typeof useFinanceWalletMovements>);
     vi.mocked(useCreateFinanceWalletAdjustment).mockReturnValue(
       createMutation as unknown as ReturnType<typeof useCreateFinanceWalletAdjustment>,
+    );
+    vi.mocked(useCreateFinanceReserveMovement).mockReturnValue(
+      reserveMutation as unknown as ReturnType<typeof useCreateFinanceReserveMovement>,
     );
   });
 
@@ -170,5 +186,115 @@ describe('FinanceWalletLedger', () => {
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  it('renders reserve loading with profit selected and keeps reserve out of manual adjustments', async () => {
+    const user = userEvent.setup();
+
+    render(<FinanceWalletLedger />);
+
+    expect(screen.getByRole('heading', { name: /cargar reserva/i })).toBeInTheDocument();
+    const source = screen.getByLabelText(/origen de la carga/i);
+    expect(source).toHaveValue('profit');
+    expect(
+      within(source).getByRole('option', { name: /otra \(aporte externo\)/i }),
+    ).toBeInTheDocument();
+    await user.selectOptions(source, 'external');
+    expect(source).toHaveValue('external');
+    expect(screen.getByText(/otra.*aporte externo.*no descuenta ganancia/i)).toBeInTheDocument();
+
+    const adjustmentWallet = screen.getByLabelText(/billetera del ajuste/i);
+    expect(within(adjustmentWallet).queryByRole('option', { name: /reserva/i })).toBeNull();
+  });
+
+  it('loads reserve from profit and clears the form after success', async () => {
+    const user = userEvent.setup();
+
+    render(<FinanceWalletLedger />);
+
+    await user.type(screen.getByLabelText(/^monto$/i), '1500.25');
+    await user.type(screen.getByLabelText(/motivo \/ nota/i), 'Fondo de emergencia');
+    await user.click(screen.getByRole('button', { name: /^cargar reserva$/i }));
+
+    expect(reserveMutation.mutate).toHaveBeenCalledWith(
+      {
+        source: 'profit',
+        amountCents: 150025,
+        reason: 'Fondo de emergencia',
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+
+    const onSuccess = reserveMutation.mutate.mock.calls[0]?.[1]?.onSuccess;
+    act(() => onSuccess?.());
+
+    expect(screen.getByLabelText(/^monto$/i)).toHaveValue(null);
+    expect(screen.getByLabelText(/motivo \/ nota/i)).toHaveValue('');
+    expect(screen.getByLabelText(/origen de la carga/i)).toHaveValue('profit');
+  });
+
+  it('loads reserve from an external contribution', async () => {
+    const user = userEvent.setup();
+
+    render(<FinanceWalletLedger />);
+
+    await user.type(screen.getByLabelText(/^monto$/i), '500');
+    await user.selectOptions(screen.getByLabelText(/origen de la carga/i), 'external');
+    await user.type(screen.getByLabelText(/motivo \/ nota/i), 'Aporte de socios');
+    await user.click(screen.getByRole('button', { name: /^cargar reserva$/i }));
+
+    expect(reserveMutation.mutate).toHaveBeenCalledWith(
+      {
+        source: 'external',
+        amountCents: 50000,
+        reason: 'Aporte de socios',
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('requires a positive reserve amount before calling the API', async () => {
+    const user = userEvent.setup();
+
+    render(<FinanceWalletLedger />);
+
+    await user.type(screen.getByLabelText(/^monto$/i), '0');
+    await user.type(screen.getByLabelText(/motivo \/ nota/i), 'Fondo de emergencia');
+    await user.click(screen.getByRole('button', { name: /^cargar reserva$/i }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/monto mayor a 0/i);
+    expect(screen.getByLabelText(/^monto$/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(reserveMutation.mutate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a reserve reason containing only spaces', async () => {
+    const user = userEvent.setup();
+
+    render(<FinanceWalletLedger />);
+
+    await user.type(screen.getByLabelText(/^monto$/i), '500');
+    await user.type(screen.getByLabelText(/motivo \/ nota/i), '   ');
+    await user.click(screen.getByRole('button', { name: /^cargar reserva$/i }));
+
+    const reason = screen.getByLabelText(/motivo \/ nota/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/ingresá un motivo o nota/i);
+    expect(reason).toHaveAttribute('aria-invalid', 'true');
+    expect(reason).toHaveAttribute('aria-describedby', 'reserve-form-error');
+    expect(reserveMutation.mutate).not.toHaveBeenCalled();
+  });
+
+  it('shows the API validation error returned while loading reserve', () => {
+    vi.mocked(useCreateFinanceReserveMovement).mockReturnValue({
+      ...reserveMutation,
+      isError: true,
+      error: Object.assign(new Error('Request failed with status code 400'), {
+        isAxiosError: true,
+        response: { data: { error: 'El monto debe ser mayor a cero.' } },
+      }),
+    } as unknown as ReturnType<typeof useCreateFinanceReserveMovement>);
+
+    render(<FinanceWalletLedger />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('El monto debe ser mayor a cero.');
   });
 });

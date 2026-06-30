@@ -7,6 +7,7 @@ import {
   createFinanceBaseCostRule,
   createFinanceProduct,
   createFinancePurchase,
+  createFinanceReserveMovement,
   createFinanceStockAdjustment,
   cancelFinancePurchase,
   deleteFinanceBaseCostRule,
@@ -185,6 +186,38 @@ describe('finance api client', () => {
       amountCents: 250000,
       reason: 'Gas bill',
       occurredAt: '2026-06-18T12:30:00.000Z',
+    });
+  });
+
+  it('records profit and external reserve movements through the dedicated endpoint', async () => {
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({ data: { movement: { id: 'reserve-1' } } })
+      .mockResolvedValueOnce({ data: { movement: { id: 'reserve-2' } } });
+
+    await expect(
+      createFinanceReserveMovement({
+        source: 'profit',
+        amountCents: 100_000,
+        reason: ' Emergency fund ',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      createFinanceReserveMovement({
+        source: 'external',
+        amountCents: 50_000,
+        reason: 'External contribution',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(apiClient.post).toHaveBeenNthCalledWith(1, '/finance/reserve-movements', {
+      source: 'profit',
+      amountCents: 100_000,
+      reason: 'Emergency fund',
+    });
+    expect(apiClient.post).toHaveBeenNthCalledWith(2, '/finance/reserve-movements', {
+      source: 'external',
+      amountCents: 50_000,
+      reason: 'External contribution',
     });
   });
 

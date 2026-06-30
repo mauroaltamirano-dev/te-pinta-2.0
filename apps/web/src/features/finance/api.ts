@@ -3,6 +3,7 @@ import {
   createFinanceBaseCostRuleSchema,
   createFinanceProductSchema,
   createFinancePurchaseSchema,
+  createFinanceReserveMovementSchema,
   updateFinanceProductSchema,
   createFinanceStockAdjustmentSchema,
   createFinanceWalletAdjustmentSchema,
@@ -18,6 +19,7 @@ import { apiClient } from '@/lib/api-client';
 import type {
   CreateFinanceProductInput,
   CreateFinancePurchaseInput,
+  CreateFinanceReserveMovementInput,
   CreateFinanceStockAdjustmentInput,
   CreateFinanceWalletAdjustmentInput,
   CancelFinancePurchaseInput,
@@ -237,6 +239,13 @@ export const createFinanceWalletAdjustment = async (
   );
 
   return response.data.movement;
+};
+
+export const createFinanceReserveMovement = async (
+  input: CreateFinanceReserveMovementInput,
+): Promise<void> => {
+  const payload = createFinanceReserveMovementSchema.parse(input);
+  await apiClient.post('/finance/reserve-movements', payload);
 };
 
 export const previewFinanceOrderCost = async (

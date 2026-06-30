@@ -216,6 +216,11 @@ describe('FinancePurchases', () => {
 
     await user.click(screen.getByRole('button', { name: /registrar compra/i }));
     const dialog = screen.getByRole('dialog', { name: /registrar compra/i });
+    expect(
+      within(within(dialog).getByLabelText(/asignar compra a/i)).queryByRole('option', {
+        name: /reserva/i,
+      }),
+    ).toBeNull();
     await user.type(within(dialog).getByLabelText(/proveedor/i), 'Molino norte');
     await user.clear(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i));
     await user.type(within(dialog).getByLabelText(/cantidad comprada \(kg\)/i), '2.5');
