@@ -29,7 +29,12 @@ export const financePurchaseFundingSourceSchema = z.enum(['production_cost', 'pr
 export const financeWalletSchema = z.enum(['production_cost', 'services', 'profit', 'reserve']);
 export const financeWalletAdjustmentWalletSchema = financePurchaseFundingSourceSchema;
 export const financeWalletMovementDirectionSchema = z.enum(['credit', 'debit']);
-export const financeWalletMovementSourceTypeSchema = z.enum(['sale', 'purchase', 'adjustment']);
+export const financeWalletMovementSourceTypeSchema = z.enum([
+  'sale',
+  'purchase',
+  'adjustment',
+  'reserve_movement',
+]);
 export const financeReserveMovementSourceSchema = z.enum(['profit', 'external']);
 export const financeStockMovementTypeSchema = z.enum([
   'purchase_in',
@@ -230,6 +235,7 @@ export const financeWalletMovementSchema = z.object({
   sourceId: idSchema,
   occurredAt: trimmedString,
   reason: trimmedString.optional(),
+  reserveSource: financeReserveMovementSourceSchema.optional(),
   actorId: trimmedString.optional(),
   actorName: trimmedString.optional(),
 });

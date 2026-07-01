@@ -131,6 +131,7 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   listWalletLedgerSales: async () => [],
   listWalletLedgerPurchases: async () => [],
   listWalletAdjustments: async () => [],
+  listReserveWalletMovements: async () => [],
   createWalletAdjustment: async (input) => input,
   createReserveMovement: async (input) => input,
   ...overrides,
@@ -156,7 +157,7 @@ describe('finance routes', () => {
     expect(response.body).toEqual({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
   });
 
-  it('returns filtered wallet movements with balances calculated from the visible ledger', async () => {
+  it('returns filtered wallet and reserve movements with visible balances', async () => {
     const app = createFinanceApp(
       createRepository({
         listWalletLedgerSales: async () => [
@@ -166,6 +167,20 @@ describe('finance routes', () => {
             occurredAt: '2026-06-15',
             totalCents: 20_000,
             directCostCents: 8_000,
+          },
+        ],
+        listReserveWalletMovements: async () => [
+          {
+            id: 'reserve-movement:reserve-external:reserve_credit',
+            wallet: 'reserve',
+            direction: 'credit',
+            amountCents: 1_500,
+            signedAmountCents: 1_500,
+            sourceType: 'reserve_movement',
+            sourceId: 'reserve-external',
+            occurredAt: '2026-06-28T12:00:00.000Z',
+            reason: 'Partner contribution',
+            reserveSource: 'external',
           },
         ],
       }),
@@ -186,6 +201,10 @@ describe('finance routes', () => {
       .get('/api/v1/finance/wallet-movements')
       .query({ sourceId: 'missing-source' })
       .set('Authorization', `Bearer ${accessToken}`);
+    const reserveResponse = await request(app)
+      .get('/api/v1/finance/wallet-movements')
+      .query({ sourceType: 'reserve_movement' })
+      .set('Authorization', `Bearer ${accessToken}`);
 
     expect(filteredResponse.status).toBe(200);
     expect(filteredResponse.body).toMatchObject({
@@ -204,6 +223,18 @@ describe('finance routes', () => {
     expect(emptyResponse.body).toEqual({
       movements: [],
       balances: { production_cost: 0, services: 0, profit: 0, reserve: 0 },
+    });
+    expect(reserveResponse.status).toBe(200);
+    expect(reserveResponse.body).toEqual({
+      movements: [
+        expect.objectContaining({
+          wallet: 'reserve',
+          signedAmountCents: 1_500,
+          sourceType: 'reserve_movement',
+          reserveSource: 'external',
+        }),
+      ],
+      balances: { production_cost: 0, services: 0, profit: 0, reserve: 1_500 },
     });
   });
 
@@ -288,13 +319,11 @@ describe('finance routes', () => {
     );
     const app = createFinanceApp(createRepository({ createReserveMovement }));
 
-    const unauthorizedResponse = await request(app)
-      .post('/api/v1/finance/reserve-movements')
-      .send({
-        source: 'external',
-        amountCents: 15_000,
-        reason: 'External contribution',
-      });
+    const unauthorizedResponse = await request(app).post('/api/v1/finance/reserve-movements').send({
+      source: 'external',
+      amountCents: 15_000,
+      reason: 'External contribution',
+    });
     const response = await request(app)
       .post('/api/v1/finance/reserve-movements')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -360,6 +389,44 @@ describe('finance routes', () => {
       code: 'VALIDATION_ERROR',
     });
     expect(createReserveMovement).not.toHaveBeenCalled();
+  });
+
+  it('keeps reserve out of purchases and manual wallet adjustments', async () => {
+    const createPurchaseWithItems = vi.fn<FinanceRepository['createPurchaseWithItems']>();
+    const createWalletAdjustment = vi.fn<FinanceRepository['createWalletAdjustment']>();
+    const app = createFinanceApp(
+      createRepository({ createPurchaseWithItems, createWalletAdjustment }),
+    );
+
+    const purchaseResponse = await request(app)
+      .post('/api/v1/finance/purchases')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        purchaseDate: '2026-06-28',
+        fundingSource: 'reserve',
+        items: [
+          {
+            productId: 'product-tapa',
+            purchaseUnit: 'unit',
+            purchaseQuantity: 1,
+            unitsPerPackage: 1,
+            unitPriceCents: 1_000,
+          },
+        ],
+      });
+    const adjustmentResponse = await request(app)
+      .post('/api/v1/finance/wallet-adjustments')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        wallet: 'reserve',
+        direction: 'credit',
+        amountCents: 1_000,
+        reason: 'Use explicit reserve movement',
+      });
+
+    expect([purchaseResponse.status, adjustmentResponse.status]).toEqual([400, 400]);
+    expect(createPurchaseWithItems).not.toHaveBeenCalled();
+    expect(createWalletAdjustment).not.toHaveBeenCalled();
   });
 
   it('returns the standard validation error and does not persist partial purchases', async () => {

@@ -9,6 +9,7 @@ import {
   type FinanceProductFilters,
   type FinanceRecipeCostItem,
   type FinanceStockFilters,
+  type FinanceWalletMovement,
 } from '@te-pinta/shared';
 
 import type { createDbClient } from '../../db/index';
@@ -245,8 +246,7 @@ const toWalletAdjustmentLedgerEntryValues = (
   createdAt: adjustment.createdAt,
 });
 
-const reserveMovementLedgerKey = (movementId: string): string =>
-  `reserve-movement:${movementId}`;
+const reserveMovementLedgerKey = (movementId: string): string => `reserve-movement:${movementId}`;
 
 const toReserveMovementValues = (
   movement: FinanceReserveMovementRecord,
@@ -276,8 +276,7 @@ const toReserveMovementLedgerEventValues = (
   movement: FinanceReserveMovementRecord,
 ): FinanceLedgerEventInsert => ({
   id: reserveMovementLedgerKey(movement.id),
-  eventType:
-    movement.source === 'profit' ? 'reserve_transfer' : 'reserve_external_contribution',
+  eventType: movement.source === 'profit' ? 'reserve_transfer' : 'reserve_external_contribution',
   occurredAt: movement.createdAt,
   createdAt: movement.createdAt,
   origin: 'live',
@@ -1194,6 +1193,53 @@ export const createFinanceRepository = (db: DbClient): FinanceRepository => ({
       .orderBy(desc(financeWalletAdjustments.occurredAt), desc(financeWalletAdjustments.id));
 
     return rows.map(mapWalletAdjustment);
+  },
+
+  async listReserveWalletMovements(): Promise<FinanceWalletMovement[]> {
+    const rows = await db
+      .select({
+        id: financeLedgerEntries.id,
+        wallet: financeLedgerEntries.wallet,
+        direction: financeLedgerEntries.direction,
+        amountCents: financeLedgerEntries.amountCents,
+        eventType: financeLedgerEvents.eventType,
+        sourceId: financeLedgerEvents.sourceId,
+        occurredAt: financeLedgerEvents.occurredAt,
+        reason: financeLedgerEntries.description,
+        actorId: financeLedgerEvents.createdById,
+        actorName: financeLedgerEvents.createdByName,
+      })
+      .from(financeLedgerEntries)
+      .innerJoin(financeLedgerEvents, eq(financeLedgerEntries.eventId, financeLedgerEvents.id))
+      .where(eq(financeLedgerEvents.sourceType, 'reserve_movement'))
+      .orderBy(desc(financeLedgerEvents.occurredAt), desc(financeLedgerEntries.id));
+
+    return rows.map((row) => {
+      if (!row.wallet) {
+        throw new Error('Reserve ledger entry must target a wallet');
+      }
+      if (
+        row.eventType !== 'reserve_transfer' &&
+        row.eventType !== 'reserve_external_contribution'
+      ) {
+        throw new Error('Reserve ledger event has an invalid type');
+      }
+
+      return {
+        id: row.id,
+        wallet: row.wallet,
+        direction: row.direction,
+        amountCents: row.amountCents,
+        signedAmountCents: row.direction === 'credit' ? row.amountCents : -row.amountCents,
+        sourceType: 'reserve_movement',
+        sourceId: row.sourceId,
+        occurredAt: row.occurredAt.toISOString(),
+        reason: row.reason,
+        reserveSource: row.eventType === 'reserve_transfer' ? 'profit' : 'external',
+        ...(row.actorId ? { actorId: row.actorId } : {}),
+        ...(row.actorName ? { actorName: row.actorName } : {}),
+      };
+    });
   },
 
   async createWalletAdjustment(

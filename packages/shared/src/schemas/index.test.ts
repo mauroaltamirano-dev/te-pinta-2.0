@@ -287,6 +287,7 @@ describe('shared domain schemas', () => {
       'sale',
       'purchase',
       'adjustment',
+      'reserve_movement',
     ]);
     expect(
       financeWalletMovementFiltersSchema.parse({
@@ -308,9 +309,7 @@ describe('shared domain schemas', () => {
     expect(financeWalletMovementFiltersSchema.safeParse({ wallet: 'base-cost' }).success).toBe(
       false,
     );
-    expect(financeWalletMovementFiltersSchema.parse({ wallet: 'reserve' }).wallet).toBe(
-      'reserve',
-    );
+    expect(financeWalletMovementFiltersSchema.parse({ wallet: 'reserve' }).wallet).toBe('reserve');
     expect(financeWalletMovementFiltersSchema.safeParse({ direction: 'in' }).success).toBe(false);
     expect(financeWalletMovementFiltersSchema.safeParse({ from: '06/01/2026' }).success).toBe(
       false,
@@ -344,6 +343,24 @@ describe('shared domain schemas', () => {
         occurredAt: '2026-06-15',
       }).success,
     ).toBe(false);
+    expect(
+      financeWalletMovementSchema.parse({
+        id: 'reserve-movement:reserve-1:reserve_credit',
+        wallet: 'reserve',
+        direction: 'credit',
+        amountCents: 10_000,
+        signedAmountCents: 10_000,
+        sourceType: 'reserve_movement',
+        sourceId: 'reserve-1',
+        occurredAt: '2026-06-27T12:00:00.000Z',
+        reason: 'Emergency fund',
+        reserveSource: 'profit',
+      }),
+    ).toMatchObject({
+      wallet: 'reserve',
+      sourceType: 'reserve_movement',
+      reserveSource: 'profit',
+    });
     expect(
       createFinanceWalletAdjustmentSchema.safeParse({
         wallet: 'services',

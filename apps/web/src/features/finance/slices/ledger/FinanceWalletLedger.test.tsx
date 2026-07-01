@@ -129,6 +129,68 @@ describe('FinanceWalletLedger', () => {
     );
   });
 
+  it('renders reserve balance, profit transfers, and external contributions', () => {
+    vi.mocked(useFinanceWalletMovements).mockReturnValue({
+      data: {
+        movements: [
+          {
+            id: 'reserve-movement:profit-transfer:profit_debit',
+            wallet: 'profit',
+            direction: 'debit',
+            amountCents: 100_000,
+            signedAmountCents: -100_000,
+            sourceType: 'reserve_movement',
+            sourceId: 'profit-transfer',
+            occurredAt: '2026-06-28T12:00:00.000Z',
+            reason: 'Fondo de emergencia',
+            reserveSource: 'profit',
+          },
+          {
+            id: 'reserve-movement:profit-transfer:reserve_credit',
+            wallet: 'reserve',
+            direction: 'credit',
+            amountCents: 100_000,
+            signedAmountCents: 100_000,
+            sourceType: 'reserve_movement',
+            sourceId: 'profit-transfer',
+            occurredAt: '2026-06-28T12:00:00.000Z',
+            reason: 'Fondo de emergencia',
+            reserveSource: 'profit',
+          },
+          {
+            id: 'reserve-movement:external-contribution:reserve_credit',
+            wallet: 'reserve',
+            direction: 'credit',
+            amountCents: 50_000,
+            signedAmountCents: 50_000,
+            sourceType: 'reserve_movement',
+            sourceId: 'external-contribution',
+            occurredAt: '2026-06-29T12:00:00.000Z',
+            reason: 'Aporte de socios',
+            reserveSource: 'external',
+          },
+        ],
+        balances: { production_cost: 0, services: 0, profit: -100_000, reserve: 150_000 },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useFinanceWalletMovements>);
+
+    render(<FinanceWalletLedger />);
+
+    expect(screen.getByRole('article', { name: /reserva: \$1\.500/i })).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText(/^billetera$/i)).getByRole('option', { name: /^reserva$/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /reserva desde ganancia/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('cell', { name: /reserva desde otra.*aporte externo/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Fondo de emergencia')).toBeInTheDocument();
+    expect(screen.getByText('Aporte de socios')).toBeInTheDocument();
+  });
+
   it('shows newest operations first and paginates grouped movements', async () => {
     const user = userEvent.setup();
     const movements = Array.from({ length: 21 }, (_, index) => ({

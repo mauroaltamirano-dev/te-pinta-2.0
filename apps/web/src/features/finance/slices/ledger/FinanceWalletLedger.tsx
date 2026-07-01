@@ -64,10 +64,11 @@ type WalletMovementGroup = {
 
 const MOVEMENT_GROUPS_PAGE_SIZE = 20;
 
-const walletLabels: Record<AdjustableFinanceWallet, string> = {
+const walletLabels: Record<FinanceWallet, string> = {
   production_cost: 'Costo base',
   services: 'Servicios',
   profit: 'Ganancia',
+  reserve: 'Reserva',
 };
 
 const directionLabels: Record<FinanceWalletMovementDirection, string> = {
@@ -79,17 +80,18 @@ const sourceTypeLabels: Record<FinanceWalletMovementSourceType, string> = {
   sale: 'Venta',
   purchase: 'Compra',
   adjustment: 'Ajuste',
+  reserve_movement: 'Movimiento de Reserva',
 };
 
-const wallets = Object.keys(walletLabels) as AdjustableFinanceWallet[];
+const wallets = Object.keys(walletLabels) as FinanceWallet[];
+const adjustableWallets: AdjustableFinanceWallet[] = ['production_cost', 'services', 'profit'];
 const directions = Object.keys(directionLabels) as FinanceWalletMovementDirection[];
 const sourceTypes = Object.keys(sourceTypeLabels) as FinanceWalletMovementSourceType[];
 
 const isAdjustableWallet = (wallet: FinanceWallet): wallet is AdjustableFinanceWallet =>
-  wallet in walletLabels;
+  wallet !== 'reserve';
 
-const walletLabel = (wallet: FinanceWallet): string =>
-  isAdjustableWallet(wallet) ? walletLabels[wallet] : wallet;
+const walletLabel = (wallet: FinanceWallet): string => walletLabels[wallet];
 
 const numberFormatter = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('es-AR', {
@@ -123,12 +125,17 @@ const sourceCode = (sourceId: string): string => {
 };
 
 const formatSource = (group: WalletMovementGroup): string => {
+  if (group.sourceType === 'reserve_movement') {
+    const source = group.movements[0]?.reserveSource;
+
+    if (source === 'profit') return 'Reserva desde Ganancia';
+    if (source === 'external') return 'Reserva desde Otra / Aporte externo';
+
+    return 'Movimiento de Reserva';
+  }
+
   const prefix =
-    group.sourceType === 'sale'
-      ? 'Pedido'
-      : group.sourceType === 'purchase'
-        ? 'Compra'
-        : 'Ajuste';
+    group.sourceType === 'sale' ? 'Pedido' : group.sourceType === 'purchase' ? 'Compra' : 'Ajuste';
 
   return `${prefix} #${sourceCode(group.sourceId)}`;
 };
@@ -371,7 +378,7 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
             </h2>
             <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-muted-foreground">
               Cada saldo sale de movimientos visibles: ventas pagadas, compras activas y ajustes
-              auditados con motivo.
+              auditados con motivo, incluyendo movimientos de Reserva.
             </p>
           </div>
         </div>
@@ -484,7 +491,7 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4">
         {wallets.map((wallet) => (
           <MetricCard
             accent={wallet === 'profit' ? 'success' : wallet === 'services' ? 'primary' : 'neutral'}
@@ -671,7 +678,7 @@ export const FinanceWalletLedger = ({ initialWallet }: FinanceWalletLedgerProps)
                 }
                 value={adjustmentForm.wallet}
               >
-                {wallets.map((wallet) => (
+                {adjustableWallets.map((wallet) => (
                   <option key={wallet} value={wallet}>
                     {walletLabels[wallet]}
                   </option>

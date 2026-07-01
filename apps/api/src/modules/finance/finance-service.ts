@@ -274,9 +274,8 @@ export type FinanceRepository = WalletLedgerRepository & {
   listRecipes(): Promise<FinanceRecipeDetail[]>;
   getRecipe(menuItemId: string): Promise<FinanceRecipeDetail | null>;
   replaceRecipe(input: PersistFinanceRecipeInput): Promise<FinanceRecipeDetail | null>;
-  createReserveMovement(
-    input: FinanceReserveMovementRecord,
-  ): Promise<FinanceReserveMovementRecord>;
+  listReserveWalletMovements(): Promise<FinanceWalletMovement[]>;
+  createReserveMovement(input: FinanceReserveMovementRecord): Promise<FinanceReserveMovementRecord>;
   getSetting(key: string): Promise<FinanceSetting | null>;
 };
 
@@ -562,19 +561,23 @@ export const listFinanceWalletMovements = async (
   repository: FinanceRepository,
   filters?: FinanceWalletMovementFilters,
 ): Promise<FinanceWalletMovementLedger> => {
-  const [sales, purchases, adjustments, servicePercent] = await Promise.all([
+  const [sales, purchases, adjustments, reserveMovements, servicePercent] = await Promise.all([
     repository.listWalletLedgerSales(),
     repository.listWalletLedgerPurchases(),
     repository.listWalletAdjustments(),
+    repository.listReserveWalletMovements(),
     getFinanceServicePercent(repository),
   ]);
   const movements = filterWalletMovements(
-    buildWalletMovements({
-      sales,
-      purchases,
-      adjustments,
-      servicePercent,
-    }),
+    [
+      ...buildWalletMovements({
+        sales,
+        purchases,
+        adjustments,
+        servicePercent,
+      }),
+      ...reserveMovements,
+    ],
     filters,
   );
 

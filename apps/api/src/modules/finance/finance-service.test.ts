@@ -16,6 +16,7 @@ import {
   getFinanceProductHistory,
   listFinanceProducts,
   listFinancePurchases,
+  listFinanceWalletMovements,
   previewFinanceOrderCost,
   updateFinanceProduct,
   updateFinancePurchase,
@@ -117,6 +118,7 @@ const createRepository = (overrides: Partial<FinanceRepository> = {}): FinanceRe
   listWalletLedgerSales: async () => [],
   listWalletLedgerPurchases: async () => [],
   listWalletAdjustments: async () => [],
+  listReserveWalletMovements: async () => [],
   createWalletAdjustment: async (input) => input,
   createReserveMovement: async (input) => input,
   ...overrides,
@@ -156,6 +158,98 @@ describe('finance service', () => {
       ),
     ).rejects.toThrow();
     expect(createReserveMovement).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts reserve at zero when there are no movements', async () => {
+    const ledger = await listFinanceWalletMovements(createRepository());
+
+    expect(ledger).toEqual({
+      movements: [],
+      balances: { production_cost: 0, services: 0, profit: 0, reserve: 0 },
+    });
+  });
+
+  it('moves profit into reserve without changing the internal total', async () => {
+    const ledger = await listFinanceWalletMovements(
+      createRepository({
+        listWalletLedgerSales: async () => [
+          {
+            id: 'order-1',
+            isPaid: true,
+            occurredAt: '2026-06-15',
+            totalCents: 20_000,
+            directCostCents: 8_000,
+          },
+        ],
+        listReserveWalletMovements: async () => [
+          {
+            id: 'reserve-movement:reserve-profit:profit_debit',
+            wallet: 'profit',
+            direction: 'debit',
+            amountCents: 1_000,
+            signedAmountCents: -1_000,
+            sourceType: 'reserve_movement',
+            sourceId: 'reserve-profit',
+            occurredAt: '2026-06-27T12:00:00.000Z',
+            reason: 'Emergency fund',
+            reserveSource: 'profit',
+          },
+          {
+            id: 'reserve-movement:reserve-profit:reserve_credit',
+            wallet: 'reserve',
+            direction: 'credit',
+            amountCents: 1_000,
+            signedAmountCents: 1_000,
+            sourceType: 'reserve_movement',
+            sourceId: 'reserve-profit',
+            occurredAt: '2026-06-27T12:00:00.000Z',
+            reason: 'Emergency fund',
+            reserveSource: 'profit',
+          },
+        ],
+      }),
+    );
+
+    expect(ledger.balances).toEqual({
+      production_cost: 8_000,
+      services: 2_400,
+      profit: 8_600,
+      reserve: 1_000,
+    });
+    expect(Object.values(ledger.balances).reduce((total, balance) => total + balance, 0)).toBe(
+      20_000,
+    );
+    expect(
+      ledger.movements.filter(({ sourceType }) => sourceType === 'reserve_movement'),
+    ).toHaveLength(2);
+  });
+
+  it('adds external reserve without debiting internal wallets', async () => {
+    const ledger = await listFinanceWalletMovements(
+      createRepository({
+        listReserveWalletMovements: async () => [
+          {
+            id: 'reserve-movement:reserve-external:reserve_credit',
+            wallet: 'reserve',
+            direction: 'credit',
+            amountCents: 1_500,
+            signedAmountCents: 1_500,
+            sourceType: 'reserve_movement',
+            sourceId: 'reserve-external',
+            occurredAt: '2026-06-28T12:00:00.000Z',
+            reason: 'Partner contribution',
+            reserveSource: 'external',
+          },
+        ],
+      }),
+    );
+
+    expect(ledger.balances).toEqual({
+      production_cost: 0,
+      services: 0,
+      profit: 0,
+      reserve: 1_500,
+    });
   });
 
   it('records purchase item costs and stock ledger movements atomically for tracked products', async () => {

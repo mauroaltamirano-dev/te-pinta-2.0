@@ -11,7 +11,7 @@ import {
   financeWalletAdjustments,
 } from '../../db/schema';
 import { createFinanceRepository } from './finance-repository';
-import type { FinanceReserveMovementRecord } from './finance-service';
+import { listFinanceWalletMovements, type FinanceReserveMovementRecord } from './finance-service';
 import type { FinanceWalletAdjustmentRecord } from './wallet-ledger-service';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -217,6 +217,26 @@ describeWithDatabase('finance repository ledger integration', () => {
       ]),
     );
     expect(entries.every((entry) => entry.description === input.reason)).toBe(true);
+
+    const walletMovements = await repository.listReserveWalletMovements();
+    expect(walletMovements.filter((movement) => movement.sourceId === input.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          wallet: 'profit',
+          direction: 'debit',
+          signedAmountCents: -input.amountCents,
+          sourceType: 'reserve_movement',
+          reserveSource: 'profit',
+        }),
+        expect.objectContaining({
+          wallet: 'reserve',
+          direction: 'credit',
+          signedAmountCents: input.amountCents,
+          sourceType: 'reserve_movement',
+          reserveSource: 'profit',
+        }),
+      ]),
+    );
   });
 
   it('creates an external reserve contribution without an internal debit', async () => {
@@ -262,6 +282,58 @@ describeWithDatabase('finance repository ledger integration', () => {
       }),
     ]);
     expect(entries.some((entry) => entry.direction === 'debit')).toBe(false);
+
+    const walletMovements = await repository.listReserveWalletMovements();
+    expect(walletMovements.filter((movement) => movement.sourceId === input.id)).toEqual([
+      expect.objectContaining({
+        wallet: 'reserve',
+        direction: 'credit',
+        signedAmountCents: input.amountCents,
+        sourceType: 'reserve_movement',
+        reserveSource: 'external',
+      }),
+    ]);
+  });
+
+  it('reads reserve balances and movement listings from PostgreSQL ledger entries', async () => {
+    const profit = reserveMovement(`integration-read-profit-${randomUUID()}`, {
+      amountCents: 12_000,
+    });
+    const external = reserveMovement(`integration-read-external-${randomUUID()}`, {
+      source: 'external',
+      amountCents: 8_000,
+    });
+
+    await repository.createReserveMovement(profit);
+    await repository.createReserveMovement(external);
+
+    const profitLedger = await listFinanceWalletMovements(repository, {
+      sourceId: profit.id,
+    });
+    const externalLedger = await listFinanceWalletMovements(repository, {
+      sourceId: external.id,
+    });
+
+    expect(profitLedger.balances).toEqual({
+      production_cost: 0,
+      services: 0,
+      profit: -profit.amountCents,
+      reserve: profit.amountCents,
+    });
+    expect(profitLedger.movements).toHaveLength(2);
+    expect(externalLedger.balances).toEqual({
+      production_cost: 0,
+      services: 0,
+      profit: 0,
+      reserve: external.amountCents,
+    });
+    expect(externalLedger.movements).toEqual([
+      expect.objectContaining({
+        sourceType: 'reserve_movement',
+        reserveSource: 'external',
+        reason: external.reason,
+      }),
+    ]);
   });
 
   it('rolls back a reserve movement when its ledger entry cannot be inserted', async () => {
